@@ -13,6 +13,9 @@ export default async function DashboardPage() {
   const applyCount = jobs.filter(j => j.recommendation === 'apply').length;
   const maybeCount = jobs.filter(j => j.recommendation === 'maybe').length;
   const skipCount = jobs.filter(j => j.recommendation === 'skip').length;
+  const avgLatency = runs.length
+    ? Math.round(runs.reduce((a, r) => a + r.latency_ms, 0) / runs.length)
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -61,17 +64,17 @@ export default async function DashboardPage() {
                 <span className="font-medium text-slate-900">{runs.length}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-600">Completed</span>
-                <span className="font-medium text-emerald-600">{runs.filter(r => r.status === 'completed').length}</span>
+                <span className="text-slate-600">Successful</span>
+                <span className="font-medium text-emerald-600">{runs.filter(r => r.status === 'success' || r.status === 'completed').length}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-600">Failed</span>
-                <span className="font-medium text-red-600">{runs.filter(r => r.status === 'failed').length}</span>
+                <span className="font-medium text-red-600">{runs.filter(r => r.status === 'error' || r.status === 'failed').length}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-600">Avg Latency</span>
                 <span className="font-medium text-slate-900">
-                  {Math.round(runs.reduce((a, r) => a + r.latency_ms, 0) / runs.length)}ms
+                  {avgLatency}ms
                 </span>
               </div>
             </div>

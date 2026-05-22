@@ -18,7 +18,7 @@ export interface CandidateProfile {
   headline: string;
   location?: string;
   raw_cv_md: string;
-  evidence_chunks: EvidenceChunk[];
+  evidence_chunks?: EvidenceChunk[];
 }
 
 export interface EvidenceChunk {
@@ -36,6 +36,7 @@ export interface MatchReport {
   breakdown: Record<string, number>;
   top_reasons: string[];
   gaps: string[];
+  explanation?: string;
 }
 
 export interface ResumeArtifact {

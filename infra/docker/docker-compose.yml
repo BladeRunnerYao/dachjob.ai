@@ -59,6 +59,20 @@ services:
     networks:
       - dachjob-net
 
+  createbucket:
+    image: minio/mc
+    container_name: dachjob-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing local/dachjob-artifacts
+      "
+    networks:
+      - dachjob-net
+
   api:
     build:
       context: ../../
@@ -68,16 +82,21 @@ services:
       - "8000:8000"
     env_file:
       - ../../.env
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: postgresql+psycopg://dachjob:dachjob@postgres:5432/dachjob
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
     volumes:
       - ../../apps/api:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: sh -c "alembic -c app/db/migrations/alembic.ini upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      createbucket:
+        condition: service_completed_successfully
     networks:
       - dachjob-net
 
@@ -88,6 +107,11 @@ services:
     container_name: dachjob-worker
     env_file:
       - ../../.env
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: postgresql+psycopg://dachjob:dachjob@postgres:5432/dachjob
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
     command: celery -A app.workers.celery_app worker --loglevel=info
     depends_on:
       postgres:
@@ -108,6 +132,10 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      INTERNAL_API_BASE_URL: http://api:8000
+    volumes:
+      - ../../apps/web:/app
+      - /app/node_modules
     depends_on:
       - api
     networks:

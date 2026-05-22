@@ -20,7 +20,9 @@ export default function ProfilePage() {
     });
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    const updated = await api.uploadCv(cvMd);
+    setProfile(updated);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -83,10 +85,10 @@ export default function ProfilePage() {
 
           <Card>
             <CardHeader>
-              <h2 className="text-sm font-semibold text-slate-900">Evidence Chunks ({profile?.evidence_chunks.length})</h2>
+              <h2 className="text-sm font-semibold text-slate-900">Evidence Chunks ({profile?.evidence_chunks?.length || 0})</h2>
             </CardHeader>
             <CardContent className="space-y-3">
-              {profile?.evidence_chunks.map((chunk: EvidenceChunk) => (
+              {(profile?.evidence_chunks || []).map((chunk: EvidenceChunk) => (
                 <div key={chunk.id} className="rounded-lg border border-slate-200 p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <Badge>{chunk.source_type}</Badge>

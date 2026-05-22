@@ -1,13 +1,25 @@
 import type { JobPosting, CandidateProfile, Application, LLMRun, MatchReport, ResumeArtifact } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+function getApiBase() {
+  if (typeof window === 'undefined') {
+    return process.env.INTERNAL_API_BASE_URL
+      || process.env.NEXT_PUBLIC_API_BASE_URL
+      || 'http://localhost:8000';
+  }
+  return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+}
+
+function getPublicApiBase() {
+  return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+}
 
 export class ApiClient {
   private async request<T>(path: string, options?: RequestInit): Promise<T> {
-    const url = `${API_BASE}${path}`;
+    const url = `${getApiBase()}${path}`;
     try {
       const res = await fetch(url, {
         headers: { 'Content-Type': 'application/json', ...options?.headers },
+        cache: 'no-store',
         ...options,
       });
       if (!res.ok) throw new Error(`API error: ${res.status}`);
@@ -38,10 +50,23 @@ export class ApiClient {
   }
 
   async getJob(id: string): Promise<JobPosting> {
-    const jobs = await this.getJobs();
-    const job = jobs.find(j => j.id === id);
-    if (!job) throw new Error('Job not found');
-    return job;
+    try {
+      return await this.fetch<JobPosting>(`/api/jobs/${id}`);
+    } catch {
+      const jobs = await this.getJobs();
+      const job = jobs.find(j => j.id === id);
+      if (!job) throw new Error('Job not found');
+      return job;
+    }
+  }
+
+  async createJob(rawJd: string): Promise<JobPosting> {
+    const titleMatch = rawJd.match(/^#+\s*([^—\n-]+)(?:[—-]\s*([^\n]+))?/m);
+    return this.post<JobPosting>('/api/jobs', {
+      title: titleMatch?.[1]?.trim() || 'New Job',
+      company: titleMatch?.[2]?.trim() || 'Unknown',
+      raw_jd: rawJd,
+    });
   }
 
   async getApplications(): Promise<Application[]> {
@@ -54,15 +79,40 @@ export class ApiClient {
 
   async getProfile(): Promise<CandidateProfile> {
     try {
-      return await this.fetch<CandidateProfile>('/api/profile');
+      const profile = await this.fetch<CandidateProfile>('/api/profile');
+      return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
     } catch {
       return this.getMockProfile();
     }
   }
 
+  async uploadCv(rawCvMd: string): Promise<CandidateProfile> {
+    const profile = await this.post<CandidateProfile>('/api/profile/cv', { raw_cv_md: rawCvMd });
+    return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
+  }
+
   async getMatchReport(jobId: string): Promise<MatchReport> {
     try {
-      return await this.fetch<MatchReport>(`/api/jobs/${jobId}/match`);
+      await this.post(`/api/jobs/${jobId}/parse`, {});
+      const report = await this.post<{
+        id: string;
+        job_id: string;
+        overall_score: number;
+        recommendation: string;
+        breakdown_json: Record<string, number>;
+        gaps_json?: { gaps?: string[] } | null;
+        explanation?: string | null;
+      }>(`/api/jobs/${jobId}/match`, {});
+      return {
+        id: report.id,
+        job_id: report.job_id,
+        overall_score: Number(report.overall_score),
+        recommendation: report.recommendation,
+        breakdown: report.breakdown_json || {},
+        top_reasons: report.explanation ? [report.explanation] : [],
+        gaps: report.gaps_json?.gaps || [],
+        explanation: report.explanation || undefined,
+      };
     } catch {
       return this.getMockMatchReport(jobId);
     }
@@ -70,7 +120,20 @@ export class ApiClient {
 
   async getResumeArtifact(jobId: string): Promise<ResumeArtifact> {
     try {
-      return await this.fetch<ResumeArtifact>(`/api/jobs/${jobId}/resume`);
+      const artifact = await this.post<{
+        id: string;
+        job_id: string;
+        html_object_key: string;
+        pdf_object_key?: string | null;
+        provenance_json?: unknown[];
+      }>(`/api/jobs/${jobId}/resume`, {});
+      return {
+        id: artifact.id,
+        job_id: artifact.job_id,
+        html_url: `${getPublicApiBase()}/api/resumes/${artifact.id}/html`,
+        pdf_url: artifact.pdf_object_key || undefined,
+        provenance: artifact.provenance_json || [],
+      };
     } catch {
       return this.getMockResume(jobId);
     }

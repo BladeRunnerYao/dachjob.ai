@@ -21,17 +21,8 @@ export default function JobsPage() {
     });
   }, []);
 
-  const handleSave = (jd: string) => {
-    const newJob: JobPosting = {
-      id: String(Date.now()),
-      title: 'New Job',
-      company: 'Unknown',
-      status: 'active',
-      score: 0,
-      recommendation: 'maybe',
-      raw_jd: jd,
-      created_at: new Date().toISOString(),
-    };
+  const handleSave = async (jd: string) => {
+    const newJob = await api.createJob(jd);
     setJobs([newJob, ...jobs]);
     setShowForm(false);
   };

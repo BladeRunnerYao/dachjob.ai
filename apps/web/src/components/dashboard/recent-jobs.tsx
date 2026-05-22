@@ -46,10 +46,18 @@ export function RecentJobs({ jobs }: RecentJobsProps) {
                 </td>
                 <td className="px-4 py-2.5 text-slate-600">{job.company}</td>
                 <td className="px-4 py-2.5">
-                  <Badge variant={scoreBadge(job.score!)}>{job.score}</Badge>
+                  {job.score == null ? (
+                    <span className="text-xs text-slate-400">Pending</span>
+                  ) : (
+                    <Badge variant={scoreBadge(job.score)}>{job.score}</Badge>
+                  )}
                 </td>
                 <td className="px-4 py-2.5">
-                  <Badge variant={recBadge(job.recommendation!)}>{job.recommendation}</Badge>
+                  {job.recommendation ? (
+                    <Badge variant={recBadge(job.recommendation)}>{job.recommendation}</Badge>
+                  ) : (
+                    <span className="text-xs text-slate-400">Pending</span>
+                  )}
                 </td>
                 <td className="px-4 py-2.5 text-slate-500">{new Date(job.created_at).toLocaleDateString()}</td>
               </tr>

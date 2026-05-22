@@ -15,6 +15,8 @@ class JobResponse(BaseModel):
     raw_jd: str
     parsed_json: Any = None
     status: str
+    score: float | None = None
+    recommendation: str | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -1,15 +1,20 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tenant import TenantContext, get_tenant_context
+from app.db.models import ResumeArtifact
 from app.db.session import get_db
 from app.modules.profiles.repository import get_profile_by_tenant
 from app.modules.resumes.schemas import EvidenceResponse, ResumeResponse
 from app.modules.resumes.service import list_evidence, generate_resume
+from app.modules.storage.service import StorageService
 
 router = APIRouter(prefix="/api/jobs/{job_id}", tags=["resumes"])
+artifact_router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
 
 @router.get("/evidence", response_model=list[EvidenceResponse])
@@ -32,3 +37,24 @@ async def create_resume(
 ):
     artifact = await generate_resume(db, tenant, job_id)
     return artifact
+
+
+@artifact_router.get("/{artifact_id}/html", response_class=HTMLResponse)
+async def get_resume_html(
+    artifact_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ResumeArtifact).where(ResumeArtifact.id == artifact_id).limit(1)
+    )
+    artifact = result.scalar_one_or_none()
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Resume artifact not found")
+
+    storage = StorageService()
+    try:
+        html = storage.download(artifact.html_object_key).decode("utf-8")
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="Resume HTML not found") from exc
+
+    return HTMLResponse(html)

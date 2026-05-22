@@ -5,21 +5,25 @@ import { Badge } from '@/components/ui/badge';
 import type { Application } from '@/lib/api/types';
 import { useState } from 'react';
 
+type BadgeVariant = 'default' | 'green' | 'yellow' | 'red' | 'blue';
+
 interface TrackerTableProps {
   applications: Application[];
   onStatusChange: (id: string, status: string) => void;
 }
 
-const statusColors: Record<string, string> = {
-  saved: 'blue',
-  applied: 'green',
-  interview: 'yellow',
-  offer: 'green',
-  rejected: 'red',
-  withdrawn: 'red',
+const statusColors: Record<string, BadgeVariant> = {
+  Evaluated: 'blue',
+  Applied: 'green',
+  Responded: 'yellow',
+  Interview: 'yellow',
+  Offer: 'green',
+  Rejected: 'red',
+  Discarded: 'red',
+  SKIP: 'red',
 };
 
-const statusOptions = ['saved', 'applied', 'interview', 'offer', 'rejected', 'withdrawn'];
+const statusOptions = ['Evaluated', 'Applied', 'Responded', 'Interview', 'Offer', 'Rejected', 'Discarded', 'SKIP'];
 
 export function TrackerTable({ applications, onStatusChange }: TrackerTableProps) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -55,7 +59,7 @@ export function TrackerTable({ applications, onStatusChange }: TrackerTableProps
                     onClick={() => setOpenDropdown(openDropdown === app.id ? null : app.id)}
                     className="focus:outline-none"
                   >
-                    <Badge variant={statusColors[app.status] as any}>{app.status}</Badge>
+                    <Badge variant={statusColors[app.status] || 'default'}>{app.status}</Badge>
                   </button>
                   {openDropdown === app.id && (
                     <div className="absolute top-full left-0 mt-1 w-36 rounded-md border border-slate-200 bg-white shadow-lg z-10">

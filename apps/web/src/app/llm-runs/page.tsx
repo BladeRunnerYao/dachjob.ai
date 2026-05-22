@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Fragment } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api/client';
@@ -51,8 +52,8 @@ export default function LLMRunsPage() {
           className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs bg-white"
         >
           <option value="all">All Statuses</option>
-          <option value="completed">Completed</option>
-          <option value="failed">Failed</option>
+          <option value="success">Success</option>
+          <option value="error">Error</option>
         </select>
       </div>
 
@@ -70,29 +71,28 @@ export default function LLMRunsPage() {
             </thead>
             <tbody>
               {filtered.map((run) => (
-                <>
+                <Fragment key={run.id}>
                   <tr
-                    key={run.id}
                     onClick={() => setExpandedId(expandedId === run.id ? null : run.id)}
                     className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                   >
                     <td className="px-4 py-3 font-medium text-slate-900">{run.task}</td>
                     <td className="px-4 py-3 text-slate-600">{run.model}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={run.status === 'completed' ? 'green' : 'red'}>{run.status}</Badge>
+                      <Badge variant={run.status === 'success' || run.status === 'completed' ? 'green' : 'red'}>{run.status}</Badge>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{run.latency_ms}</td>
                     <td className="px-4 py-3 text-slate-500">{new Date(run.created_at).toLocaleString()}</td>
                   </tr>
                   {expandedId === run.id && run.error_message && (
-                    <tr key={`${run.id}-error`} className="bg-red-50">
+                    <tr className="bg-red-50">
                       <td colSpan={5} className="px-4 py-3">
                         <p className="text-xs text-red-700 font-medium">Error:</p>
                         <p className="text-sm text-red-600">{run.error_message}</p>
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>
