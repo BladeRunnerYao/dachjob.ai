@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dachjob.ai Documentation</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #edf1f4;
+      color: #172033;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      background: #fff;
+      min-height: 100vh;
+      padding: 42px;
+      box-shadow: 0 16px 48px rgba(23, 32, 51, .12);
+    }
+    h1 {
+      margin: 0 0 10px;
+      color: #0b5568;
+      font-size: 34px;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin-top: 34px;
+      color: #123847;
+      font-size: 22px;
+    }
+    p {
+      max-width: 760px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+    a.card {
+      display: block;
+      border: 1px solid #d8e0e7;
+      border-radius: 6px;
+      padding: 15px;
+      color: #172033;
+      text-decoration: none;
+      background: #fff;
+    }
+    a.card:hover {
+      border-color: #0b5568;
+      background: #f4f8fa;
+    }
+    .card strong {
+      display: block;
+      color: #0b5568;
+      margin-bottom: 5px;
+    }
+    .card span {
+      color: #5e6878;
+      font-size: 14px;
+    }
+    code {
+      background: #edf3f6;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    @media (max-width: 720px) {
+      main { padding: 24px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>dachjob.ai Documentation</h1>
+    <p>
+      This folder contains the split requirements and implementation plans for the local-first DACH AI job platform demo.
+      Start with the master PRD, then assign individual module documents to coding agents.
+    </p>
+
+    <h2>Master Documents</h2>
+    <div class="grid">
+      <a class="card" href="requirements/00-master-prd.md">
+        <strong>00 Master PRD</strong>
+        <span>Project overview, goals, scope, architecture, success criteria.</span>
+      </a>
+      <a class="card" href="plans/00-parallel-agent-plan.md">
+        <strong>Parallel Agent Plan</strong>
+        <span>How to split implementation across multiple coding agents.</span>
+      </a>
+      <a class="card" href="plans/01-demo-script.md">
+        <strong>2-Minute Demo Script</strong>
+        <span>Interview walkthrough and architecture talking points.</span>
+      </a>
+    </div>
+
+    <h2>Module Requirements</h2>
+    <div class="grid">
+      <a class="card" href="requirements/01-local-docker-runtime.md">
+        <strong>01 Local Docker Runtime</strong>
+        <span>Docker Compose, services, environment variables, local startup.</span>
+      </a>
+      <a class="card" href="requirements/02-backend-api.md">
+        <strong>02 Backend API</strong>
+        <span>FastAPI foundation, tenant context, health checks, module layout.</span>
+      </a>
+      <a class="card" href="requirements/03-data-model.md">
+        <strong>03 Data Model</strong>
+        <span>Postgres schema, pgvector, migrations, tenant isolation.</span>
+      </a>
+      <a class="card" href="requirements/04-llm-gateway.md">
+        <strong>04 LLM Gateway</strong>
+        <span>DeepSeek integration, prompt versioning, LLM run logging.</span>
+      </a>
+      <a class="card" href="requirements/05-job-matching.md">
+        <strong>05 Job Matching</strong>
+        <span>JD parsing, deterministic fit score, DACH-specific rules.</span>
+      </a>
+      <a class="card" href="requirements/06-rag-resume-generation.md">
+        <strong>06 RAG Resume Generation</strong>
+        <span>Evidence chunks, retrieval, tailored CV, PDF export.</span>
+      </a>
+      <a class="card" href="requirements/07-frontend-dashboard.md">
+        <strong>07 Frontend Dashboard</strong>
+        <span>Next.js pages, product UI, mock-first frontend plan.</span>
+      </a>
+      <a class="card" href="requirements/08-tracker-autofill.md">
+        <strong>08 Tracker and Autofill</strong>
+        <span>Application tracker and safe autofill demo scope.</span>
+      </a>
+    </div>
+
+    <h2>Repository Layout</h2>
+    <p>
+      Code should be implemented under <code>apps/</code> and <code>infra/</code>.
+      Requirements and plans live under <code>docs/</code>.
+    </p>
+  </main>
+</body>
+</html>
