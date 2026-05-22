@@ -1,0 +1,15 @@
+{
+  "title": "Default Dashboard",
+  "uid": "default",
+  "panels": [
+    {
+      "title": "API Health",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "up{job=\"api\"}"
+        }
+      ]
+    }
+  ]
+}
