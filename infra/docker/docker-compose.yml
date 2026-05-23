@@ -74,10 +74,11 @@ services:
       - dachjob-net
 
   api:
+    image: dachjob-backend-api
     build:
       context: ../../
       dockerfile: app/backend/Dockerfile
-    container_name: dachjob-api
+    container_name: dachjob-backend-api
     ports:
       - "8000:8000"
     env_file:
@@ -101,10 +102,11 @@ services:
       - dachjob-net
 
   worker:
+    image: dachjob-backend-worker
     build:
       context: ../../
       dockerfile: app/backend/Dockerfile
-    container_name: dachjob-worker
+    container_name: dachjob-backend-worker
     env_file:
       - ../../.env
     environment:
@@ -124,6 +126,7 @@ services:
       - dachjob-net
 
   frontend:
+    image: dachjob-frontend
     build:
       context: ../../
       dockerfile: app/frontend/Dockerfile

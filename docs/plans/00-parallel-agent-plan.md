@@ -105,7 +105,7 @@ Create:
 
 Use this as the final shared acceptance test:
 
-1. Run `docker compose -f infra/docker/docker-compose.yml up --build`.
+1. Run `docker-compose -f infra/docker/docker-compose.yml up -d --build`.
 2. Run migrations.
 3. Seed demo tenant and profile.
 4. Create a job from sample JD.

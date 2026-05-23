@@ -53,7 +53,7 @@ Goal:
 Make local Docker Compose run frontend, api, worker, postgres with pgvector, redis, minio, prometheus, and grafana.
 
 Acceptance:
-- docker compose -f infra/docker/docker-compose.yml up --build works
+- docker-compose -f infra/docker/docker-compose.yml up -d --build works with cached builds by default
 - API docs should be reachable on localhost:8000/docs once backend agent implements API
 - MinIO console on localhost:9001
 - Grafana on localhost:3001

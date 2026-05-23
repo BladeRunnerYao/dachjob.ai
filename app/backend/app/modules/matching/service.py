@@ -132,6 +132,23 @@ GERMAN_KEYWORDS = [
     "verhandlungssicher", "muttersprache",
 ]
 
+SWISS_LOCATION_KEYWORDS = [
+    "switzerland", "swiss", "schweiz", "suisse", "svizzera", "zurich",
+    "zürich", "zuerich", "geneva", "basel", "bern", "lausanne",
+]
+
+STRICT_WORK_AUTH_PATTERNS = [
+    r"\b(?:only|must|require[sd]?|eligible|eligibility|applicants?|candidates?)\b.{0,140}\b(?:swiss|switzerland|schweiz|eu|e/u|efta|european union|swedish|sweden)\b.{0,140}\b(?:citizenship|citizens?|passport|work permit|right to work|work authori[sz]ation|eligible)\b",
+    r"\b(?:swiss|switzerland|schweiz|eu|e/u|efta|european union|swedish|sweden)\b.{0,80}\b(?:citizenship|citizens?|passport holders?|work permit|right to work)\b.{0,80}\b(?:only|required|must|can't|cannot|unable|unfortunately)\b",
+    r"\b(?:valid|existing)\b.{0,60}\b(?:swiss|switzerland|schweiz|eu|efta)\b.{0,60}\b(?:work permit|work authori[sz]ation|right to work)\b",
+    r"\b(?:can't|cannot|unable to|unfortunately)\b.{0,120}\b(?:support|sponsor)\b.{0,120}\bnon[-\s]?eu\b",
+]
+
+VISA_SPONSORSHIP_WARNING_PATTERNS = [
+    r"\b(?:no|not|unable to|cannot)\b.{0,80}\b(?:visa sponsorship|sponsor visas?|work permit sponsorship)\b",
+    r"\b(?:must|need to)\b.{0,80}\b(?:already|currently)\b.{0,80}\b(?:authorized|eligible|right to work)\b",
+]
+
 
 def _dedupe_preserve_order(items: list[str]) -> list[str]:
     seen: set[str] = set()
@@ -196,6 +213,44 @@ def _extract_language_requirements(raw_jd: str) -> list[str]:
     return requirements
 
 
+def _sentences(text: str) -> list[str]:
+    normalized = re.sub(r"\r\n?", "\n", text or "")
+    parts = re.split(r"(?<=[.!?])\s+|\n+", normalized)
+    return [re.sub(r"\s+", " ", part).strip() for part in parts if len(part.strip()) > 12]
+
+
+def _is_swiss_job(job) -> bool:
+    text = f"{job.location or ''}\n{job.raw_jd or ''}".lower()
+    return any(keyword in text for keyword in SWISS_LOCATION_KEYWORDS)
+
+
+def _extract_work_authorization(job) -> dict | None:
+    if not _is_swiss_job(job):
+        return None
+
+    text = f"{job.title or ''}\n{job.company or ''}\n{job.location or ''}\n{job.raw_jd or ''}"
+    sentences = _sentences(text)
+    for sentence in sentences:
+        if any(re.search(pattern, sentence, flags=re.IGNORECASE | re.DOTALL) for pattern in STRICT_WORK_AUTH_PATTERNS):
+            return {
+                "status": "restricted",
+                "label": "Swiss/EU/EFTA eligibility restriction",
+                "detail": "The posting appears to restrict applicants by citizenship, permit, or existing Swiss/EU/EFTA work authorization.",
+                "evidence": sentence,
+            }
+
+    for sentence in sentences:
+        if any(re.search(pattern, sentence, flags=re.IGNORECASE | re.DOTALL) for pattern in VISA_SPONSORSHIP_WARNING_PATTERNS):
+            return {
+                "status": "warning",
+                "label": "Visa sponsorship warning",
+                "detail": "The posting may require existing local work authorization.",
+                "evidence": sentence,
+            }
+
+    return None
+
+
 def _enrich_parsed_skills(parsed_json: dict, job) -> dict:
     raw_jd = job.raw_jd or ""
     title = job.title or ""
@@ -251,6 +306,14 @@ def _enrich_parsed_skills(parsed_json: dict, job) -> dict:
         if extracted_responsibilities
         else _dedupe_preserve_order(list(current_responsibilities))[:12]
     )
+    work_authorization = _extract_work_authorization(job)
+    if work_authorization:
+        parsed_json["work_authorization"] = work_authorization
+        dach_signals = parsed_json.get("dach_signals")
+        if not isinstance(dach_signals, dict):
+            dach_signals = {}
+        dach_signals["work_authorization"] = work_authorization["label"]
+        parsed_json["dach_signals"] = dach_signals
     return parsed_json
 
 
@@ -434,7 +497,8 @@ async def parse_job_posting(
                             "language_requirements (list), must_have_skills (list), "
                             "nice_to_have_skills (list), responsibilities (list), "
                             "salary_range (string or null), seniority (string or null), "
-                            "dach_signals (object with location/country/language keys)\n\n"
+                            "work_authorization (object or null with status, label, detail, evidence), "
+                            "dach_signals (object with location/country/language/work_authorization keys)\n\n"
                             "Skill extraction rules:\n"
                             "- Extract atomic skills/capabilities, not only broad summary sentences.\n"
                             "- Include technologies, cloud services, infrastructure practices, security controls, testing/release practices, and operational responsibilities.\n"
@@ -442,7 +506,8 @@ async def parse_job_posting(
                             "['GCP', 'Cloud Run', 'Networking', 'IAM', 'TLS', 'Firewall rules'].\n"
                             "- Treat capabilities like RBAC, job queues, CI/CD pipelines, GitHub Actions, E2E tests, QA, rollbacks, on-call, incident response, observability, monitoring, vulnerability scanning, penetration testing, and infrastructure hardening as skills when present.\n"
                             "- Do not include skills that are mentioned only in a negated section such as 'What this role is NOT'.\n"
-                            "- Put explicit 'must have' requirements in must_have_skills and optional/preferred items in nice_to_have_skills."
+                            "- Put explicit 'must have' requirements in must_have_skills and optional/preferred items in nice_to_have_skills.\n"
+                            "- For Swiss jobs, flag explicit citizenship, work permit, EU/EFTA, right-to-work, or visa sponsorship restrictions in work_authorization with the exact evidence sentence."
                         ),
                     },
                 ],

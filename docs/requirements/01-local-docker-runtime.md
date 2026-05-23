@@ -59,14 +59,17 @@ S3_BUCKET_NAME=dachjob-artifacts
 4. `api` must mount source code for local reload.
 5. `frontend` must use `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`.
 6. Compose must define persistent volumes for Postgres, MinIO, and Grafana.
+7. Local builds must use `docker-compose -f infra/docker/docker-compose.yml up -d --build` by default, preserving Docker's build cache.
+8. Only use `--no-cache` when explicitly requested.
+9. Local image/container names must be `dachjob-backend-api`, `dachjob-backend-worker`, and `dachjob-frontend`.
 
 ## Local Commands
 
 ```bash
 cp .env.example .env
-docker compose -f infra/docker/docker-compose.yml up --build
-docker compose -f infra/docker/docker-compose.yml exec api alembic upgrade head
-docker compose -f infra/docker/docker-compose.yml exec api python -m app.db.seed_demo
+docker-compose -f infra/docker/docker-compose.yml up -d --build
+docker-compose -f infra/docker/docker-compose.yml exec api alembic upgrade head
+docker-compose -f infra/docker/docker-compose.yml exec api python -m app.db.seed_demo
 ```
 
 ## Acceptance Criteria

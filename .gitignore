@@ -16,5 +16,7 @@ build/
 .mypy_cache/
 .ruff_cache/
 
+.playwright-cli/
+
 # Local change logs (never pushed)
 /ChangeLog/
