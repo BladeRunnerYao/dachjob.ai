@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import uuid
 from decimal import Decimal
@@ -6,7 +7,6 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.tenant import TenantContext
 from app.db.models import MatchReport, EvidenceChunk
 from app.modules.jobs.repository import get_job, sync_job_skills
@@ -464,68 +464,58 @@ async def parse_job_posting(
         await sync_job_skills(db, job, job.parsed_json, source="cached_parser")
         return {"status": job.status or "parsed", "parsed_json": job.parsed_json}
 
-    settings = get_settings()
+    from app.modules.llm_gateway.gateway import LLMGateway
 
-    api_key = settings.openrouter_api_key or settings.deepseek_api_key
-    base_url = settings.openrouter_base_url if settings.openrouter_api_key else settings.deepseek_base_url
-    model = settings.openrouter_model_fast if settings.openrouter_api_key else settings.deepseek_model_fast
-
-    if api_key:
-        try:
-            from openai import AsyncOpenAI
-
-            client = AsyncOpenAI(
-                api_key=api_key,
-                base_url=base_url,
-            )
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a job parser. Extract structured information from the job posting below. Return valid JSON only.",
-                    },
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Title: {job.title}\n"
-                            f"Company: {job.company}\n"
-                            f"Location: {job.location or 'N/A'}\n"
-                            f"Description:\n{job.raw_jd}\n\n"
-                            "Extract JSON with these fields:\n"
-                            "title, company, location, work_model (remote/hybrid/onsite), "
-                            "language_requirements (list), must_have_skills (list), "
-                            "nice_to_have_skills (list), responsibilities (list), "
-                            "salary_range (string or null), seniority (string or null), "
-                            "work_authorization (object or null with status, label, detail, evidence), "
-                            "dach_signals (object with location/country/language/work_authorization keys)\n\n"
-                            "Skill extraction rules:\n"
-                            "- Extract atomic skills/capabilities, not only broad summary sentences.\n"
-                            "- Include technologies, cloud services, infrastructure practices, security controls, testing/release practices, and operational responsibilities.\n"
-                            "- Split combined requirements into separate items. Example: 'GCP infrastructure (Cloud Run, networking, IAM, TLS, firewall rules)' becomes "
-                            "['GCP', 'Cloud Run', 'Networking', 'IAM', 'TLS', 'Firewall rules'].\n"
-                            "- Treat capabilities like RBAC, job queues, CI/CD pipelines, GitHub Actions, E2E tests, QA, rollbacks, on-call, incident response, observability, monitoring, vulnerability scanning, penetration testing, and infrastructure hardening as skills when present.\n"
-                            "- Do not include skills that are mentioned only in a negated section such as 'What this role is NOT'.\n"
-                            "- Put explicit 'must have' requirements in must_have_skills and optional/preferred items in nice_to_have_skills.\n"
-                            "- For Swiss jobs, flag explicit citizenship, work permit, EU/EFTA, right-to-work, or visa sponsorship restrictions in work_authorization with the exact evidence sentence."
-                        ),
-                    },
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.0,
-                max_tokens=2000,
-            )
-            content = response.choices[0].message.content
-            if content:
-                parsed_json = json.loads(content)
-                parsed_json = _enrich_parsed_skills(parsed_json, job)
-                job.parsed_json = parsed_json
-                job.status = "parsed"
-                await sync_job_skills(db, job, parsed_json, source="deepseek")
-                await db.flush()
-                return {"status": "parsed", "parsed_json": parsed_json}
-        except Exception:
-            pass
+    logger = logging.getLogger(__name__)
+    gateway = LLMGateway()
+    try:
+        content = await gateway.run_text(
+            tenant_id=tenant.id,
+            task="jd_extract",
+            prompt_version="1.0",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a job parser. Extract structured information from the job posting below. Return valid JSON only.",
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Title: {job.title}\n"
+                        f"Company: {job.company}\n"
+                        f"Location: {job.location or 'N/A'}\n"
+                        f"Description:\n{job.raw_jd}\n\n"
+                        "Extract JSON with these fields:\n"
+                        "title, company, location, work_model (remote/hybrid/onsite), "
+                        "language_requirements (list), must_have_skills (list), "
+                        "nice_to_have_skills (list), responsibilities (list), "
+                        "salary_range (string or null), seniority (string or null), "
+                        "work_authorization (object or null with status, label, detail, evidence), "
+                        "dach_signals (object with location/country/language/work_authorization keys)\n\n"
+                        "Skill extraction rules:\n"
+                        "- Extract atomic skills/capabilities, not only broad summary sentences.\n"
+                        "- Include technologies, cloud services, infrastructure practices, security controls, testing/release practices, and operational responsibilities.\n"
+                        "- Split combined requirements into separate items. Example: 'GCP infrastructure (Cloud Run, networking, IAM, TLS, firewall rules)' becomes "
+                        "['GCP', 'Cloud Run', 'Networking', 'IAM', 'TLS', 'Firewall rules'].\n"
+                        "- Treat capabilities like RBAC, job queues, CI/CD pipelines, GitHub Actions, E2E tests, QA, rollbacks, on-call, incident response, observability, monitoring, vulnerability scanning, penetration testing, and infrastructure hardening as skills when present.\n"
+                        "- Do not include skills that are mentioned only in a negated section such as 'What this role is NOT'.\n"
+                        "- Put explicit 'must have' requirements in must_have_skills and optional/preferred items in nice_to_have_skills.\n"
+                        "- For Swiss jobs, flag explicit citizenship, work permit, EU/EFTA, right-to-work, or visa sponsorship restrictions in work_authorization with the exact evidence sentence."
+                    ),
+                },
+            ],
+            response_format={"type": "json_object"},
+        )
+        if content:
+            parsed_json = json.loads(content)
+            parsed_json = _enrich_parsed_skills(parsed_json, job)
+            job.parsed_json = parsed_json
+            job.status = "parsed"
+            await sync_job_skills(db, job, parsed_json, source="deepseek")
+            await db.flush()
+            return {"status": "parsed", "parsed_json": parsed_json}
+    except Exception:
+        logger.exception("LLM job parsing failed, falling back to deterministic parser")
 
     parsed_json = _enrich_parsed_skills(_deterministic_parse(job), job)
     job.parsed_json = parsed_json
@@ -730,47 +720,37 @@ async def compute_match(
         job, profile, evidence_chunks
     )
 
-    settings = get_settings()
+    from app.modules.llm_gateway.gateway import LLMGateway
+
+    logger = logging.getLogger(__name__)
     explanation = None
-
-    api_key = settings.openrouter_api_key or settings.deepseek_api_key
-    base_url = settings.openrouter_base_url if settings.openrouter_api_key else settings.deepseek_base_url
-    model = settings.openrouter_model_fast if settings.openrouter_api_key else settings.deepseek_model_fast
-
-    if api_key:
-        try:
-            from openai import AsyncOpenAI
-
-            client = AsyncOpenAI(
-                api_key=api_key,
-                base_url=base_url,
-            )
-            resp = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a career coach. Given a match score and breakdown, write 2-3 sentences explaining the fit and key gaps. Be concise and factual.",
-                    },
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Score: {overall_score}/5. Recommendation: {recommendation}.\n"
-                            f"Breakdown: {json.dumps(breakdown)}\n"
-                            f"Gaps: {json.dumps(gaps)}\n"
-                            f"Job: {job.title} at {job.company}\n"
-                            f"Profile: {profile.headline}"
-                        ),
-                    },
-                ],
-                temperature=0.3,
-                max_tokens=300,
-            )
-            content = resp.choices[0].message.content
-            if content:
-                explanation = content.strip()
-        except Exception:
-            pass
+    gateway = LLMGateway()
+    try:
+        content = await gateway.run_text(
+            tenant_id=tenant.id,
+            task="fit_explanation",
+            prompt_version="1.0",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a career coach. Given a match score and breakdown, write 2-3 sentences explaining the fit and key gaps. Be concise and factual.",
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Score: {overall_score}/5. Recommendation: {recommendation}.\n"
+                        f"Breakdown: {json.dumps(breakdown)}\n"
+                        f"Gaps: {json.dumps(gaps)}\n"
+                        f"Job: {job.title} at {job.company}\n"
+                        f"Profile: {profile.headline}"
+                    ),
+                },
+            ],
+        )
+        if content:
+            explanation = content.strip()
+    except Exception:
+        logger.exception("LLM match explanation failed, falling back to template")
 
     if not explanation:
         explanation = _generate_explanation_template(

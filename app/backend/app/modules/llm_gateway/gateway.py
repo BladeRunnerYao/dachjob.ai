@@ -16,22 +16,18 @@ from app.db.session import async_session_factory
 class LLMGateway:
     def __init__(self):
         settings = get_settings()
-        if settings.openrouter_api_key:
-            self.client = AsyncOpenAI(
-                api_key=settings.openrouter_api_key,
-                base_url=settings.openrouter_base_url,
+        if not settings.openrouter_api_key:
+            raise RuntimeError(
+                "No LLM API key configured. "
+                "Set OPENROUTER_API_KEY in .env"
             )
-            self.default_model = settings.openrouter_model_fast
-            self.default_model_reasoning = settings.openrouter_model_reasoning
-            self.provider = "openrouter"
-        else:
-            self.client = AsyncOpenAI(
-                api_key=settings.deepseek_api_key,
-                base_url=settings.deepseek_base_url,
-            )
-            self.default_model = settings.deepseek_model_fast
-            self.default_model_reasoning = settings.deepseek_model_reasoning
-            self.provider = "deepseek"
+        self.client = AsyncOpenAI(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+        )
+        self.default_model = settings.openrouter_model_fast
+        self.default_model_reasoning = settings.openrouter_model_reasoning
+        self.provider = "openrouter"
         self.settings = settings
 
     async def run_text(
@@ -42,6 +38,7 @@ class LLMGateway:
         messages: list[dict],
         model: str | None = None,
         reasoning: bool = False,
+        response_format: dict | None = None,
     ) -> str:
         settings = self.settings
         model = model or self.default_model
@@ -58,6 +55,8 @@ class LLMGateway:
             )
             if reasoning:
                 kwargs["extra_body"] = {"reasoning": {"enabled": True}}
+            if response_format:
+                kwargs["response_format"] = response_format
 
             response = await self.client.chat.completions.create(**kwargs)
             latency_ms = int((time.monotonic() - start) * 1000)
