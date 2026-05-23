@@ -18,19 +18,23 @@ async def get_profile_by_tenant(
 
 
 async def upsert_profile(
-    db: AsyncSession, tenant_id: UUID, full_name: str, headline: str, raw_cv_md: str
+    db: AsyncSession, tenant_id: UUID, full_name: str, headline: str, raw_cv_md: str,
+    location: str | None = None,
 ) -> CandidateProfile:
     profile = await get_profile_by_tenant(db, tenant_id)
     if profile:
         profile.raw_cv_md = raw_cv_md
         profile.full_name = full_name
         profile.headline = headline
+        if location is not None:
+            profile.location = location
     else:
         profile = CandidateProfile(
             tenant_id=tenant_id,
             full_name=full_name,
             headline=headline,
             raw_cv_md=raw_cv_md,
+            location=location,
         )
         db.add(profile)
     await db.flush()

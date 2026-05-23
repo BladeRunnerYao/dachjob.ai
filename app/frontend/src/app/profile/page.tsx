@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api/client';
@@ -14,6 +16,7 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [importMode, setImportMode] = useState<ImportMode>('edit');
+  const [preview, setPreview] = useState(true);
 
   const [url, setUrl] = useState('');
   const [urlImporting, setUrlImporting] = useState(false);
@@ -155,15 +158,43 @@ export default function ProfilePage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <h2 className="text-sm font-semibold text-slate-900">CV Markdown</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-900">CV Markdown</h2>
+              <div className="flex gap-1 rounded-lg border border-slate-300 p-0.5">
+                <button
+                  onClick={() => setPreview(true)}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                    preview ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Preview
+                </button>
+                <button
+                  onClick={() => setPreview(false)}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                    !preview ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <textarea
-              value={cvMd}
-              onChange={(e) => setCvMd(e.target.value)}
-              rows={16}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none"
-            />
+            {preview ? (
+              <div className="min-h-[400px] w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm leading-relaxed [&_h1]:text-lg [&_h1]:font-bold [&_h1]:text-slate-900 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-slate-900 [&_h2]:mt-4 [&_h2]:mb-2 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-slate-800 [&_h3]:mt-3 [&_h3]:mb-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1 [&_li]:text-slate-700 [&_strong]:font-semibold [&_p]:text-slate-700 [&_p]:mb-2 [&_hr]:my-4 [&_hr]:border-slate-200">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {cvMd}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <textarea
+                value={cvMd}
+                onChange={(e) => setCvMd(e.target.value)}
+                rows={16}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none"
+              />
+            )}
             <div className="flex items-center gap-3">
               <button
                 onClick={handleSave}

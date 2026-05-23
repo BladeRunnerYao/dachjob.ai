@@ -1,3 +1,4 @@
+import html
 import re
 import io
 from uuid import UUID
@@ -6,6 +7,7 @@ import httpx
 from pypdf import PdfReader
 
 from app.modules.llm_gateway.gateway import LLMGateway
+
 
 def _strip_html(html_text: str) -> str:
     text = re.sub(r"<script[^>]*>.*?</script>", "", html_text, flags=re.DOTALL | re.IGNORECASE)
@@ -20,7 +22,58 @@ def _strip_html(html_text: str) -> str:
     return text.strip()
 
 
-async def fetch_url_content(url: str) -> str:
+def _extract_h1(html_text: str) -> str | None:
+    match = re.search(r"<h1[^>]*>(.*?)</h1>", html_text, re.IGNORECASE | re.DOTALL)
+    if match:
+        content = re.sub(r"<[^>]+>", "", match.group(1))
+        content = html.unescape(content).strip()
+        return content
+    return None
+
+
+_CITIES = [
+    "Stuttgart", "Berlin", "Munich", "München", "Hamburg", "Cologne", "Köln",
+    "Frankfurt", "Düsseldorf", "Leipzig", "Dresden", "Nuremberg", "Nürnberg",
+    "Hannover", "Bremen", "Bonn", "Mannheim", "Karlsruhe", "Augsburg",
+    "Wiesbaden", "Münster", "Aachen", "Braunschweig", "Kiel", "Potsdam",
+    "Zurich", "Zürich", "Vienna", "Wien", "Amsterdam", "Paris", "London",
+]
+
+
+_COUNTRIES = ["Germany", "Deutschland", "Switzerland", "Schweiz", "Austria", "Österreich"]
+
+
+def _extract_location(text: str) -> str | None:
+    for pattern in [
+        r"\bBased\s+in\s*[:\s]+([^,\n]+(?:,\s*[^,\n]+)?)",
+        r"\bLocation[:\s]+([^,\n]+(?:,\s*[^,\n]+)?)",
+        r"[📍📌]\s*([^,\n]+(?:,\s*[^,\n]+)?)",
+    ]:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            loc = match.group(1).strip()
+            if loc:
+                return loc
+    for city in _CITIES:
+        for country in _COUNTRIES:
+            pair = re.search(
+                rf"{re.escape(city)}\s*,\s*{re.escape(country)}",
+                text, re.IGNORECASE,
+            )
+            if pair:
+                return pair.group(0)
+    for city in _CITIES:
+        idx = text.find(city)
+        if idx >= 0:
+            nearby = text[max(0, idx - 40) : idx + 80]
+            for country in _COUNTRIES:
+                if country in nearby:
+                    return f"{city}, {country}"
+            return city
+    return None
+
+
+async def fetch_url_content(url: str) -> tuple[str, dict]:
     async with httpx.AsyncClient(
         follow_redirects=True,
         timeout=20.0,
@@ -40,7 +93,17 @@ async def fetch_url_content(url: str) -> str:
     lines = [line.strip() for line in text.split("\n") if line.strip()]
     text = "\n".join(lines)
 
-    return text[:30000]
+    metadata: dict[str, str] = {}
+    h1 = _extract_h1(html_text)
+    if h1 and "|" in h1:
+        parts = h1.split("|", 1)
+        metadata["name"] = parts[0].strip()
+        metadata["headline"] = parts[1].strip()
+    location = _extract_location(text)
+    if location:
+        metadata["location"] = location
+
+    return text[:30000], metadata
 
 
 def extract_pdf_text(pdf_bytes: bytes) -> str:

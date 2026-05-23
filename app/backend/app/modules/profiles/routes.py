@@ -1,9 +1,15 @@
+import re
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tenant import TenantContext, get_tenant_context
 from app.db.session import get_db
 from app.modules.profiles.schemas import ProfileResponse, CVUploadRequest, URLImportRequest
+from sqlalchemy import select
+
+from app.db.models import CandidateProfile
 from app.modules.profiles.repository import (
     get_profile_by_tenant,
     upsert_profile,
@@ -17,20 +23,52 @@ from app.modules.resumes.service import chunk_cv_md
 router = APIRouter(prefix="/api/profile", tags=["profiles"])
 
 
-async def _profile_response(db: AsyncSession, profile):
+def _parse_name_and_headline(md: str) -> tuple[str | None, str | None]:
+    name = None
+    headline = None
+    match = re.search(r"^#\s+(.+)$", md, re.MULTILINE)
+    if match:
+        name = match.group(1).strip()
+    section_match = re.search(
+        r"^##\s+Profile(?:\s*/\s*Summary)?\s*\n+(.+?)(?:\n+##\s|\Z)",
+        md, re.MULTILINE | re.DOTALL
+    )
+    if section_match:
+        first_sentence = section_match.group(1).strip().split(".")[0].strip()
+        if first_sentence:
+            headline = first_sentence[:200]
+    return name, headline
+
+
+async def _profile_response(db: AsyncSession, tenant_id: UUID):
+    result = await db.execute(
+        select(CandidateProfile).where(CandidateProfile.tenant_id == tenant_id).limit(1)
+    )
+    profile = result.scalar_one_or_none()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
     chunks = await list_evidence_by_profile(db, profile.id)
     return {
-        "id": profile.id,
-        "tenant_id": profile.tenant_id,
+        "id": str(profile.id),
+        "tenant_id": str(profile.tenant_id),
         "full_name": profile.full_name,
         "headline": profile.headline,
         "location": profile.location,
         "timezone": profile.timezone,
         "raw_cv_md": profile.raw_cv_md,
         "profile_json": profile.profile_json,
-        "evidence_chunks": chunks,
-        "created_at": profile.created_at,
-        "updated_at": profile.updated_at,
+        "evidence_chunks": [
+            {
+                "id": str(c.id),
+                "source_type": c.source_type,
+                "source_label": c.source_label,
+                "content": c.content,
+                "metadata_json": c.metadata_json,
+            }
+            for c in chunks
+        ],
+        "created_at": profile.created_at.isoformat() if profile.created_at else None,
+        "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
     }
 
 
@@ -44,7 +82,7 @@ async def get_profile(
     profile = await get_profile_by_tenant(db, tenant.id)
     if not profile:
         return None
-    return await _profile_response(db, profile)
+    return await _profile_response(db, tenant.id)
 
 
 @router.post("/import-url", response_model=ProfileResponse)
@@ -56,11 +94,14 @@ async def import_profile_from_url(
     if tenant.id is None:
         raise HTTPException(status_code=400, detail="Tenant required")
 
-    raw_text = await fetch_url_content(body.url)
+    raw_text, metadata = await fetch_url_content(body.url)
     cv_md = await convert_to_cv_markdown(raw_text, body.url, tenant.id)
 
+    name = metadata.get("name") or _parse_name_and_headline(cv_md)[0] or "Unknown"
+    headline = metadata.get("headline") or _parse_name_and_headline(cv_md)[1] or "Unknown"
+    location = metadata.get("location")
     profile = await upsert_profile(
-        db, tenant.id, "Unknown", "Unknown", cv_md
+        db, tenant.id, name, headline, cv_md, location=location
     )
     profile.profile_json = {"source_url": body.url}
 
@@ -69,7 +110,7 @@ async def import_profile_from_url(
     if chunks:
         await create_evidence_chunks(db, tenant.id, profile.id, chunks)
 
-    return await _profile_response(db, profile)
+    return await _profile_response(db, tenant.id)
 
 
 @router.post("/import-pdf", response_model=ProfileResponse)
@@ -88,8 +129,9 @@ async def import_profile_from_pdf(
     raw_text = extract_pdf_text(pdf_bytes)
     cv_md = await convert_to_cv_markdown(raw_text, file.filename, tenant.id)
 
+    name, headline = _parse_name_and_headline(cv_md)
     profile = await upsert_profile(
-        db, tenant.id, "Unknown", "Unknown", cv_md
+        db, tenant.id, name or "Unknown", headline or "Unknown", cv_md
     )
     profile.profile_json = {"source_pdf": file.filename}
 
@@ -98,7 +140,7 @@ async def import_profile_from_pdf(
     if chunks:
         await create_evidence_chunks(db, tenant.id, profile.id, chunks)
 
-    return await _profile_response(db, profile)
+    return await _profile_response(db, tenant.id)
 
 
 @router.post("/cv", response_model=ProfileResponse)
@@ -107,8 +149,13 @@ async def upload_cv(
     tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    existing = await get_profile_by_tenant(db, tenant.id)
+    name, headline = _parse_name_and_headline(body.raw_cv_md)
+    name = name or (existing.full_name if existing else "Unknown")
+    headline = headline or (existing.headline if existing else "Unknown")
+    location = existing.location if existing else None
     profile = await upsert_profile(
-        db, tenant.id, "Demo User", "Senior AI Platform Engineer", body.raw_cv_md
+        db, tenant.id, name, headline, body.raw_cv_md, location=location
     )
 
     await delete_evidence_by_profile(db, profile.id)
@@ -116,4 +163,4 @@ async def upload_cv(
     if chunks:
         await create_evidence_chunks(db, tenant.id, profile.id, chunks)
 
-    return await _profile_response(db, profile)
+    return await _profile_response(db, tenant.id)

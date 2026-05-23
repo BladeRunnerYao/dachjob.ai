@@ -15,3 +15,6 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Local change logs (never pushed)
+/ChangeLog/
