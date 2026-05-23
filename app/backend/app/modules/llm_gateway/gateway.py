@@ -16,18 +16,28 @@ from app.db.session import async_session_factory
 class LLMGateway:
     def __init__(self):
         settings = get_settings()
-        if not settings.openrouter_api_key:
+        provider = settings.llm_provider.lower()
+        if provider == "deepseek" and settings.deepseek_api_key:
+            api_key = settings.deepseek_api_key
+            base_url = settings.deepseek_base_url
+            self.default_model = settings.deepseek_model_fast
+            self.default_model_reasoning = settings.deepseek_model_reasoning
+            self.provider = "deepseek"
+        elif settings.openrouter_api_key:
+            api_key = settings.openrouter_api_key
+            base_url = settings.openrouter_base_url
+            self.default_model = settings.openrouter_model_fast
+            self.default_model_reasoning = settings.openrouter_model_reasoning
+            self.provider = "openrouter"
+        else:
             raise RuntimeError(
                 "No LLM API key configured. "
-                "Set OPENROUTER_API_KEY in .env"
+                "Set DEEPSEEK_API_KEY or OPENROUTER_API_KEY in .env"
             )
         self.client = AsyncOpenAI(
-            api_key=settings.openrouter_api_key,
-            base_url=settings.openrouter_base_url,
+            api_key=api_key,
+            base_url=base_url,
         )
-        self.default_model = settings.openrouter_model_fast
-        self.default_model_reasoning = settings.openrouter_model_reasoning
-        self.provider = "openrouter"
         self.settings = settings
 
     async def run_text(
@@ -40,8 +50,9 @@ class LLMGateway:
         reasoning: bool = False,
         response_format: dict | None = None,
     ) -> str:
-        settings = self.settings
-        model = model or self.default_model
+        model = model or (
+            self.default_model_reasoning if reasoning else self.default_model
+        )
 
         start = time.monotonic()
         input_text = json.dumps(messages, sort_keys=True)
@@ -53,7 +64,7 @@ class LLMGateway:
                 messages=messages,
                 temperature=0.3,
             )
-            if reasoning:
+            if reasoning and self.provider == "openrouter":
                 kwargs["extra_body"] = {"reasoning": {"enabled": True}}
             if response_format:
                 kwargs["response_format"] = response_format
@@ -109,8 +120,9 @@ class LLMGateway:
         model: str | None = None,
         thinking: bool = False,
     ) -> BaseModel:
-        settings = self.settings
-        model = model or self.default_model
+        model = model or (
+            self.default_model_reasoning if thinking else self.default_model
+        )
 
         start = time.monotonic()
         input_text = json.dumps(messages, sort_keys=True)
@@ -123,7 +135,7 @@ class LLMGateway:
                 response_format={"type": "json_object"},
                 temperature=0.3,
             )
-            if thinking:
+            if thinking and self.provider == "openrouter":
                 kwargs["extra_body"] = {"reasoning": {"enabled": True}}
 
             response = await self.client.chat.completions.create(**kwargs)

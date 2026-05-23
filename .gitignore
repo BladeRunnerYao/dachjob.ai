@@ -21,3 +21,5 @@ build/
 
 # Local change logs (never pushed)
 /ChangeLog/
+.terraform/
+*.tfplan
