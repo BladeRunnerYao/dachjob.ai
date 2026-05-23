@@ -16,28 +16,18 @@ from app.db.session import async_session_factory
 class LLMGateway:
     def __init__(self):
         settings = get_settings()
-        if settings.openrouter_api_key:
-            self.client = AsyncOpenAI(
-                api_key=settings.openrouter_api_key,
-                base_url=settings.openrouter_base_url,
+        if not settings.openrouter_api_key:
+            raise RuntimeError(
+                "No LLM API key configured. "
+                "Set OPENROUTER_API_KEY in .env"
             )
-            self.default_model = settings.openrouter_model_fast
-            self.default_model_reasoning = settings.openrouter_model_reasoning
-            self.provider = "openrouter"
-        else:
-            deepseek_key = getattr(settings, 'deepseek_api_key', '') or ''
-            if not deepseek_key:
-                raise RuntimeError(
-                    "No LLM API key configured. "
-                    "Set OPENROUTER_API_KEY (or uncomment DEEPSEEK_API_KEY) in .env"
-                )
-            self.client = AsyncOpenAI(
-                api_key=deepseek_key,
-                base_url=getattr(settings, 'deepseek_base_url', 'https://api.deepseek.com') or 'https://api.deepseek.com',
-            )
-            self.default_model = getattr(settings, 'deepseek_model_fast', 'deepseek-v4-flash') or 'deepseek-v4-flash'
-            self.default_model_reasoning = getattr(settings, 'deepseek_model_reasoning', 'deepseek-v4-pro') or 'deepseek-v4-pro'
-            self.provider = "deepseek"
+        self.client = AsyncOpenAI(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+        )
+        self.default_model = settings.openrouter_model_fast
+        self.default_model_reasoning = settings.openrouter_model_reasoning
+        self.provider = "openrouter"
         self.settings = settings
 
     async def run_text(
