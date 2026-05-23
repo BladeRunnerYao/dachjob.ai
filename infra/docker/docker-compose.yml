@@ -76,7 +76,7 @@ services:
   api:
     build:
       context: ../../
-      dockerfile: apps/api/Dockerfile
+      dockerfile: app/backend/Dockerfile
     container_name: dachjob-api
     ports:
       - "8000:8000"
@@ -88,7 +88,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT_URL: http://minio:9000
     volumes:
-      - ../../apps/api:/app
+      - ../../app/backend:/app
     command: sh -c "alembic -c app/db/migrations/alembic.ini upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
       postgres:
@@ -103,7 +103,7 @@ services:
   worker:
     build:
       context: ../../
-      dockerfile: apps/api/Dockerfile
+      dockerfile: app/backend/Dockerfile
     container_name: dachjob-worker
     env_file:
       - ../../.env
@@ -126,7 +126,7 @@ services:
   frontend:
     build:
       context: ../../
-      dockerfile: apps/web/Dockerfile
+      dockerfile: app/frontend/Dockerfile
     container_name: dachjob-frontend
     ports:
       - "3000:3000"
@@ -134,7 +134,7 @@ services:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
       INTERNAL_API_BASE_URL: http://api:8000
     volumes:
-      - ../../apps/web:/app
+      - ../../app/frontend:/app
       - /app/node_modules
     depends_on:
       - api

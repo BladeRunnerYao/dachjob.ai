@@ -13,8 +13,8 @@ Read:
 
 Task:
 Create the base monorepo structure for a local-first AI job search platform:
-- apps/api
-- apps/web
+- app/backend
+- app/frontend
 - infra/docker
 - docs already exists, do not rewrite requirements
 
@@ -71,10 +71,10 @@ Read:
 - docs/requirements/02-backend-api.md
 
 Implement only:
-- apps/api/app/main.py
-- apps/api/app/core/*
-- apps/api/app/db/session.py
-- apps/api/app/workers/celery_app.py
+- app/backend/app/main.py
+- app/backend/app/core/*
+- app/backend/app/db/session.py
+- app/backend/app/workers/celery_app.py
 - basic health router
 
 Goal:
@@ -127,7 +127,7 @@ Read:
 - docs/requirements/04-llm-gateway.md
 
 Implement:
-- apps/api/app/modules/llm_gateway/*
+- app/backend/app/modules/llm_gateway/*
 - DeepSeek provider using OpenAI-compatible SDK
 - prompt loader
 - Pydantic output schemas
@@ -216,7 +216,7 @@ Read:
 - docs/requirements/07-frontend-dashboard.md
 
 Implement:
-- Next.js dashboard under apps/web
+- Next.js dashboard under app/frontend
 - navigation layout
 - dashboard page
 - profile vault page

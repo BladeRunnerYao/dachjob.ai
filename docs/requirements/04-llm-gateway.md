@@ -40,7 +40,7 @@ Do not hardcode API keys.
 Recommended structure:
 
 ```text
-apps/api/app/modules/llm_gateway/prompts/
+app/backend/app/modules/llm_gateway/prompts/
   jd_extract.v1.md
   fit_explanation.v1.md
   evidence_select.v1.md

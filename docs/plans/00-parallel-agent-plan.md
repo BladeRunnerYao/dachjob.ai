@@ -15,20 +15,20 @@ Each agent should read:
 | Agent | Doc | Main Paths | Dependencies |
 |---|---|---|---|
 | Infrastructure Agent | `01-local-docker-runtime.md` | `infra/docker/`, `.env.example`, Dockerfiles | none |
-| Backend Foundation Agent | `02-backend-api.md` | `apps/api/app/core/`, `apps/api/app/main.py` | none |
-| Data Model Agent | `03-data-model.md` | `apps/api/app/db/` | backend skeleton |
-| LLM Platform Agent | `04-llm-gateway.md` | `apps/api/app/modules/llm_gateway/` | backend skeleton + data model for logging |
-| Job Matching Agent | `05-job-matching.md` | `apps/api/app/modules/jobs/`, `matching/` | LLM gateway + data model |
+| Backend Foundation Agent | `02-backend-api.md` | `app/backend/app/core/`, `app/backend/app/main.py` | none |
+| Data Model Agent | `03-data-model.md` | `app/backend/app/db/` | backend skeleton |
+| LLM Platform Agent | `04-llm-gateway.md` | `app/backend/app/modules/llm_gateway/` | backend skeleton + data model for logging |
+| Job Matching Agent | `05-job-matching.md` | `app/backend/app/modules/jobs/`, `matching/` | LLM gateway + data model |
 | RAG/Resume Agent | `06-rag-resume-generation.md` | `profiles/`, `resumes/`, `storage/` | data model + LLM gateway |
-| Frontend Agent | `07-frontend-dashboard.md` | `apps/web/` | can start with mocks |
+| Frontend Agent | `07-frontend-dashboard.md` | `app/frontend/` | can start with mocks |
 | Tracker/Autofill Agent | `08-tracker-autofill.md` | `tracker/`, frontend tracker pages | data model |
 
 ## Phase 0: Repository Bootstrap
 
 Single agent should create:
 
-- `apps/api`
-- `apps/web`
+- `app/backend`
+- `app/frontend`
 - `infra/docker`
 - `pyproject.toml` for backend
 - `package.json` for frontend

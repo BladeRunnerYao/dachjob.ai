@@ -26,8 +26,8 @@ Create a local Docker Compose environment that can run the MVP cheaply on a lapt
 - `infra/docker/docker-compose.yml`
 - `infra/docker/prometheus.yml`
 - `.env.example`
-- `apps/api/Dockerfile`
-- `apps/web/Dockerfile`
+- `app/backend/Dockerfile`
+- `app/frontend/Dockerfile`
 - root `README.md` local setup section
 
 ## Environment Variables

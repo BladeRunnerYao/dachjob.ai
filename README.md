@@ -7,7 +7,7 @@ The product helps engineers evaluate AI Platform, Data Platform, MLOps, Backend 
 This repository is intended to contain both:
 
 - Requirements and implementation plans under `docs/`
-- Project code under `apps/` and `infra/`
+- Project code under `app/` and `infra/`
 
 ## Documentation
 
@@ -33,3 +33,13 @@ Start here:
 The first version should run fully on a local machine with Docker Compose. The only external dependency is the DeepSeek API key.
 
 The project should not automatically submit job applications. It may prepare forms, CVs, cover notes, and answers, but the user must review and submit manually.
+
+## Local URLs
+
+After the Docker Compose stack is running, source the local environment helper to export the ports and print clickable URLs:
+
+```bash
+source scripts/local-env.sh
+```
+
+It exports `DACHJOB_WEB_URL`, `DACHJOB_JOBS_URL`, `DACHJOB_API_URL`, `DACHJOB_API_HEALTH_URL`, `DACHJOB_API_DOCS_URL`, and MinIO URLs for quick testing from VS Code terminals.
