@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: celery-worker
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: worker
+  namespace: celery-worker
+  annotations:
+    iam.gke.io/gcp-service-account: dachjob-dev-worker-sa@dachjob-ai-platform.iam.gserviceaccount.com
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  namespace: celery-worker
+  labels:
+    app: dachjob
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dachjob
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: dachjob
+        component: worker
+    spec:
+      serviceAccountName: worker
+      containers:
+        - name: worker
+          image: europe-west1-docker.pkg.dev/dachjob-ai-platform/dachjob-dev-worker:latest
+          command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info"]
+          env:
+            - name: APP_ENV
+              value: "production"
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: worker-secrets
+                  key: redis_host
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: worker-secrets
+                  key: database_url
+            - name: OPENROUTER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: worker-secrets
+                  key: openrouter_api_key
+            - name: DEEPSEEK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: worker-secrets
+                  key: deepseek_api_key
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: worker-secrets
+                  key: jwt_secret_key
+            - name: GOOGLE_CLOUD_PROJECT
+              value: dachjob-ai-platform
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: celery-worker
+  namespace: celery-worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: celery-worker
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

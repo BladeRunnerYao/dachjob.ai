@@ -1,0 +1,18 @@
+# Example terraform.tfvars — copy to environments/<env>/terraform.tfvars and fill in.
+
+project_id         = "your-gcp-project-id"
+region             = "europe-west1"
+environment        = "dev"
+billing_account_id = "000000-000000-000000"
+notification_email = "your-email@example.com"
+
+# Optional overrides (defaults shown):
+# db_tier          = "db-f1-micro"
+# db_disk_size_gb  = 20
+# redis_tier       = "basic"
+# redis_memory_size_gb = 1
+# gke_machine_type = "e2-custom-2-4096"
+# gke_min_nodes    = 1
+# gke_max_nodes    = 3
+# budget_amount    = 200
+# domain           = ""
