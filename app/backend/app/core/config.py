@@ -15,10 +15,12 @@ class Settings(BaseSettings):
     cloud_sql_connection_name: str = ""
     redis_url: str = "redis://localhost:6379/0"
 
-    # deepseek_api_key: str = ""
-    # deepseek_base_url: str = "https://api.deepseek.com"
-    # deepseek_model_fast: str = "deepseek-v4-flash"
-    # deepseek_model_reasoning: str = "deepseek-v4-pro"
+    llm_provider: str = "deepseek"
+
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_model_fast: str = "deepseek-v4-flash"
+    deepseek_model_reasoning: str = "deepseek-v4-pro"
 
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"

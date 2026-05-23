@@ -91,6 +91,8 @@ spec:
               value: dachjob-dev-artifacts
             - name: GOOGLE_CLOUD_PROJECT
               value: dachjob-ai-platform
+            - name: LLM_PROVIDER
+              value: deepseek
           resources:
             requests:
               cpu: "500m"
