@@ -15,3 +15,9 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+.playwright-cli/
+.vscode/
+
+# Local change logs (never pushed)
+/ChangeLog/

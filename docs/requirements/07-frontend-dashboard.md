@@ -103,7 +103,7 @@ Frontend can start with mock data before backend endpoints are ready.
 Recommended API client layer:
 
 ```text
-apps/web/lib/api/
+app/frontend/lib/api/
   client.ts
   jobs.ts
   profile.ts

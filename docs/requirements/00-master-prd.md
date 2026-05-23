@@ -83,7 +83,7 @@ This keeps the implementation realistic but manageable for local development.
 
 ## Success Criteria
 
-- `docker compose up --build` starts all MVP services.
+- `docker-compose -f infra/docker/docker-compose.yml up -d --build` starts all MVP services using cached builds by default.
 - `/api/health` reports API, database, Redis, and MinIO status.
 - User can upload CV Markdown.
 - User can create a job from pasted JD text.

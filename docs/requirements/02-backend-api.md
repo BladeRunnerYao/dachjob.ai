@@ -23,7 +23,7 @@ Build the FastAPI application foundation with settings, database session wiring,
 ## Required Structure
 
 ```text
-apps/api/
+app/backend/
   app/
     main.py
     core/
