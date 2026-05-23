@@ -183,7 +183,7 @@ async def generate_resume(
         provenance = {
             "method": "llm",
             "job_id": str(job_id),
-            "model": gateway.settings.deepseek_model_fast,
+            "model": gateway.default_model,
         }
     except Exception:
         pass

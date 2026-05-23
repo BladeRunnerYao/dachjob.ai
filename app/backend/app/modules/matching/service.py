@@ -403,16 +403,20 @@ async def parse_job_posting(
 
     settings = get_settings()
 
-    if settings.deepseek_api_key:
+    api_key = settings.openrouter_api_key or settings.deepseek_api_key
+    base_url = settings.openrouter_base_url if settings.openrouter_api_key else settings.deepseek_base_url
+    model = settings.openrouter_model_fast if settings.openrouter_api_key else settings.deepseek_model_fast
+
+    if api_key:
         try:
             from openai import AsyncOpenAI
 
             client = AsyncOpenAI(
-                api_key=settings.deepseek_api_key,
-                base_url=settings.deepseek_base_url,
+                api_key=api_key,
+                base_url=base_url,
             )
             response = await client.chat.completions.create(
-                model=settings.deepseek_model_fast,
+                model=model,
                 messages=[
                     {
                         "role": "system",
@@ -664,16 +668,20 @@ async def compute_match(
     settings = get_settings()
     explanation = None
 
-    if settings.deepseek_api_key:
+    api_key = settings.openrouter_api_key or settings.deepseek_api_key
+    base_url = settings.openrouter_base_url if settings.openrouter_api_key else settings.deepseek_base_url
+    model = settings.openrouter_model_fast if settings.openrouter_api_key else settings.deepseek_model_fast
+
+    if api_key:
         try:
             from openai import AsyncOpenAI
 
             client = AsyncOpenAI(
-                api_key=settings.deepseek_api_key,
-                base_url=settings.deepseek_base_url,
+                api_key=api_key,
+                base_url=base_url,
             )
             resp = await client.chat.completions.create(
-                model=settings.deepseek_model_fast,
+                model=model,
                 messages=[
                     {
                         "role": "system",

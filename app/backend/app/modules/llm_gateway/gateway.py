@@ -16,10 +16,22 @@ from app.db.session import async_session_factory
 class LLMGateway:
     def __init__(self):
         settings = get_settings()
-        self.client = AsyncOpenAI(
-            api_key=settings.deepseek_api_key,
-            base_url=settings.deepseek_base_url,
-        )
+        if settings.openrouter_api_key:
+            self.client = AsyncOpenAI(
+                api_key=settings.openrouter_api_key,
+                base_url=settings.openrouter_base_url,
+            )
+            self.default_model = settings.openrouter_model_fast
+            self.default_model_reasoning = settings.openrouter_model_reasoning
+            self.provider = "openrouter"
+        else:
+            self.client = AsyncOpenAI(
+                api_key=settings.deepseek_api_key,
+                base_url=settings.deepseek_base_url,
+            )
+            self.default_model = settings.deepseek_model_fast
+            self.default_model_reasoning = settings.deepseek_model_reasoning
+            self.provider = "deepseek"
         self.settings = settings
 
     async def run_text(
@@ -29,20 +41,25 @@ class LLMGateway:
         prompt_version: str,
         messages: list[dict],
         model: str | None = None,
+        reasoning: bool = False,
     ) -> str:
         settings = self.settings
-        model = model or settings.deepseek_model_fast
+        model = model or self.default_model
 
         start = time.monotonic()
         input_text = json.dumps(messages, sort_keys=True)
         input_hash = hashlib.sha256(input_text.encode()).hexdigest()[:16]
 
         try:
-            response = await self.client.chat.completions.create(
+            kwargs: dict[str, Any] = dict(
                 model=model,
                 messages=messages,
                 temperature=0.3,
             )
+            if reasoning:
+                kwargs["extra_body"] = {"reasoning": {"enabled": True}}
+
+            response = await self.client.chat.completions.create(**kwargs)
             latency_ms = int((time.monotonic() - start) * 1000)
 
             content = response.choices[0].message.content or ""
@@ -94,19 +111,23 @@ class LLMGateway:
         thinking: bool = False,
     ) -> BaseModel:
         settings = self.settings
-        model = model or settings.deepseek_model_fast
+        model = model or self.default_model
 
         start = time.monotonic()
         input_text = json.dumps(messages, sort_keys=True)
         input_hash = hashlib.sha256(input_text.encode()).hexdigest()[:16]
 
         try:
-            response = await self.client.chat.completions.create(
+            kwargs: dict[str, Any] = dict(
                 model=model,
                 messages=messages,
                 response_format={"type": "json_object"},
                 temperature=0.3,
             )
+            if thinking:
+                kwargs["extra_body"] = {"reasoning": {"enabled": True}}
+
+            response = await self.client.chat.completions.create(**kwargs)
             latency_ms = int((time.monotonic() - start) * 1000)
 
             content = response.choices[0].message.content or "{}"
@@ -156,7 +177,7 @@ class LLMGateway:
                     id=uuid.uuid4(),
                     tenant_id=kwargs["tenant_id"],
                     task=kwargs["task"],
-                    provider="deepseek",
+                    provider=self.provider,
                     model=kwargs["model"],
                     prompt_version=kwargs.get("prompt_version"),
                     input_hash=kwargs.get("input_hash"),
