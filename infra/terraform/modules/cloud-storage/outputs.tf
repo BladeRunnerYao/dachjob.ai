@@ -8,7 +8,7 @@ output "static_bucket_name" {
   value       = google_storage_bucket.static_assets.name
 }
 
-output "terraform_state_bucket" {
-  description = "Name of the Terraform state GCS bucket"
-  value       = google_storage_bucket.terraform_state.name
-}
+# output "terraform_state_bucket" {
+#   description = "Name of the Terraform state GCS bucket"
+#   value       = google_storage_bucket.terraform_state.name
+# }

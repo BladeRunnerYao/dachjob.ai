@@ -80,16 +80,15 @@ resource "google_project_iam_member" "terraform_roles" {
     "roles/cloudsql.admin",
     "roles/redis.admin",
     "roles/serviceusage.serviceUsageAdmin",
-    "roles/billing.user",
   ])
   project = var.project_id
   role    = each.key
   member  = "serviceAccount:${google_service_account.terraform.email}"
 }
 
-# Workload Identity for GKE
-resource "google_service_account_iam_member" "worker_workload_identity" {
-  service_account_id = google_service_account.worker.name
-  role               = "roles/iam.workloadIdentityUser"
-  member             = "serviceAccount:${var.project_id}.svc.id.goog[celery-worker/worker]"
-}
+# Workload Identity for GKE — applied manually after GKE cluster is created
+# resource "google_service_account_iam_member" "worker_workload_identity" {
+#   service_account_id = google_service_account.worker.name
+#   role               = "roles/iam.workloadIdentityUser"
+#   member             = "serviceAccount:${var.project_id}.svc.id.goog[celery-worker/worker]"
+# }

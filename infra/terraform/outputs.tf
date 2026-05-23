@@ -1,13 +1,3 @@
-output "cloud_run_api_url" {
-  description = "URL of the deployed FastAPI backend"
-  value       = module.cloud-run.api_url
-}
-
-output "cloud_run_frontend_url" {
-  description = "URL of the deployed Next.js frontend"
-  value       = module.cloud-run.frontend_url
-}
-
 output "gke_cluster_name" {
   description = "Name of the GKE cluster"
   value       = module.gke.cluster_name

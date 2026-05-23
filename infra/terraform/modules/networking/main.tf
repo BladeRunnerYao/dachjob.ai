@@ -1,7 +1,6 @@
 resource "google_compute_network" "vpc" {
   name                    = "${var.name_prefix}-vpc"
   auto_create_subnetworks = true
-  labels                  = var.labels
 }
 
 resource "google_vpc_access_connector" "connector" {

@@ -28,9 +28,9 @@ variable "db_disk_size_gb" {
 }
 
 variable "redis_tier" {
-  description = "Memorystore Redis tier"
+  description = "Memorystore Redis tier (BASIC, STANDARD_HA)"
   type        = string
-  default     = "basic"
+  default     = "BASIC"
 }
 
 variable "redis_memory_size_gb" {

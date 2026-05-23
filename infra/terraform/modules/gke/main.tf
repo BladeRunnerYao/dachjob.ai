@@ -1,7 +1,6 @@
 resource "google_container_cluster" "cluster" {
   name     = "${var.name_prefix}-cluster"
   location = var.region
-  labels   = var.labels
 
   enable_autopilot = true
 

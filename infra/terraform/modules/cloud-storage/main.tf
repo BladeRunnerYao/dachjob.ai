@@ -35,14 +35,12 @@ resource "google_storage_bucket" "static_assets" {
   }
 }
 
-resource "google_storage_bucket" "terraform_state" {
-  name          = "${var.name_prefix}-terraform-state"
-  location      = var.location
-  storage_class = "STANDARD"
-  labels        = var.labels
-
-  uniform_bucket_level_access = true
-  versioning {
-    enabled = true
-  }
-}
+# Terraform state bucket is created manually by scripts/bootstrap.sh
+# resource "google_storage_bucket" "terraform_state" {
+#   name          = "${var.name_prefix}-terraform-state"
+#   location      = var.location
+#   storage_class = "STANDARD"
+#   labels        = var.labels
+#   uniform_bucket_level_access = true
+#   versioning { enabled = true }
+# }

@@ -35,7 +35,7 @@ resource "google_cloud_run_v2_service" "api" {
       }
       env {
         name  = "DATABASE_URL"
-        value = "postgresql+asyncpg://cloud-run-sa@/${var.cloud_sql_connection_name}/dachjob"
+        value = "postgresql+asyncpg://${var.api_service_account_email}/dachjob?host=/cloudsql/${var.cloud_sql_connection_name}"
       }
       env {
         name  = "REDIS_HOST"
@@ -69,7 +69,7 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "SECRET_KEY"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.jwt_secret.secret_id
+            secret  = data.google_secret_manager_secret.jwt_secret.secret_id
             version = "latest"
           }
         }
@@ -78,7 +78,7 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "OPENROUTER_API_KEY"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.openrouter_api_key.secret_id
+            secret  = data.google_secret_manager_secret.openrouter_api_key.secret_id
             version = "latest"
           }
         }
@@ -87,7 +87,7 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "DEEPSEEK_API_KEY"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.deepseek_api_key.secret_id
+            secret  = data.google_secret_manager_secret.deepseek_api_key.secret_id
             version = "latest"
           }
         }
@@ -103,12 +103,6 @@ resource "google_cloud_run_v2_service" "api" {
       }
     }
   }
-
-  depends_on = [
-    google_secret_manager_secret.openrouter_api_key,
-    google_secret_manager_secret.deepseek_api_key,
-    google_secret_manager_secret.jwt_secret,
-  ]
 }
 
 resource "google_cloud_run_v2_service" "frontend" {

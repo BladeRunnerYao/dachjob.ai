@@ -28,13 +28,13 @@ module "artifact-registry" {
 module "cloud-sql" {
   source = "./modules/cloud-sql"
 
-  name_prefix      = local.name_prefix
-  region           = var.region
-  db_tier          = var.db_tier
-  db_disk_size_gb  = var.db_disk_size_gb
-  vpc_connector_id = module.networking.vpc_connector_id
-  network_id       = module.networking.network_id
-  labels           = local.common_labels
+  name_prefix     = local.name_prefix
+  region          = var.region
+  db_tier         = var.db_tier
+  db_disk_size_gb = var.db_disk_size_gb
+  network_id               = module.networking.network_id
+  api_service_account_email = module.iam.api_service_account_email
+  labels                    = local.common_labels
 }
 
 module "memorystore" {
@@ -72,27 +72,8 @@ module "iam" {
   gcs_bucket_name          = module.cloud-storage.bucket_name
 }
 
-module "cloud-run" {
-  source = "./modules/cloud-run"
-
-  name_prefix              = local.name_prefix
-  region                   = var.region
-  project_id               = var.project_id
-  vpc_connector_id         = module.networking.vpc_connector_id
-  api_image                = "${module.artifact-registry.api_repo}/${var.api_image_tag}"
-  frontend_image           = "${module.artifact-registry.frontend_repo}/${var.frontend_image_tag}"
-  cloud_sql_connection_name = module.cloud-sql.connection_name
-  redis_host               = module.memorystore.host
-  gcs_bucket_name          = module.cloud-storage.bucket_name
-  api_service_account_email = module.iam.api_service_account_email
-  frontend_service_account_email = module.iam.frontend_service_account_email
-  depends_on = [
-    module.cloud-sql,
-    module.memorystore,
-    module.cloud-storage,
-    module.secret-manager,
-  ]
-}
+# Cloud Run is deployed via CI/CD pipeline after Docker images are built
+# module "cloud-run" { ... }
 
 module "gke" {
   source = "./modules/gke"
@@ -113,11 +94,6 @@ module "monitoring" {
 
   name_prefix        = local.name_prefix
   project_id         = var.project_id
-  billing_account_id = var.billing_account_id
-  budget_amount      = var.budget_amount
   notification_email = var.notification_email
-  cloud_run_api_url  = module.cloud-run.api_url
   labels             = local.common_labels
-
-  depends_on = [module.cloud-run]
 }

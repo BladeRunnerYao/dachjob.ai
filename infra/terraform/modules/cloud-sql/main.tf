@@ -2,10 +2,10 @@ resource "google_sql_database_instance" "postgres" {
   name             = "${var.name_prefix}-postgres"
   database_version = "POSTGRES_16"
   region           = var.region
-  labels           = var.labels
 
   settings {
     tier              = var.db_tier
+    edition           = "ENTERPRISE"
     disk_size         = var.db_disk_size_gb
     disk_type         = "PD_SSD"
     availability_type = "ZONAL"
@@ -20,11 +20,6 @@ resource "google_sql_database_instance" "postgres" {
     ip_configuration {
       ipv4_enabled    = false
       private_network = var.network_id
-
-      authorized_networks {
-        name  = "cloud-run-connector"
-        value = "10.8.0.0/28"
-      }
     }
 
     database_flags {
@@ -42,7 +37,7 @@ resource "google_sql_database" "database" {
 }
 
 resource "google_sql_user" "iam_user" {
-  name     = "cloud-run-sa"
+  name     = trimsuffix(var.api_service_account_email, ".gserviceaccount.com")
   instance = google_sql_database_instance.postgres.name
   type     = "CLOUD_IAM_SERVICE_ACCOUNT"
 }
