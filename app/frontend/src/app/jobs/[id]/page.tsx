@@ -7,7 +7,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { JobDescriptionView } from '@/components/jobs/job-description-view';
 import { api } from '@/lib/api/client';
-import type { JobPosting, MatchReport, ResumeArtifact } from '@/lib/api/types';
+import type { JobPosting, MatchReport, ResumeArtifact, CandidateProfile } from '@/lib/api/types';
 
 type Tab = 'raw' | 'parsed' | 'match' | 'evidence' | 'cv';
 
@@ -39,6 +39,16 @@ const responsibilityThemes = [
   },
 ];
 
+function isSkillInProfile(skill: string, profile: CandidateProfile | null): boolean {
+  if (!profile) return false;
+  const text = [
+    profile.raw_cv_md,
+    profile.headline,
+    ...(profile.evidence_chunks || []).map((c) => c.content),
+  ].join(' ').toLowerCase();
+  return text.includes(skill.toLowerCase());
+}
+
 function responsibilityTheme(text: string) {
   const lower = text.toLowerCase();
   return responsibilityThemes.find((theme) => theme.patterns.some((pattern) => lower.includes(pattern)))
@@ -53,6 +63,8 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [matching, setMatching] = useState(false);
   const [generatingResume, setGeneratingResume] = useState(false);
+  const [profile, setProfile] = useState<CandidateProfile | null>(null);
+  const [ownedSkills, setOwnedSkills] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<Tab>('raw');
 
   useEffect(() => {
@@ -60,10 +72,12 @@ export default function JobDetailPage() {
       api.getJob(id),
       api.getLatestMatchReport(id),
       api.getLatestResumeArtifact(id),
-    ]).then(([j, m, r]) => {
+      api.getProfile(),
+    ]).then(([j, m, r, p]) => {
       setJob(j);
       setMatch(m);
       setResume(r);
+      setProfile(p);
       setLoading(false);
     });
   }, [id]);
@@ -110,6 +124,15 @@ export default function JobDetailPage() {
     } finally {
       setMatching(false);
     }
+  };
+
+  const toggleSkill = (skill: string) => {
+    setOwnedSkills((prev) => {
+      const next = new Set(prev);
+      if (next.has(skill)) next.delete(skill);
+      else next.add(skill);
+      return next;
+    });
   };
 
   const generateResume = async () => {
@@ -170,24 +193,66 @@ export default function JobDetailPage() {
           {job.parsed_json ? (
             <>
               <Card>
-                <CardHeader><h3 className="text-sm font-semibold">Skills</h3></CardHeader>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold">Skills</h3>
+                    {profile && <Badge>{skills.filter((s) => isSkillInProfile(s, profile)).length}/{skills.length} in resume</Badge>}
+                  </div>
+                </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
-                    {skills.map((s: string) => (
-                      <Badge key={s} variant="blue">{s}</Badge>
-                    ))}
+                    {skills.map((s: string) => {
+                      const matched = isSkillInProfile(s, profile);
+                      const owned = ownedSkills.has(s);
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => !matched && toggleSkill(s)}
+                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                            matched || owned
+                              ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                              : 'bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100 cursor-pointer'
+                          }`}
+                          title={matched ? 'Found in your resume' : owned ? 'Manually confirmed' : 'Not found in resume — click to confirm'}
+                        >
+                          {matched || owned ? '✓' : '+'} {s}
+                        </button>
+                      );
+                    })}
                     {skills.length === 0 && <p className="text-sm text-slate-500">No skills parsed yet.</p>}
                   </div>
                 </CardContent>
               </Card>
               {niceSkills.length > 0 && (
                 <Card>
-                  <CardHeader><h3 className="text-sm font-semibold">Nice to Have</h3></CardHeader>
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold">Nice to Have</h3>
+                      {profile && <Badge>{niceSkills.filter((s) => isSkillInProfile(s, profile)).length}/{niceSkills.length} in resume</Badge>}
+                    </div>
+                  </CardHeader>
                   <CardContent>
                     <div className="flex flex-wrap gap-2">
-                      {niceSkills.map((s: string) => (
-                        <Badge key={s}>{s}</Badge>
-                      ))}
+                      {niceSkills.map((s: string) => {
+                        const matched = isSkillInProfile(s, profile);
+                        const owned = ownedSkills.has(s);
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => !matched && toggleSkill(s)}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                              matched || owned
+                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                                : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200 cursor-pointer'
+                            }`}
+                            title={matched ? 'Found in your resume' : owned ? 'Manually confirmed' : 'Not found in resume — click to confirm'}
+                          >
+                            {matched || owned ? '✓' : '+'} {s}
+                          </button>
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
@@ -235,6 +300,33 @@ export default function JobDetailPage() {
                   <CardHeader><h3 className="text-sm font-semibold">Years Experience Required</h3></CardHeader>
                   <CardContent>
                     <p className="text-sm text-slate-700">{String(years)}+ years</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {profile && (
+                <Card>
+                  <CardHeader><h3 className="text-sm font-semibold">Generate CV</h3></CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-slate-500">
+                      {ownedSkills.size > 0
+                        ? `${skills.filter((s) => isSkillInProfile(s, profile) || ownedSkills.has(s)).length} skills selected (${ownedSkills.size} manually confirmed).`
+                        : `Verifying skills against your resume...`}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={generateResume}
+                        disabled={generatingResume}
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {generatingResume ? 'Generating...' : 'Generate CV'}
+                      </button>
+                      {ownedSkills.size > 0 && (
+                        <span className="text-xs text-slate-400">
+                          ({ownedSkills.size} manually confirmed skill{ownedSkills.size > 1 ? 's' : ''})
+                        </span>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -363,7 +455,7 @@ export default function JobDetailPage() {
             <CardContent className="flex items-center justify-between py-4">
               <div>
                 <p className="text-sm font-medium text-slate-900">Tailored Resume</p>
-                <p className="text-xs text-slate-500">Auto-generated based on match analysis</p>
+                <p className="text-xs text-slate-500">Tailored to match skills confirmed in your Parsed Requirements tab</p>
               </div>
               <button
                 onClick={generateResume}
