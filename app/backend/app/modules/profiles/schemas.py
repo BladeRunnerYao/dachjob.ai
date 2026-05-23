@@ -32,3 +32,7 @@ class ProfileResponse(BaseModel):
 
 class CVUploadRequest(BaseModel):
     raw_cv_md: str
+
+
+class URLImportRequest(BaseModel):
+    url: str

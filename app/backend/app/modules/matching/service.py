@@ -12,19 +12,87 @@ from app.db.models import MatchReport, EvidenceChunk
 from app.modules.jobs.repository import get_job, sync_job_skills
 from app.modules.profiles.repository import get_profile_by_tenant
 
-SKILL_KEYWORDS = [
-    "python", "kubernetes", "docker", "fastapi", "redis", "postgresql",
-    "terraform", "aws", "gcp", "azure", "mlflow", "airflow", "rust",
-    "typescript", "react", "vue", "angular", "node", "go", "java",
-    "spring", "sql", "mongodb", "kafka", "rabbitmq", "git", "ci/cd",
-    "pytorch", "tensorflow", "scikit-learn", "pandas", "spark", "flink",
-    "helm", "prometheus", "grafana", "datadog", "sentry", "docker compose",
-    "graphql", "rest", "grpc", "redis", "celery", "nginx", "postgres",
-    "mysql", "dynamodb", "s3", "lambda", "ecs", "eks", "ec2",
-    "cloudformation", "pulumi", "jenkins", "github actions", "gitlab ci",
-    "argocd", "istio", "envoy", "linkerd", "temporal", "prefect",
-    "dbt", "bigquery", "snowflake", "databricks", "ray", "kubeflow",
+SKILL_PATTERNS = [
+    ("Python", [r"\bpython\b"]),
+    ("TypeScript", [r"\btypescript\b"]),
+    ("JavaScript", [r"\bjavascript\b"]),
+    ("Node.js", [r"\bnode(?:\.js)?\b"]),
+    ("React", [r"\breact\b"]),
+    ("FastAPI", [r"\bfastapi\b"]),
+    ("Go", [r"\bgolang\b", r"\bgo programming\b", r"\bgo language\b"]),
+    ("Java", [r"\bjava\b"]),
+    ("SQL", [r"\bsql\b"]),
+    ("PostgreSQL", [r"\bpostgres(?:ql)?\b"]),
+    ("MongoDB", [r"\bmongodb\b"]),
+    ("Redis", [r"\bredis\b"]),
+    ("Production databases", [r"production (?:database|databases|dbs)", r"databases in production"]),
+    ("Database performance", [r"database performance", r"performance, scaling, and reliability"]),
+    ("Docker", [r"\bdocker\b"]),
+    ("Containerization", [r"\bcontaineri[sz]ed\b", r"\bcontaineri[sz]ation\b", r"container-based deployments?"]),
+    ("Kubernetes", [r"\bkubernetes\b", r"\bk8s\b"]),
+    ("GCP", [r"\bgcp\b", r"google cloud"]),
+    ("Cloud Run", [r"\bcloud run\b"]),
+    ("AWS", [r"\baws\b", r"amazon web services"]),
+    ("Azure", [r"\bazure\b"]),
+    ("Cloud infrastructure", [r"cloud infrastructure", r"infrastructure backbone"]),
+    ("Cloud compute", [r"major cloud platform[^.\n]*compute", r"cloud[^.\n]*compute"]),
+    ("Compute-intensive workloads", [r"compute-intensive workloads?"]),
+    ("Scientific simulation workloads", [r"scientific simulation workloads?"]),
+    ("Climate tech", [r"climate tech"]),
+    ("Sustainability", [r"\bsustainability\b", r"\bsustainable\b"]),
+    ("Built environment", [r"built environment"]),
+    ("Cloud storage", [r"\bstorage\b"]),
+    ("Networking", [r"\bnetworking\b", r"network architecture"]),
+    ("IAM", [r"\biam\b", r"identity and access management"]),
+    ("TLS", [r"\btls\b", r"\bssl\b"]),
+    ("Firewall rules", [r"firewall rules?", r"\bfirewalls?\b"]),
+    ("RBAC", [r"\brbac\b", r"role-based access control"]),
+    ("Job queues", [r"job queues?", r"\bqueues?\b"]),
+    ("Distributed workloads", [r"distributed workloads?"]),
+    ("Event-driven architecture", [r"event-driven"]),
+    ("Metrics", [r"\bmetrics\b"]),
+    ("CI/CD pipelines", [r"\bci/cd\b", r"continuous integration", r"continuous deployment"]),
+    ("GitHub Actions", [r"github actions"]),
+    ("GitLab CI", [r"gitlab ci"]),
+    ("Jenkins", [r"\bjenkins\b"]),
+    ("Release management", [r"release process", r"release management", r"production deployment"]),
+    ("Deployment workflows", [r"deployment workflows?", r"deployment process"]),
+    ("Rollbacks", [r"\brollbacks?\b"]),
+    ("Staging environments", [r"\bstaging\b"]),
+    ("QA", [r"\bqa\b", r"quality assurance"]),
+    ("E2E tests", [r"\be2e tests?\b", r"end-to-end tests?"]),
+    ("Integration tests", [r"integration tests?"]),
+    ("Developer experience", [r"developer experience", r"\bdx\b"]),
+    ("On-call", [r"on-call", r"on call"]),
+    ("Incident response", [r"incident response", r"severity processes?"]),
+    ("Reliability engineering", [r"\breliability\b", r"ensure uptime", r"stable releases?"]),
+    ("Observability", [r"\bobservability\b"]),
+    ("Monitoring", [r"\bmonitoring\b"]),
+    ("Vulnerability scanning", [r"vulnerability scanning"]),
+    ("Penetration testing", [r"penetration testing", r"\bpentest(?:ing)?\b"]),
+    ("Infrastructure hardening", [r"infrastructure hardening", r"security hardening"]),
+    ("Infrastructure engineering", [r"infrastructure engineering"]),
+    ("Platform engineering", [r"platform engineering"]),
+    ("Backend engineering", [r"backend engineering", r"backend codebase"]),
+    ("Data-oriented codebases", [r"data-oriented codebases?"]),
+    ("Terraform", [r"\bterraform\b"]),
+    ("Infrastructure as Code", [r"infrastructure-as-code", r"infrastructure as code", r"\biac\b"]),
+    ("Ansible", [r"\bansible\b"]),
+    ("Pulumi", [r"\bpulumi\b"]),
+    ("Kafka", [r"\bkafka\b"]),
+    ("RabbitMQ", [r"\brabbitmq\b"]),
+    ("Airflow", [r"\bairflow\b"]),
+    ("Dagster", [r"\bdagster\b"]),
+    ("MLflow", [r"\bmlflow\b"]),
+    ("PyTorch", [r"\bpytorch\b"]),
+    ("TensorFlow", [r"\btensorflow\b"]),
+    ("scikit-learn", [r"scikit-learn", r"\bsklearn\b"]),
+    ("pandas", [r"\bpandas\b"]),
+    ("Apache Spark", [r"apache spark", r"\bspark\b"]),
+    ("Databricks", [r"\bdatabricks\b"]),
 ]
+
+SKILL_KEYWORDS = [name for name, _patterns in SKILL_PATTERNS]
 
 SENIORITY_KEYWORDS = {
     "senior": "Senior",
@@ -65,15 +133,141 @@ GERMAN_KEYWORDS = [
 ]
 
 
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        cleaned = str(item).strip()
+        if not cleaned:
+            continue
+        key = re.sub(r"\s+", " ", cleaned).strip(" .;:").casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(cleaned)
+    return result
+
+
+def _extract_pattern_skills(text: str | None) -> list[str]:
+    if not text:
+        return []
+    found: list[str] = []
+    for name, patterns in SKILL_PATTERNS:
+        if any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns):
+            found.append(name)
+    return found
+
+
+def _extract_section(raw_jd: str, start_keywords: tuple[str, ...], stop_keywords: tuple[str, ...]) -> str:
+    lines = raw_jd.splitlines()
+    section: list[str] = []
+    in_section = False
+    for line in lines:
+        stripped = line.strip()
+        lower = stripped.lower()
+        if not stripped:
+            continue
+        if in_section and any(stop in lower for stop in stop_keywords):
+            break
+        if any(start in lower for start in start_keywords):
+            in_section = True
+            continue
+        if in_section:
+            section.append(stripped)
+    return "\n".join(section)
+
+
+def _extract_language_requirements(raw_jd: str) -> list[str]:
+    requirements: list[str] = []
+    language_patterns = {
+        "English": [
+            r"english.{0,80}(?:required|proficiency|fluent|communication|written|verbal|skills)",
+            r"(?:required|proficiency|fluent|communication|written|verbal|skills).{0,80}english",
+        ],
+        "German": [
+            r"german.{0,80}(?:required|proficiency|fluent|communication|written|verbal|skills)",
+            r"deutsch.{0,80}(?:erforderlich|kenntnisse|fließend|kommunikation)",
+            r"(?:required|proficiency|fluent|communication|written|verbal|skills).{0,80}german",
+        ],
+    }
+    for language, patterns in language_patterns.items():
+        if any(re.search(pattern, raw_jd, flags=re.IGNORECASE | re.DOTALL) for pattern in patterns):
+            requirements.append(language)
+    return requirements
+
+
+def _enrich_parsed_skills(parsed_json: dict, job) -> dict:
+    raw_jd = job.raw_jd or ""
+    title = job.title or ""
+    full_text = f"{title}\n{raw_jd}"
+    nice_text = _extract_section(
+        raw_jd,
+        ("nice to have", "nice-to-have", "preferred", "bonus", "plus", "wünschenswert"),
+        ("benefits", "what we offer", "about ", "show more", "seniority level"),
+    )
+    must_text = _extract_section(
+        raw_jd,
+        ("must have", "requirements", "who we are looking for", "what we look for"),
+        ("nice to have", "benefits", "what this role is not", "show more", "seniority level"),
+    )
+    not_text = _extract_section(
+        raw_jd,
+        ("what this role is not", "this role is not"),
+        ("requirements", "benefits", "must have", "nice to have"),
+    )
+
+    nice_skills = set(_extract_pattern_skills(nice_text))
+    must_section_skills = set(_extract_pattern_skills(must_text))
+    not_only_skills = set(_extract_pattern_skills(not_text)) - must_section_skills - nice_skills
+    not_only_keys = {skill.casefold() for skill in not_only_skills}
+
+    current_must = parsed_json.get("must_have_skills") if isinstance(parsed_json.get("must_have_skills"), list) else []
+    current_must = [skill for skill in current_must if str(skill).casefold() not in not_only_keys]
+    current_nice = parsed_json.get("nice_to_have_skills") if isinstance(parsed_json.get("nice_to_have_skills"), list) else []
+    current_nice = [skill for skill in current_nice if str(skill).casefold() not in not_only_keys]
+    inferred_skills = [
+        skill for skill in _extract_pattern_skills(full_text)
+        if skill not in not_only_skills
+    ]
+
+    enriched_nice = _dedupe_preserve_order(list(current_nice) + list(nice_skills))
+    enriched_nice_keys = {skill.casefold() for skill in enriched_nice}
+    enriched_must = _dedupe_preserve_order(
+        list(current_must)
+        + [skill for skill in inferred_skills if skill.casefold() not in enriched_nice_keys]
+    )
+
+    parsed_json["must_have_skills"] = enriched_must
+    parsed_json["nice_to_have_skills"] = enriched_nice
+    parsed_json["skills"] = _dedupe_preserve_order(enriched_must + enriched_nice)
+    extracted_responsibilities = _extract_responsibilities(raw_jd)
+    current_responsibilities = (
+        parsed_json.get("responsibilities")
+        if isinstance(parsed_json.get("responsibilities"), list)
+        else []
+    )
+    parsed_json["responsibilities"] = (
+        extracted_responsibilities
+        if extracted_responsibilities
+        else _dedupe_preserve_order(list(current_responsibilities))[:12]
+    )
+    return parsed_json
+
+
 def _deterministic_parse(job):
     jd_lower = job.raw_jd.lower() if job.raw_jd else ""
     title_lower = job.title.lower() if job.title else ""
 
-    must_have = []
-    nice_to_have = []
-    for skill in SKILL_KEYWORDS:
-        if skill in jd_lower or skill in title_lower:
-            must_have.append(skill)
+    must_have = _extract_pattern_skills(f"{job.title or ''}\n{job.raw_jd or ''}")
+    nice_to_have = _extract_pattern_skills(
+        _extract_section(
+            job.raw_jd or "",
+            ("nice to have", "nice-to-have", "preferred", "bonus", "plus", "wünschenswert"),
+            ("benefits", "what we offer", "about ", "show more", "seniority level"),
+        )
+    )
+    nice_keys = {skill.casefold() for skill in nice_to_have}
+    must_have = [skill for skill in must_have if skill.casefold() not in nice_keys]
 
     work_model = "onsite"
     for keyword, model in WORK_MODEL_KEYWORDS.items():
@@ -104,20 +298,22 @@ def _deterministic_parse(job):
         if city in jd_lower or city in location.lower():
             dach_signals["location"] = city
             break
+    location_lower = location.lower()
     for country in DACH_COUNTRIES:
-        if country in jd_lower or country in location.lower():
+        if country in location_lower:
             dach_signals["country"] = country
             break
+    if "country" not in dach_signals:
+        for country in DACH_COUNTRIES:
+            if country in jd_lower:
+                dach_signals["country"] = country
+                break
     for kw in GERMAN_KEYWORDS:
         if kw in jd_lower:
             dach_signals["language"] = "german"
             break
 
-    lang_reqs = []
-    if "german" in jd_lower or "deutsch" in jd_lower:
-        lang_reqs.append("German")
-    if "english" in jd_lower:
-        lang_reqs.append("English")
+    lang_reqs = _extract_language_requirements(job.raw_jd or "")
 
     return {
         "title": job.title,
@@ -138,23 +334,61 @@ def _deterministic_parse(job):
 
 
 def _extract_responsibilities(raw_jd: str) -> list[str]:
-    responsibilities: list[str] = []
+    start_keywords = (
+        "responsibilities",
+        "tasks",
+        "the impact you will have",
+        "what you will do",
+        "what you'll do",
+        "your tasks",
+        "aufgaben",
+    )
+    stop_keywords = (
+        "what this role is not",
+        "requirements",
+        "must have",
+        "who we are looking for",
+        "nice to have",
+        "benefits",
+        "seniority level",
+        "employment type",
+        "job function",
+        "industries",
+        "show more",
+    )
+    heading_only = {
+        "tasks",
+        "responsibilities",
+        "requirements",
+        "benefits",
+        "nice to have",
+        "must have",
+    }
+
+    items: list[str] = []
     in_section = False
     for line in raw_jd.splitlines():
         stripped = line.strip()
         lower = stripped.lower()
         if not stripped:
             continue
-        if any(key in lower for key in ("responsibilities", "what you'll do", "your tasks", "aufgaben")):
+        if in_section and any(key in lower for key in stop_keywords):
+            break
+        if any(key in lower for key in start_keywords):
             in_section = True
             continue
-        if in_section and stripped.startswith(("-", "*", "•")):
-            item = stripped.lstrip("-*• ").strip()
-            if item:
-                responsibilities.append(item)
-        elif in_section and stripped.startswith("#"):
+        if not in_section:
+            continue
+        if stripped.startswith("#"):
             break
-    return responsibilities[:8]
+        item = stripped.lstrip("-*• ").strip()
+        item_lower = item.lower().strip(":")
+        if item_lower in heading_only:
+            continue
+        if len(item) < 18:
+            continue
+        items.append(item)
+    return _dedupe_preserve_order(items)[:12]
 
 
 async def parse_job_posting(
@@ -196,7 +430,15 @@ async def parse_job_posting(
                             "language_requirements (list), must_have_skills (list), "
                             "nice_to_have_skills (list), responsibilities (list), "
                             "salary_range (string or null), seniority (string or null), "
-                            "dach_signals (object with location/country/language keys)"
+                            "dach_signals (object with location/country/language keys)\n\n"
+                            "Skill extraction rules:\n"
+                            "- Extract atomic skills/capabilities, not only broad summary sentences.\n"
+                            "- Include technologies, cloud services, infrastructure practices, security controls, testing/release practices, and operational responsibilities.\n"
+                            "- Split combined requirements into separate items. Example: 'GCP infrastructure (Cloud Run, networking, IAM, TLS, firewall rules)' becomes "
+                            "['GCP', 'Cloud Run', 'Networking', 'IAM', 'TLS', 'Firewall rules'].\n"
+                            "- Treat capabilities like RBAC, job queues, CI/CD pipelines, GitHub Actions, E2E tests, QA, rollbacks, on-call, incident response, observability, monitoring, vulnerability scanning, penetration testing, and infrastructure hardening as skills when present.\n"
+                            "- Do not include skills that are mentioned only in a negated section such as 'What this role is NOT'.\n"
+                            "- Put explicit 'must have' requirements in must_have_skills and optional/preferred items in nice_to_have_skills."
                         ),
                     },
                 ],
@@ -207,6 +449,7 @@ async def parse_job_posting(
             content = response.choices[0].message.content
             if content:
                 parsed_json = json.loads(content)
+                parsed_json = _enrich_parsed_skills(parsed_json, job)
                 job.parsed_json = parsed_json
                 job.status = "parsed"
                 await sync_job_skills(db, job, parsed_json, source="deepseek")
@@ -215,7 +458,7 @@ async def parse_job_posting(
         except Exception:
             pass
 
-    parsed_json = _deterministic_parse(job)
+    parsed_json = _enrich_parsed_skills(_deterministic_parse(job), job)
     job.parsed_json = parsed_json
     job.status = "parsed"
     await sync_job_skills(db, job, parsed_json, source="deterministic_parser")

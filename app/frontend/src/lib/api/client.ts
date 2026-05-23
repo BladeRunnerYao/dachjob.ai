@@ -104,6 +104,24 @@ export class ApiClient {
     return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
   }
 
+  async importProfileFromUrl(url: string): Promise<CandidateProfile> {
+    const profile = await this.post<CandidateProfile>('/api/profile/import-url', { url });
+    return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
+  }
+
+  async importProfileFromPdf(file: File): Promise<CandidateProfile> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const baseUrl = getApiBase();
+    const res = await fetch(`${baseUrl}/api/profile/import-pdf`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+    const profile = await res.json();
+    return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
+  }
+
   private toMatchReport(report: {
     id: string;
     job_id: string;

@@ -66,11 +66,14 @@ async def get_job(db: AsyncSession, job_id: UUID) -> JobPosting | None:
 def extract_skill_items(parsed_json: dict | None) -> list[tuple[str, str]]:
     if not parsed_json:
         return []
-    fields = [
-        ("must_have_skills", "must_have"),
-        ("nice_to_have_skills", "nice_to_have"),
-        ("skills", "must_have"),
-    ]
+    has_structured_skills = isinstance(parsed_json.get("must_have_skills"), list) or isinstance(
+        parsed_json.get("nice_to_have_skills"), list
+    )
+    fields = (
+        [("must_have_skills", "must_have"), ("nice_to_have_skills", "nice_to_have")]
+        if has_structured_skills
+        else [("skills", "must_have")]
+    )
     seen: set[tuple[str, str]] = set()
     items: list[tuple[str, str]] = []
     for key, category in fields:

@@ -2,12 +2,48 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { CheckCircle2, ListChecks } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { JobDescriptionView } from '@/components/jobs/job-description-view';
 import { api } from '@/lib/api/client';
 import type { JobPosting, MatchReport, ResumeArtifact } from '@/lib/api/types';
 
 type Tab = 'raw' | 'parsed' | 'match' | 'evidence' | 'cv';
+
+const responsibilityThemes = [
+  {
+    label: 'Delivery',
+    tone: 'border-violet-300 bg-violet-50 text-violet-700',
+    patterns: ['ci/cd', 'deployment', 'release', 'staging', 'production', 'rollback', 'qa', 'e2e'],
+  },
+  {
+    label: 'Reliability',
+    tone: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+    patterns: ['on-call', 'incident', 'uptime', 'observability', 'monitoring', 'reliability'],
+  },
+  {
+    label: 'Security',
+    tone: 'border-amber-300 bg-amber-50 text-amber-700',
+    patterns: ['security', 'vulnerability', 'penetration', 'hardening'],
+  },
+  {
+    label: 'Engineering',
+    tone: 'border-slate-300 bg-slate-50 text-slate-700',
+    patterns: ['codebase', 'python', 'typescript', 'rbac', 'queue', 'feature'],
+  },
+  {
+    label: 'Infrastructure',
+    tone: 'border-blue-300 bg-blue-50 text-blue-700',
+    patterns: ['infrastructure', 'gcp', 'cloud', 'networking', 'iam', 'tls', 'firewall'],
+  },
+];
+
+function responsibilityTheme(text: string) {
+  const lower = text.toLowerCase();
+  return responsibilityThemes.find((theme) => theme.patterns.some((pattern) => lower.includes(pattern)))
+    || { label: 'Ownership', tone: 'border-slate-300 bg-white text-slate-700' };
+}
 
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -126,27 +162,7 @@ export default function JobDetailPage() {
       </div>
 
       {tab === 'raw' && (
-        <div className="space-y-4">
-          <Card>
-            <CardContent className="space-y-2 text-sm text-slate-700">
-              {job.url && (
-                <p>
-                  <span className="font-medium text-slate-900">Source: </span>
-                  <a href={job.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                    {job.source || job.url}
-                  </a>
-                </p>
-              )}
-              {job.salary_text && <p><span className="font-medium text-slate-900">Salary: </span>{job.salary_text}</p>}
-              {job.source_job_id && <p><span className="font-medium text-slate-900">Source ID: </span>{job.source_job_id}</p>}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="whitespace-pre-wrap text-sm text-slate-700 font-mono leading-relaxed">
-              {job.raw_jd || 'No raw JD available.'}
-            </CardContent>
-          </Card>
-        </div>
+        <JobDescriptionView job={job} />
       )}
 
       {tab === 'parsed' && (
@@ -177,13 +193,40 @@ export default function JobDetailPage() {
                 </Card>
               )}
               <Card>
-                <CardHeader><h3 className="text-sm font-semibold">Responsibilities</h3></CardHeader>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <ListChecks className="h-4 w-4 text-slate-500" />
+                      <h3 className="text-sm font-semibold">Responsibilities</h3>
+                    </div>
+                    {responsibilities.length > 0 && <Badge>{responsibilities.length} items</Badge>}
+                  </div>
+                </CardHeader>
                 <CardContent>
-                  <ul className="list-disc list-inside space-y-1 text-sm text-slate-700">
-                    {responsibilities.map((r: string, i: number) => (
-                      <li key={i}>{r}</li>
-                    ))}
-                  </ul>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {responsibilities.map((responsibility: string, index: number) => {
+                      const theme = responsibilityTheme(responsibility);
+                      return (
+                        <div
+                          key={`${responsibility}-${index}`}
+                          className={`flex min-h-28 gap-3 rounded-lg border border-l-4 p-4 ${theme.tone}`}
+                        >
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-700 shadow-sm">
+                            {index + 1}
+                          </div>
+                          <div className="min-w-0 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-medium">
+                                {theme.label}
+                              </span>
+                              <CheckCircle2 className="h-3.5 w-3.5 opacity-70" />
+                            </div>
+                            <p className="text-sm leading-6 text-slate-800">{responsibility}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                   {responsibilities.length === 0 && <p className="text-sm text-slate-500">No responsibilities parsed yet.</p>}
                 </CardContent>
               </Card>

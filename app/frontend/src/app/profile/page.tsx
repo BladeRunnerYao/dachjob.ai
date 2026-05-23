@@ -1,16 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api/client';
 import type { CandidateProfile, EvidenceChunk } from '@/lib/api/types';
+
+type ImportMode = 'url' | 'pdf' | 'edit';
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [cvMd, setCvMd] = useState('');
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [importMode, setImportMode] = useState<ImportMode>('edit');
+
+  const [url, setUrl] = useState('');
+  const [urlImporting, setUrlImporting] = useState(false);
+  const [urlError, setUrlError] = useState('');
+
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfImporting, setPdfImporting] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api.getProfile().then((p) => {
@@ -27,14 +39,118 @@ export default function ProfilePage() {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handleUrlImport = async () => {
+    if (!url.trim()) return;
+    setUrlImporting(true);
+    setUrlError('');
+    try {
+      const updated = await api.importProfileFromUrl(url.trim());
+      setProfile(updated);
+      setCvMd(updated.raw_cv_md);
+      setUrl('');
+    } catch (e) {
+      setUrlError(e instanceof Error ? e.message : 'Import failed');
+    } finally {
+      setUrlImporting(false);
+    }
+  };
+
+  const handlePdfImport = async () => {
+    if (!pdfFile) return;
+    setPdfImporting(true);
+    setPdfError('');
+    try {
+      const updated = await api.importProfileFromPdf(pdfFile);
+      setProfile(updated);
+      setCvMd(updated.raw_cv_md);
+      setPdfFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setPdfImporting(false);
+    }
+  };
+
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
+
+  const tabClass = (mode: ImportMode) =>
+    `px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+      importMode === mode
+        ? 'bg-white text-slate-900 border border-b-0 border-slate-300'
+        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+    }`;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Profile Vault</h1>
-        <p className="text-sm text-slate-500 mt-1">Manage your CV and evidence</p>
+        <p className="text-sm text-slate-500 mt-1">Import your CV from a URL, PDF, or edit directly</p>
       </div>
+
+      <div className="flex gap-1 border-b border-slate-300">
+        <button onClick={() => setImportMode('url')} className={tabClass('url')}>
+          Import from URL
+        </button>
+        <button onClick={() => setImportMode('pdf')} className={tabClass('pdf')}>
+          Upload PDF
+        </button>
+        <button onClick={() => setImportMode('edit')} className={tabClass('edit')}>
+          Edit Markdown
+        </button>
+      </div>
+
+      {importMode === 'url' && (
+        <Card>
+          <CardHeader>
+            <h2 className="text-sm font-semibold text-slate-900">Import from URL</h2>
+            <p className="text-xs text-slate-500">Enter your personal website or LinkedIn profile URL</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://your-personal-site.com or https://linkedin.com/in/..."
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            />
+            {urlError && <p className="text-sm text-red-600">{urlError}</p>}
+            <button
+              onClick={handleUrlImport}
+              disabled={urlImporting || !url.trim()}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {urlImporting ? 'Importing...' : 'Import'}
+            </button>
+          </CardContent>
+        </Card>
+      )}
+
+      {importMode === 'pdf' && (
+        <Card>
+          <CardHeader>
+            <h2 className="text-sm font-semibold text-slate-900">Upload PDF Resume</h2>
+            <p className="text-xs text-slate-500">Upload your CV or resume as a PDF file</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+              className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100"
+            />
+            {pdfError && <p className="text-sm text-red-600">{pdfError}</p>}
+            <button
+              onClick={handlePdfImport}
+              disabled={pdfImporting || !pdfFile}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {pdfImporting ? 'Uploading & Extracting...' : 'Upload & Extract'}
+            </button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>

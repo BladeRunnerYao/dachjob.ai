@@ -24,7 +24,7 @@ async def parse_job(
     job = await get_job(db, job_id)
     if not job:
         raise AppError("job_not_found", "Job posting not found")
-    result = await parse_job_posting(db, tenant, job)
+    result = await parse_job_posting(db, tenant, job, force=True)
     return ParseResponse(
         job_id=job.id, status=result["status"], parsed_json=result.get("parsed_json")
     )

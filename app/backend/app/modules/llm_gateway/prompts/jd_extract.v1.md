@@ -5,6 +5,11 @@ Rules:
 - `work_model` must be one of: "remote", "hybrid", "onsite", or null if unclear.
 - `language_requirements`: list languages explicitly required (e.g. "German (C1)", "English (B2)").
 - `must_have_skills`: hard requirements. `nice_to_have_skills`: optional/"wünschenswert" skills.
+- Extract skills as atomic, searchable items. Do not only summarize entire requirement sentences.
+- Include technologies, cloud services, infrastructure practices, security controls, testing/release practices, and operational responsibilities.
+- Split combined requirements into separate skills. Example: "GCP infrastructure (Cloud Run, networking, IAM, TLS, firewall rules)" becomes "GCP", "Cloud Run", "Networking", "IAM", "TLS", and "Firewall rules".
+- Treat capabilities such as RBAC, job queues, CI/CD pipelines, GitHub Actions, E2E tests, QA, rollbacks, on-call, incident response, observability, monitoring, vulnerability scanning, penetration testing, and infrastructure hardening as skills when present.
+- Do not include skills that are mentioned only in a negated section such as "What this role is NOT".
 - `responsibilities`: key duties extracted from the job description.
 - `salary_range`: extract if mentioned (e.g. "70.000 - 90.000 €"), otherwise null.
 - `seniority`: e.g. "Senior", "Junior", "Lead", "Entry", or null.

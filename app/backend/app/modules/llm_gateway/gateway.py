@@ -22,6 +22,67 @@ class LLMGateway:
         )
         self.settings = settings
 
+    async def run_text(
+        self,
+        tenant_id: UUID,
+        task: str,
+        prompt_version: str,
+        messages: list[dict],
+        model: str | None = None,
+    ) -> str:
+        settings = self.settings
+        model = model or settings.deepseek_model_fast
+
+        start = time.monotonic()
+        input_text = json.dumps(messages, sort_keys=True)
+        input_hash = hashlib.sha256(input_text.encode()).hexdigest()[:16]
+
+        try:
+            response = await self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.3,
+            )
+            latency_ms = int((time.monotonic() - start) * 1000)
+
+            content = response.choices[0].message.content or ""
+
+            tokens = None
+            if response.usage:
+                tokens = {
+                    "prompt": response.usage.prompt_tokens,
+                    "completion": response.usage.completion_tokens,
+                    "total": response.usage.total_tokens,
+                }
+
+            await self._log_run(
+                tenant_id=tenant_id,
+                task=task,
+                prompt_version=prompt_version,
+                model=model,
+                input_hash=input_hash,
+                latency_ms=latency_ms,
+                tokens_json=tokens,
+                status="success",
+            )
+
+            return content
+
+        except Exception as e:
+            latency_ms = int((time.monotonic() - start) * 1000)
+            await self._log_run(
+                tenant_id=tenant_id,
+                task=task,
+                prompt_version=prompt_version,
+                model=model,
+                input_hash=input_hash,
+                latency_ms=latency_ms,
+                tokens_json=None,
+                status="error",
+                error_message=str(e),
+            )
+            raise
+
     async def run_json(
         self,
         tenant_id: UUID,

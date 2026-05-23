@@ -164,7 +164,7 @@ def _location_from_title(title: str | None) -> str | None:
 def _clean_source_text(source: str, text: str) -> str:
     cleaned = text
     if "linkedin." in source:
-        start_markers = ["Mission", "The Impact You Will Have", "Report this job"]
+        start_markers = ["About You", "Mission", "The Impact You Will Have", "Tasks", "Responsibilities", "Report this job"]
         for marker in start_markers:
             index = cleaned.find(marker)
             if index >= 0:
