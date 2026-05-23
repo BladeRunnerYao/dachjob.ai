@@ -1,0 +1,5 @@
+project_id         = "dachjob-ai-platform"
+region             = "europe-west1"
+environment        = "dev"
+billing_account_id = "01C40D-37543D-36F0C9"
+notification_email = "liyioo0587@gmail.com"

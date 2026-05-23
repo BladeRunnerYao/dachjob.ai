@@ -1,4 +1,5 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.engine import URL
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import get_settings
@@ -8,11 +9,24 @@ class Base(DeclarativeBase):
     pass
 
 
-def get_engine():
-    settings = get_settings()
-    async_url = settings.database_url.replace(
+def get_async_database_url(settings=None):
+    if settings is None:
+        settings = get_settings()
+    if settings.cloud_sql_connection_name and settings.database_password:
+        return URL.create(
+            "postgresql+asyncpg",
+            username=settings.database_user,
+            password=settings.database_password,
+            database=settings.database_name,
+            query={"host": f"/cloudsql/{settings.cloud_sql_connection_name}"},
+        )
+    return settings.database_url.replace(
         "postgresql+psycopg://", "postgresql+asyncpg://"
     )
+
+
+def get_engine():
+    async_url = get_async_database_url()
     return create_async_engine(
         async_url,
         pool_size=5,

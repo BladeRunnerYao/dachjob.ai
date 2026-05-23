@@ -1,0 +1,547 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches:
+      - main
+      - deploy/*
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to deploy
+        required: true
+        default: main
+      target:
+        description: Deployment target
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - api
+          - frontend
+          - worker
+          - terraform
+      terraform_apply:
+        description: Apply Terraform after plan
+        required: false
+        type: boolean
+        default: false
+      run_migrations:
+        description: Run database migrations after API deploy
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-gcp-dev
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: dachjob-ai-platform
+  PROJECT_NUMBER: "936971254595"
+  REGION: europe-west1
+  GAR_LOCATION: europe-west1
+  ENVIRONMENT: dev
+  API_SERVICE_NAME: dachjob-dev-api
+  FRONTEND_SERVICE_NAME: dachjob-dev-frontend
+  MIGRATION_JOB_NAME: dachjob-dev-migrate
+  API_BASE_URL: https://dachjob-dev-api-qxugiew36a-ew.a.run.app
+  FRONTEND_URL: https://dachjob-dev-frontend-qxugiew36a-ew.a.run.app
+  GKE_CLUSTER_NAME: dachjob-dev-cluster
+  GKE_NAMESPACE: celery-worker
+  WORKLOAD_IDENTITY_PROVIDER: projects/936971254595/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
+  DEPLOYER_SERVICE_ACCOUNT: dachjob-dev-terraform-sa@dachjob-ai-platform.iam.gserviceaccount.com
+  API_SERVICE_ACCOUNT: dachjob-dev-api-sa@dachjob-ai-platform.iam.gserviceaccount.com
+  FRONTEND_SERVICE_ACCOUNT: dachjob-dev-frontend-sa@dachjob-ai-platform.iam.gserviceaccount.com
+  WORKER_SERVICE_ACCOUNT: dachjob-dev-worker-sa@dachjob-ai-platform.iam.gserviceaccount.com
+  CLOUD_SQL_CONNECTION_NAME: dachjob-ai-platform:europe-west1:dachjob-dev-postgres
+  VPC_CONNECTOR: projects/dachjob-ai-platform/locations/europe-west1/connectors/dachjob-dev-vpc-connector
+  REDIS_HOST: 10.36.0.3
+  REDIS_PORT: "6379"
+  REDIS_URL: redis://10.36.0.3:6379/0
+  GCS_BUCKET: dachjob-dev-artifacts
+
+jobs:
+  prepare:
+    name: Prepare deployment
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      branch: ${{ steps.inputs.outputs.branch }}
+      target: ${{ steps.inputs.outputs.target }}
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+      deploy_api: ${{ steps.inputs.outputs.deploy_api }}
+      deploy_frontend: ${{ steps.inputs.outputs.deploy_frontend }}
+      deploy_worker: ${{ steps.inputs.outputs.deploy_worker }}
+      run_terraform: ${{ steps.inputs.outputs.run_terraform }}
+      terraform_apply: ${{ steps.inputs.outputs.terraform_apply }}
+      run_migrations: ${{ steps.inputs.outputs.run_migrations }}
+    steps:
+      - name: Resolve inputs
+        id: inputs
+        run: |
+          branch="${{ github.event.inputs.branch || github.ref_name }}"
+          target="${{ github.event.inputs.target || 'all' }}"
+          terraform_apply="${{ github.event.inputs.terraform_apply || 'false' }}"
+          run_migrations="${{ github.event.inputs.run_migrations || 'true' }}"
+
+          echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
+          echo "target=${target}" >> "${GITHUB_OUTPUT}"
+          echo "terraform_apply=${terraform_apply}" >> "${GITHUB_OUTPUT}"
+          echo "run_migrations=${run_migrations}" >> "${GITHUB_OUTPUT}"
+
+          [[ "${target}" == "all" || "${target}" == "api" ]] && echo "deploy_api=true" >> "${GITHUB_OUTPUT}" || echo "deploy_api=false" >> "${GITHUB_OUTPUT}"
+          [[ "${target}" == "all" || "${target}" == "frontend" ]] && echo "deploy_frontend=true" >> "${GITHUB_OUTPUT}" || echo "deploy_frontend=false" >> "${GITHUB_OUTPUT}"
+          [[ "${target}" == "all" || "${target}" == "worker" ]] && echo "deploy_worker=true" >> "${GITHUB_OUTPUT}" || echo "deploy_worker=false" >> "${GITHUB_OUTPUT}"
+          [[ "${target}" == "all" || "${target}" == "terraform" ]] && echo "run_terraform=true" >> "${GITHUB_OUTPUT}" || echo "run_terraform=false" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.inputs.outputs.branch }}
+
+      - name: Create image tag
+        id: tag
+        run: |
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          echo "image_tag=${short_sha}-${GITHUB_RUN_NUMBER}" >> "${GITHUB_OUTPUT}"
+
+  terraform:
+    name: Terraform plan/apply
+    needs: prepare
+    if: ${{ needs.prepare.outputs.run_terraform == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.0"
+
+      - name: Terraform init
+        run: terraform init -backend-config=environments/dev/backend.conf
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -var-file=environments/dev/terraform.tfvars -out=tfplan
+
+      - name: Terraform apply
+        if: ${{ needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform' }}
+        run: terraform apply -auto-approve tfplan
+
+  build-api:
+    name: Build API image
+    needs: prepare
+    if: ${{ needs.prepare.outputs.deploy_api == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: access_token
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GAR_LOCATION }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-api/api:${{ needs.prepare.outputs.image_tag }}"
+          echo "image=${image}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: app/backend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-api/api:latest
+
+  build-frontend:
+    name: Build frontend image
+    needs: prepare
+    if: ${{ needs.prepare.outputs.deploy_frontend == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: access_token
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GAR_LOCATION }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-frontend/frontend:${{ needs.prepare.outputs.image_tag }}"
+          echo "image=${image}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: app/frontend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ env.API_BASE_URL }}
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-frontend/frontend:latest
+
+  build-worker:
+    name: Build worker image
+    needs: prepare
+    if: ${{ needs.prepare.outputs.deploy_worker == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: access_token
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GAR_LOCATION }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-worker/worker:${{ needs.prepare.outputs.image_tag }}"
+          echo "image=${image}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: app/backend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-worker/worker:latest
+
+  deploy-api:
+    name: Deploy API to Cloud Run
+    needs:
+      - prepare
+      - terraform
+      - build-api
+    if: ${{ always() && needs.prepare.outputs.deploy_api == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-api.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      url: ${{ steps.url.outputs.url }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy API service
+        run: |
+          gcloud run deploy "${API_SERVICE_NAME}" \
+            --project="${PROJECT_ID}" \
+            --region="${REGION}" \
+            --image="${{ needs.build-api.outputs.image }}" \
+            --service-account="${API_SERVICE_ACCOUNT}" \
+            --port=8000 \
+            --allow-unauthenticated \
+            --add-cloudsql-instances="${CLOUD_SQL_CONNECTION_NAME}" \
+            --vpc-connector="${VPC_CONNECTOR}" \
+            --vpc-egress=private-ranges-only \
+            --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},REDIS_HOST=${REDIS_HOST},REDIS_PORT=${REDIS_PORT},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=deepseek" \
+            --update-secrets="DATABASE_PASSWORD=dachjob-dev-db-password:latest,JWT_SECRET=dachjob-dev-jwt-secret-key:latest,SECRET_KEY=dachjob-dev-jwt-secret-key:latest,OPENROUTER_API_KEY=dachjob-dev-openrouter-api-key:latest,DEEPSEEK_API_KEY=dachjob-dev-deepseek-api-key:latest"
+
+      - name: Deploy migration job
+        if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
+        run: |
+          gcloud run jobs deploy "${MIGRATION_JOB_NAME}" \
+            --project="${PROJECT_ID}" \
+            --region="${REGION}" \
+            --image="${{ needs.build-api.outputs.image }}" \
+            --service-account="${API_SERVICE_ACCOUNT}" \
+            --set-cloudsql-instances="${CLOUD_SQL_CONNECTION_NAME}" \
+            --vpc-connector="${VPC_CONNECTOR}" \
+            --vpc-egress=private-ranges-only \
+            --command=alembic \
+            --args=-c,app/db/migrations/alembic.ini,upgrade,head \
+            --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=deepseek" \
+            --update-secrets="DATABASE_PASSWORD=dachjob-dev-db-password:latest,JWT_SECRET=dachjob-dev-jwt-secret-key:latest,SECRET_KEY=dachjob-dev-jwt-secret-key:latest,OPENROUTER_API_KEY=dachjob-dev-openrouter-api-key:latest,DEEPSEEK_API_KEY=dachjob-dev-deepseek-api-key:latest"
+
+      - name: Run migration job
+        if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
+        run: |
+          gcloud run jobs execute "${MIGRATION_JOB_NAME}" \
+            --project="${PROJECT_ID}" \
+            --region="${REGION}" \
+            --wait
+
+      - name: Capture service URL
+        id: url
+        run: |
+          url="$(gcloud run services describe "${API_SERVICE_NAME}" --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
+          echo "url=${url}" >> "${GITHUB_OUTPUT}"
+
+      - name: Health check API
+        run: |
+          for attempt in {1..30}; do
+            if curl -fsS "${{ steps.url.outputs.url }}/api/health"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+
+  deploy-frontend:
+    name: Deploy frontend to Cloud Run
+    needs:
+      - prepare
+      - terraform
+      - build-frontend
+    if: ${{ always() && needs.prepare.outputs.deploy_frontend == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-frontend.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      url: ${{ steps.url.outputs.url }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy frontend service
+        run: |
+          gcloud run deploy "${FRONTEND_SERVICE_NAME}" \
+            --project="${PROJECT_ID}" \
+            --region="${REGION}" \
+            --image="${{ needs.build-frontend.outputs.image }}" \
+            --service-account="${FRONTEND_SERVICE_ACCOUNT}" \
+            --port=3000 \
+            --allow-unauthenticated \
+            --set-env-vars="NODE_ENV=production,NEXT_PUBLIC_API_BASE_URL=${API_BASE_URL},INTERNAL_API_BASE_URL=${API_BASE_URL}"
+
+      - name: Capture service URL
+        id: url
+        run: |
+          url="$(gcloud run services describe "${FRONTEND_SERVICE_NAME}" --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
+          echo "url=${url}" >> "${GITHUB_OUTPUT}"
+
+      - name: Health check frontend
+        run: |
+          for attempt in {1..30}; do
+            if curl -fsS "${{ steps.url.outputs.url }}" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+
+  deploy-worker:
+    name: Deploy worker to GKE
+    needs:
+      - prepare
+      - terraform
+      - build-worker
+    if: ${{ always() && needs.prepare.outputs.deploy_worker == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-worker.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER_NAME }}
+          location: ${{ env.REGION }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Ensure worker Workload Identity binding
+        run: |
+          gcloud iam service-accounts add-iam-policy-binding "${WORKER_SERVICE_ACCOUNT}" \
+            --project="${PROJECT_ID}" \
+            --role="roles/iam.workloadIdentityUser" \
+            --member="serviceAccount:${PROJECT_ID}.svc.id.goog[${GKE_NAMESPACE}/worker]" >/dev/null
+
+      - name: Sync worker Kubernetes secrets
+        run: |
+          set +x
+          database_password="$(gcloud secrets versions access latest --secret=dachjob-dev-db-password --project="${PROJECT_ID}")"
+          jwt_secret_key="$(gcloud secrets versions access latest --secret=dachjob-dev-jwt-secret-key --project="${PROJECT_ID}")"
+          openrouter_api_key="$(gcloud secrets versions access latest --secret=dachjob-dev-openrouter-api-key --project="${PROJECT_ID}" 2>/dev/null || true)"
+          deepseek_api_key="$(gcloud secrets versions access latest --secret=dachjob-dev-deepseek-api-key --project="${PROJECT_ID}" 2>/dev/null || true)"
+          database_url="postgresql+psycopg://postgres:${database_password}@localhost/dachjob?host=/cloudsql/${CLOUD_SQL_CONNECTION_NAME}"
+
+          kubectl create namespace "${GKE_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic worker-secrets \
+            --namespace="${GKE_NAMESPACE}" \
+            --from-literal=database_password="${database_password}" \
+            --from-literal=database_url="${database_url}" \
+            --from-literal=jwt_secret_key="${jwt_secret_key}" \
+            --from-literal=openrouter_api_key="${openrouter_api_key}" \
+            --from-literal=deepseek_api_key="${deepseek_api_key}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply worker manifests
+        run: kubectl apply -f infra/k8s/celery-worker/deployment.yaml
+
+      - name: Pin worker image
+        run: |
+          kubectl set image deployment/celery-worker \
+            worker="${{ needs.build-worker.outputs.image }}" \
+            --namespace="${GKE_NAMESPACE}"
+
+      - name: Wait for worker rollout
+        run: kubectl rollout status deployment/celery-worker --namespace="${GKE_NAMESPACE}" --timeout=300s
+
+      - name: Show worker pods
+        run: kubectl get pods --namespace="${GKE_NAMESPACE}" -o wide
+
+  summary:
+    name: Deployment summary
+    needs:
+      - prepare
+      - terraform
+      - deploy-api
+      - deploy-frontend
+      - deploy-worker
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write summary
+        run: |
+          echo "## Deployment Summary" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Item | Value |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| --- | --- |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Branch | ${{ needs.prepare.outputs.branch }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Target | ${{ needs.prepare.outputs.target }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Image tag | ${{ needs.prepare.outputs.image_tag }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Terraform | ${{ needs.terraform.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| API | ${{ needs.deploy-api.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Frontend | ${{ needs.deploy-frontend.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Worker | ${{ needs.deploy-worker.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| API URL | ${{ needs.deploy-api.outputs.url || env.API_BASE_URL }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Frontend URL | ${{ needs.deploy-frontend.outputs.url || env.FRONTEND_URL }} |" >> "${GITHUB_STEP_SUMMARY}"
