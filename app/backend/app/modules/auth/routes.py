@@ -24,6 +24,17 @@ from app.modules.auth.schemas import (
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+async def _get_default_tenant(db: AsyncSession) -> Tenant:
+    slug = get_settings().default_tenant_slug
+    result = await db.execute(select(Tenant).where(Tenant.slug == slug).limit(1))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        tenant = Tenant(slug=slug, name="Default Workspace")
+        db.add(tenant)
+        await db.flush()
+    return tenant
+
+
 @router.post("/register", response_model=AuthResponse)
 async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     existing = await db.execute(
@@ -40,17 +51,22 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     db.add(user)
     await db.flush()
 
-    tenant = Tenant(slug=body.email.replace("@", "-at-"), name=f"{body.name}'s Workspace")
-    db.add(tenant)
-    await db.flush()
+    tenant = await _get_default_tenant(db)
 
-    membership = Membership(
-        tenant_id=tenant.id,
-        user_id=user.id,
-        role="owner",
+    result = await db.execute(
+        select(Membership).where(
+            Membership.user_id == user.id,
+            Membership.tenant_id == tenant.id,
+        ).limit(1)
     )
-    db.add(membership)
-    await db.flush()
+    if not result.scalar_one_or_none():
+        membership = Membership(
+            tenant_id=tenant.id,
+            user_id=user.id,
+            role="member",
+        )
+        db.add(membership)
+        await db.flush()
 
     token = create_access_token(user.id, user.email, tenant.id)
     return AuthResponse(
@@ -74,19 +90,31 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     if not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
+    tenant = await _get_default_tenant(db)
+
     result = await db.execute(
-        select(Membership).where(Membership.user_id == user.id).limit(1)
+        select(Membership).where(
+            Membership.user_id == user.id,
+            Membership.tenant_id == tenant.id,
+        ).limit(1)
     )
     membership = result.scalar_one_or_none()
-    tenant_id = membership.tenant_id if membership else None
+    if not membership:
+        membership = Membership(
+            tenant_id=tenant.id,
+            user_id=user.id,
+            role="member",
+        )
+        db.add(membership)
+        await db.flush()
 
-    token = create_access_token(user.id, user.email, tenant_id)
+    token = create_access_token(user.id, user.email, tenant.id)
     return AuthResponse(
         token=token,
         user_id=user.id,
         email=user.email,
         name=user.name,
-        tenant_id=tenant_id,
+        tenant_id=tenant.id,
     )
 
 
@@ -149,13 +177,6 @@ async def google_login(
     if user:
         if not user.google_id:
             user.google_id = google_id
-        tenant_id = None
-        result = await db.execute(
-            select(Membership).where(Membership.user_id == user.id).limit(1)
-        )
-        membership = result.scalar_one_or_none()
-        if membership:
-            tenant_id = membership.tenant_id
     else:
         user = User(
             email=email,
@@ -165,20 +186,25 @@ async def google_login(
         db.add(user)
         await db.flush()
 
-        tenant = Tenant(slug=email.replace("@", "-at-"), name=f"{name}'s Workspace")
-        db.add(tenant)
-        await db.flush()
+    tenant = await _get_default_tenant(db)
 
+    result = await db.execute(
+        select(Membership).where(
+            Membership.user_id == user.id,
+            Membership.tenant_id == tenant.id,
+        ).limit(1)
+    )
+    membership = result.scalar_one_or_none()
+    if not membership:
         membership = Membership(
             tenant_id=tenant.id,
             user_id=user.id,
-            role="owner",
+            role="member",
         )
         db.add(membership)
         await db.flush()
-        tenant_id = tenant.id
 
-    token = create_access_token(user.id, user.email, tenant_id)
+    token = create_access_token(user.id, user.email, tenant.id)
     return AuthResponse(
         token=token,
         user_id=user.id,
