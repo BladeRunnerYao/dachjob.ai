@@ -25,12 +25,18 @@ class LLMGateway:
             self.default_model_reasoning = settings.openrouter_model_reasoning
             self.provider = "openrouter"
         else:
+            deepseek_key = getattr(settings, 'deepseek_api_key', '') or ''
+            if not deepseek_key:
+                raise RuntimeError(
+                    "No LLM API key configured. "
+                    "Set OPENROUTER_API_KEY (or uncomment DEEPSEEK_API_KEY) in .env"
+                )
             self.client = AsyncOpenAI(
-                api_key=settings.deepseek_api_key,
-                base_url=settings.deepseek_base_url,
+                api_key=deepseek_key,
+                base_url=getattr(settings, 'deepseek_base_url', 'https://api.deepseek.com') or 'https://api.deepseek.com',
             )
-            self.default_model = settings.deepseek_model_fast
-            self.default_model_reasoning = settings.deepseek_model_reasoning
+            self.default_model = getattr(settings, 'deepseek_model_fast', 'deepseek-v4-flash') or 'deepseek-v4-flash'
+            self.default_model_reasoning = getattr(settings, 'deepseek_model_reasoning', 'deepseek-v4-pro') or 'deepseek-v4-pro'
             self.provider = "deepseek"
         self.settings = settings
 
@@ -42,6 +48,7 @@ class LLMGateway:
         messages: list[dict],
         model: str | None = None,
         reasoning: bool = False,
+        response_format: dict | None = None,
     ) -> str:
         settings = self.settings
         model = model or self.default_model
@@ -58,6 +65,8 @@ class LLMGateway:
             )
             if reasoning:
                 kwargs["extra_body"] = {"reasoning": {"enabled": True}}
+            if response_format:
+                kwargs["response_format"] = response_format
 
             response = await self.client.chat.completions.create(**kwargs)
             latency_ms = int((time.monotonic() - start) * 1000)
