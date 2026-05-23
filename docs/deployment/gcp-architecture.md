@@ -101,6 +101,10 @@ Options for the worker:
 | **Redis** | Memorystore | Managed; Celery broker |
 | **Object Storage** | Cloud Storage (GCS) | S3-compatible; cheap |
 | **Secrets** | Secret Manager | Native GCP; IAM integration |
+| **Docker Images** | Artifact Registry | Stores all container images (API, Frontend, Worker) |
+| **Monitoring** | Cloud Monitoring + Cloud Logging | Built-in; dashboards + alerting |
+| **DNS** | Cloud DNS | Custom domain + TLS (if needed) |
+| **Identity** | IAM Service Accounts | Secure workload identity per component |
 
 ### Infrastructure as Code (Terraform)
 
@@ -113,6 +117,8 @@ infra/terraform/
 ├── locals.tf
 │
 ├── modules/
+│   ├── artifact-registry/       # Docker image repositories
+│   │   └── main.tf
 │   ├── cloud-run/               # Cloud Run services (api, frontend)
 │   │   ├── main.tf
 │   │   ├── variables.tf
@@ -131,7 +137,11 @@ infra/terraform/
 │   │   ├── main.tf
 │   │   ├── variables.tf
 │   │   └── outputs.tf
-│   └── iam/                     # Service accounts & IAM bindings
+│   ├── iam/                     # Service accounts & IAM bindings
+│   │   └── main.tf
+│   ├── cloud-dns/               # DNS zone + records (if custom domain)
+│   │   └── main.tf
+│   └── monitoring/              # Alerting policies + dashboards
 │       └── main.tf
 │
 └── environments/
@@ -174,3 +184,85 @@ Secrets to store:
 - Database passwords
 
 Access via Workload Identity (GKE) or direct binding (Cloud Run) — no secrets in environment variables or config files.
+
+---
+
+## Additional GCP Services — Needed or Not?
+
+### Artifact Registry (Docker Image Registry)
+
+**✅ Required.**
+
+This is the equivalent of Azure Container Registry. Every Docker image (API, Frontend, Celery Worker) is built and pushed here before deployment.
+
+- GCP's recommended registry (Container Registry `gcr.io` is deprecated)
+- Each image lives in a repository: `europe-west1-docker.pkg.dev/dachjob-ai-platform/api`, `.../frontend`, `.../worker`
+- Integrated with Cloud Run, GKE, Cloud Build, and IAM
+
+### API Gateway / API Management
+
+**❌ Not needed for now.**
+
+An API Gateway (Apigee / Cloud API Gateway) adds rate limiting, client API keys, request transformation, and usage analytics. For dachjob.ai:
+
+- There is a **single backend service** (FastAPI) consumed by its own frontend
+- Cloud Run already handles HTTPS termination, authentication, and request routing
+- No third-party API consumers that need rate limiting or API keys
+
+**Revisit if**: you expose a public API for third-party integrations or need per-client usage billing.
+
+### Cloud DNS
+
+**✅ Required (if using a custom domain).**
+
+- Cloud Run provides an auto-generated `*.run.app` URL
+- For production at a custom domain (e.g. `dachjob.ai` or `app.dachjob.ai`), you need Cloud DNS to manage DNS records
+- Cloud DNS integrates with Cloud Run's custom domain mapping (automatic TLS certificates)
+
+**Without Cloud DNS**: you can still deploy and test on the `*.run.app` URL during development.
+
+### Cloud Logging
+
+**✅ Required (automatic, no extra setup).**
+
+- Cloud Run and GKE automatically stream container stdout/stderr to Cloud Logging
+- No additional configuration needed — it just works
+- Essential for debugging: view logs per revision, filter by severity, export to BigQuery
+- Integrated with Error Reporting (automatic error detection from logs)
+
+### Cloud Monitoring
+
+**✅ Recommended.**
+
+- Pre-built dashboards for Cloud Run (request count, latency, CPU, memory, billable time)
+- Alerting policies: e.g., alert when error rate > 5%, or when Cloud Run billable time exceeds a threshold
+- Can monitor Cloud SQL, Memorystore, and GKE from the same console
+- The project already includes Prometheus metrics in the API — Cloud Monitoring can scrape them via Google Cloud Managed Service for Prometheus
+
+### IAM Service Accounts
+
+**✅ Required (one per component).**
+
+Service accounts provide secure identity for each component. No hardcoded keys or long-lived credentials.
+
+| Service Account | Purpose | Permissions Needed |
+|----------------|---------|-------------------|
+| **Cloud Run API** | The FastAPI backend running on Cloud Run | Cloud SQL Client, Secret Manager Secret Accessor, Storage Object User |
+| **Cloud Run Frontend** | The Next.js frontend | (minimal — only makes HTTP calls to API) |
+| **GKE Node Pool** | The GKE cluster nodes | Artifact Registry Reader, Cloud SQL Client, Secret Manager Accessor, Monitoring Metric Writer |
+| **Terraform** | Applied locally or in CI | Project Creator, Billing User, Service Usage Admin, and per-resource admin roles |
+| **CI/CD (GitHub Actions)** | Push images + deploy | Artifact Registry Writer, Cloud Run Admin, GKE Developer |
+
+**Workload Identity** (GKE) or **Direct IAM binding** (Cloud Run) assigns these service accounts to running workloads — no JSON keys to manage.
+
+### Summary Table
+
+| Service | Required? | Reason |
+|---------|-----------|--------|
+| Artifact Registry | ✅ Yes | Store all Docker images |
+| API Gateway | ❌ No | Single backend; Cloud Run handles routing |
+| Cloud DNS | ⚠️ Conditional | Only needed for custom domain |
+| Cloud Logging | ✅ Yes | Automatic; essential for debugging |
+| Cloud Monitoring | ✅ Recommended | Dashboards + cost/error alerts |
+| IAM Service Accounts | ✅ Yes | Secure identity for every component |
+| Secret Manager | ✅ Yes | API keys, DB passwords, JWT secret |
