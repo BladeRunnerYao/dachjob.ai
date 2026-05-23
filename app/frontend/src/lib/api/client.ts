@@ -14,14 +14,29 @@ function getPublicApiBase() {
 }
 
 export class ApiClient {
+  private getAuthHeaders(): Record<string, string> {
+    if (typeof window === 'undefined') return {};
+    const token = localStorage.getItem('auth_token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
   private async request<T>(path: string, options?: RequestInit): Promise<T> {
     const url = `${getApiBase()}${path}`;
     try {
       const res = await fetch(url, {
-        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.getAuthHeaders(),
+          ...options?.headers,
+        } as Record<string, string>,
         cache: 'no-store',
         ...options,
       });
+      if (res.status === 401 && typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token');
+        window.location.href = '/login';
+        throw new Error('Unauthorized');
+      }
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json();
     } catch {
@@ -113,8 +128,10 @@ export class ApiClient {
     const formData = new FormData();
     formData.append('file', file);
     const baseUrl = getApiBase();
+    const headers = this.getAuthHeaders();
     const res = await fetch(`${baseUrl}/api/profile/import-pdf`, {
       method: 'POST',
+      headers: { ...headers } as Record<string, string>,
       body: formData,
     });
     if (!res.ok) throw new Error(`Upload failed: ${res.status}`);

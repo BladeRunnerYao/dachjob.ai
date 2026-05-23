@@ -14,6 +14,7 @@ from app.modules.resumes.routes import router as resumes_router
 from app.modules.resumes.routes import artifact_router as resume_artifact_router
 from app.modules.llm_gateway.routes import router as llm_gateway_router
 from app.modules.tracker.routes import router as tracker_router
+from app.modules.auth.routes import router as auth_router
 
 settings = get_settings()
 
@@ -50,6 +51,7 @@ app.include_router(resumes_router)
 app.include_router(resume_artifact_router)
 app.include_router(llm_gateway_router)
 app.include_router(tracker_router)
+app.include_router(auth_router)
 
 
 @app.get("/api/health")

@@ -8,7 +8,9 @@ import {
   Briefcase,
   ClipboardList,
   Activity,
+  LogOut,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -18,8 +20,15 @@ const navItems = [
   { href: '/llm-runs', label: 'LLM Runs', icon: Activity },
 ];
 
-export function Sidebar() {
+interface User {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export function Sidebar({ user }: { user: User | null }) {
   const pathname = usePathname();
+  const { logout } = useAuth();
 
   return (
     <aside className="flex h-screen w-64 flex-col bg-slate-900 text-white">
@@ -50,6 +59,21 @@ export function Sidebar() {
           );
         })}
       </nav>
+      {user && (
+        <div className="border-t border-slate-800 px-4 py-4">
+          <div className="mb-3 text-xs text-slate-400 truncate">
+            <div className="font-medium text-slate-300">{user.name}</div>
+            <div>{user.email}</div>
+          </div>
+          <button
+            onClick={logout}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

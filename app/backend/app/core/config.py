@@ -28,6 +28,13 @@ class Settings(BaseSettings):
 
     llm_log_prompts: bool = False
 
+    jwt_secret: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60 * 24 * 7
+
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
     model_config = {"env_file": ".env", "extra": "allow"}
 
 

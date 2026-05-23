@@ -34,6 +34,8 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(Text, unique=True, nullable=False)
     name = Column(Text, nullable=False)
+    password_hash = Column(Text, nullable=True)
+    google_id = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

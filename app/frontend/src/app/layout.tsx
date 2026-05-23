@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { Sidebar } from '@/components/sidebar';
+import { ClientLayout } from './client-layout';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -13,13 +13,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full">
-      <body className={`${inter.className} flex h-full bg-slate-100`}>
-        <Sidebar />
-        <main className="flex-1 overflow-auto">
-          <div className="mx-auto max-w-7xl px-6 py-8">
-            {children}
-          </div>
-        </main>
+      <body className={`${inter.className} h-full`}>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );

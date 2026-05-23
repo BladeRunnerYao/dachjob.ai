@@ -5,6 +5,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import async_session_factory
+from app.core.security import hash_password
 from app.db.models import (
     Tenant,
     User,
@@ -41,9 +42,12 @@ async def seed_demo():
                 id=uuid.uuid4(),
                 email="demo@dachjob.ai",
                 name="Demo User",
+                password_hash=hash_password("demo1234"),
             )
             session.add(user)
             await session.flush()
+        elif not user.password_hash:
+            user.password_hash = hash_password("demo1234")
 
         result = await session.execute(
             select(Membership).where(
