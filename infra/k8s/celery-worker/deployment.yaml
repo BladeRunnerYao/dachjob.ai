@@ -38,7 +38,9 @@ spec:
       containers:
         - name: worker
           image: europe-west1-docker.pkg.dev/dachjob-ai-platform/dachjob-dev-worker/worker:latest
-          command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info"]
+          command: ["sh", "-c"]
+          args:
+            - exec celery -A app.workers.celery_app worker --loglevel=info --uid=app --gid=app 2>&1
           volumeMounts:
             - name: cloudsql
               mountPath: /cloudsql
