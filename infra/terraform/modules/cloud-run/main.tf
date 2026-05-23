@@ -5,8 +5,8 @@ resource "google_cloud_run_v2_service" "api" {
   client   = "terraform"
 
   template {
-    service_account = var.api_service_account_email
-    timeout         = "300s"
+    service_account                  = var.api_service_account_email
+    timeout                          = "300s"
     max_instance_request_concurrency = 80
 
     vpc_access {
@@ -38,6 +38,31 @@ resource "google_cloud_run_v2_service" "api" {
         value = "postgresql+asyncpg://${var.api_service_account_email}/dachjob?host=/cloudsql/${var.cloud_sql_connection_name}"
       }
       env {
+        name  = "CLOUD_SQL_CONNECTION_NAME"
+        value = var.cloud_sql_connection_name
+      }
+      env {
+        name  = "DATABASE_USER"
+        value = "postgres"
+      }
+      env {
+        name  = "DATABASE_NAME"
+        value = "dachjob"
+      }
+      env {
+        name = "DATABASE_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = data.google_secret_manager_secret.db_password.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name  = "REDIS_URL"
+        value = "redis://${var.redis_host}:6379/0"
+      }
+      env {
         name  = "REDIS_HOST"
         value = var.redis_host
       }
@@ -66,7 +91,7 @@ resource "google_cloud_run_v2_service" "api" {
         value = var.project_id
       }
       env {
-        name  = "SECRET_KEY"
+        name = "JWT_SECRET"
         value_source {
           secret_key_ref {
             secret  = data.google_secret_manager_secret.jwt_secret.secret_id
@@ -75,7 +100,16 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
       env {
-        name  = "OPENROUTER_API_KEY"
+        name = "SECRET_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = data.google_secret_manager_secret.jwt_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "OPENROUTER_API_KEY"
         value_source {
           secret_key_ref {
             secret  = data.google_secret_manager_secret.openrouter_api_key.secret_id
@@ -84,7 +118,7 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
       env {
-        name  = "DEEPSEEK_API_KEY"
+        name = "DEEPSEEK_API_KEY"
         value_source {
           secret_key_ref {
             secret  = data.google_secret_manager_secret.deepseek_api_key.secret_id
@@ -124,7 +158,11 @@ resource "google_cloud_run_v2_service" "frontend" {
       image = var.frontend_image
 
       env {
-        name  = "NEXT_PUBLIC_API_URL"
+        name  = "NEXT_PUBLIC_API_BASE_URL"
+        value = google_cloud_run_v2_service.api.uri
+      }
+      env {
+        name  = "INTERNAL_API_BASE_URL"
         value = google_cloud_run_v2_service.api.uri
       }
       env {
@@ -164,4 +202,8 @@ data "google_secret_manager_secret" "deepseek_api_key" {
 
 data "google_secret_manager_secret" "jwt_secret" {
   secret_id = "${var.name_prefix}-jwt-secret-key"
+}
+
+data "google_secret_manager_secret" "db_password" {
+  secret_id = "${var.name_prefix}-db-password"
 }

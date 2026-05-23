@@ -5,7 +5,7 @@ from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import get_settings
-from app.db.session import Base
+from app.db.session import Base, get_async_database_url
 from app.db.models import *  # noqa: F401, F403
 
 config = context.config
@@ -16,9 +16,9 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline():
-    url = get_settings().database_url
+    url = get_async_database_url()
     context.configure(
-        url=url,
+        url=str(url),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -34,10 +34,7 @@ def do_run_migrations(connection):
 
 
 async def run_migrations_online():
-    settings = get_settings()
-    async_url = settings.database_url.replace(
-        "postgresql+psycopg://", "postgresql+asyncpg://"
-    )
+    async_url = get_async_database_url(get_settings())
     connectable = create_async_engine(async_url)
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

@@ -32,18 +32,32 @@ spec:
         component: worker
     spec:
       serviceAccountName: worker
+      volumes:
+        - name: cloudsql
+          emptyDir: {}
       containers:
         - name: worker
-          image: europe-west1-docker.pkg.dev/dachjob-ai-platform/dachjob-dev-worker:latest
+          image: europe-west1-docker.pkg.dev/dachjob-ai-platform/dachjob-dev-worker/worker:latest
           command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info"]
+          volumeMounts:
+            - name: cloudsql
+              mountPath: /cloudsql
           env:
             - name: APP_ENV
               value: "production"
-            - name: REDIS_HOST
+            - name: CLOUD_SQL_CONNECTION_NAME
+              value: dachjob-ai-platform:europe-west1:dachjob-dev-postgres
+            - name: DATABASE_USER
+              value: postgres
+            - name: DATABASE_NAME
+              value: dachjob
+            - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: worker-secrets
-                  key: redis_host
+                  key: database_password
+            - name: REDIS_URL
+              value: redis://10.36.0.3:6379/0
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -59,11 +73,20 @@ spec:
                 secretKeyRef:
                   name: worker-secrets
                   key: deepseek_api_key
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: worker-secrets
+                  key: jwt_secret_key
             - name: SECRET_KEY
               valueFrom:
                 secretKeyRef:
                   name: worker-secrets
                   key: jwt_secret_key
+            - name: S3_ENDPOINT_URL
+              value: https://storage.googleapis.com
+            - name: S3_BUCKET_NAME
+              value: dachjob-dev-artifacts
             - name: GOOGLE_CLOUD_PROJECT
               value: dachjob-ai-platform
           resources:
@@ -73,6 +96,24 @@ spec:
             limits:
               cpu: "1000m"
               memory: "1Gi"
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2
+          args:
+            - "--private-ip"
+            - "--unix-socket=/cloudsql"
+            - "dachjob-ai-platform:europe-west1:dachjob-dev-postgres"
+          volumeMounts:
+            - name: cloudsql
+              mountPath: /cloudsql
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

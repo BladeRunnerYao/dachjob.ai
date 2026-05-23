@@ -4,7 +4,7 @@ resource "google_container_cluster" "cluster" {
 
   enable_autopilot = true
 
-  network    = var.network_id
+  network         = var.network_id
   networking_mode = "VPC_NATIVE"
 
   release_channel {

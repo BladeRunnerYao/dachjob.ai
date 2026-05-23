@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     default_tenant_slug: str = "dachjob-local"
 
     database_url: str = "postgresql+psycopg://dachjob:dachjob@localhost:5432/dachjob"
+    database_user: str = "postgres"
+    database_password: str = ""
+    database_name: str = "dachjob"
+    cloud_sql_connection_name: str = ""
     redis_url: str = "redis://localhost:6379/0"
 
     # deepseek_api_key: str = ""

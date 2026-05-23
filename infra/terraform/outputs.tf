@@ -33,3 +33,11 @@ output "service_accounts" {
   description = "Service account emails"
   value       = module.iam.service_accounts
 }
+
+output "cloud_run_urls" {
+  description = "Cloud Run service URLs"
+  value = {
+    api      = module.cloud-run.api_url
+    frontend = module.cloud-run.frontend_url
+  }
+}
