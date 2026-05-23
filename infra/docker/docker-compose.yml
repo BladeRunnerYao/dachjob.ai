@@ -59,35 +59,61 @@ services:
     networks:
       - dachjob-net
 
+  createbucket:
+    image: minio/mc
+    container_name: dachjob-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing local/dachjob-artifacts
+      "
+    networks:
+      - dachjob-net
+
   api:
+    image: dachjob-backend-api
     build:
       context: ../../
-      dockerfile: apps/api/Dockerfile
-    container_name: dachjob-api
+      dockerfile: app/backend/Dockerfile
+    container_name: dachjob-backend-api
     ports:
       - "8000:8000"
     env_file:
       - ../../.env
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: postgresql+psycopg://dachjob:dachjob@postgres:5432/dachjob
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
     volumes:
-      - ../../apps/api:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      - ../../app/backend:/app
+    command: sh -c "alembic -c app/db/migrations/alembic.ini upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      createbucket:
+        condition: service_completed_successfully
     networks:
       - dachjob-net
 
   worker:
+    image: dachjob-backend-worker
     build:
       context: ../../
-      dockerfile: apps/api/Dockerfile
-    container_name: dachjob-worker
+      dockerfile: app/backend/Dockerfile
+    container_name: dachjob-backend-worker
     env_file:
       - ../../.env
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: postgresql+psycopg://dachjob:dachjob@postgres:5432/dachjob
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
     command: celery -A app.workers.celery_app worker --loglevel=info
     depends_on:
       postgres:
@@ -100,14 +126,19 @@ services:
       - dachjob-net
 
   frontend:
+    image: dachjob-frontend
     build:
       context: ../../
-      dockerfile: apps/web/Dockerfile
+      dockerfile: app/frontend/Dockerfile
     container_name: dachjob-frontend
     ports:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      INTERNAL_API_BASE_URL: http://api:8000
+    volumes:
+      - ../../app/frontend:/app
+      - /app/node_modules
     depends_on:
       - api
     networks:
