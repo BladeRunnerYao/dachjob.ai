@@ -16,7 +16,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ passwordNeedsReset?: boolean }>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
-  requestPasswordReset: (email: string) => Promise<string>;
+  requestPasswordReset: (email: string) => Promise<{ message: string; resetLink?: string }>;
   resetPassword: (token: string, newPassword: string) => Promise<void>;
 }
 
@@ -102,7 +102,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ email }),
     });
     const data = await res.json();
-    return data.message || 'If that email is registered, a reset link has been sent.';
+    return {
+      message: data.message || 'If that email is registered, a reset link has been sent.',
+      resetLink: data.reset_link || undefined,
+    };
   }, []);
 
   const resetPassword = useCallback(async (token: string, newPassword: string) => {

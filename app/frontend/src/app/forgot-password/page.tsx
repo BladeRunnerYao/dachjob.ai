@@ -17,8 +17,8 @@ export default function ForgotPasswordPage() {
     setMessage('');
     setSubmitting(true);
     try {
-      const msg = await requestPasswordReset(email);
-      setMessage(msg);
+      const result = await requestPasswordReset(email);
+      setMessage(result.message);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
