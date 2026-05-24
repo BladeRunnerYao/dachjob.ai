@@ -17,7 +17,7 @@ celery_app.conf.task_serializer = "json"
 
 @worker_ready.connect
 def on_worker_ready(**kwargs):
-    path = os.path.join(os.path.dirname(__file__), "..", "version.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "..", "version.json")
     try:
         with open(path) as f:
             v = json.load(f)
