@@ -323,11 +323,26 @@ async def import_job_urls(
     db: AsyncSession,
     tenant: TenantContext,
     urls: list[str],
-) -> list[JobPosting]:
+) -> tuple[list[JobPosting], list[dict[str, str]]]:
     imported: list[JobPosting] = []
+    errors: list[dict[str, str]] = []
     cleaned_urls = [url.strip() for url in urls if url.strip()]
     for url in cleaned_urls:
-        scraped = await scrape_job_url(url)
+        try:
+            scraped = await scrape_job_url(url)
+        except httpx.HTTPStatusError as e:
+            errors.append({"url": url, "error": f"HTTP {e.response.status_code}: could not fetch page"})
+            continue
+        except httpx.TimeoutException:
+            errors.append({"url": url, "error": "Request timed out after 20s"})
+            continue
+        except httpx.RequestError as e:
+            errors.append({"url": url, "error": f"Network error: {str(e)[:200]}"})
+            continue
+        except Exception as e:
+            errors.append({"url": url, "error": f"Scrape error: {str(e)[:200]}"})
+            continue
+
         existing_result = await db.execute(
             select(JobPosting).where(
                 JobPosting.tenant_id == tenant.id,
@@ -370,7 +385,11 @@ async def import_job_urls(
             job.status = "imported"
             await db.flush()
 
-        await parse_job_posting(db, tenant, job, force=True)
+        try:
+            await parse_job_posting(db, tenant, job, force=True)
+        except Exception:
+            pass
+
         imported.append(job)
 
     refreshed_jobs: list[JobPosting] = []
@@ -378,4 +397,4 @@ async def import_job_urls(
         refreshed = await get_job(db, job.id)
         if refreshed:
             refreshed_jobs.append(refreshed)
-    return refreshed_jobs
+    return refreshed_jobs, errors
