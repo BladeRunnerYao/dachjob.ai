@@ -890,6 +890,7 @@ def _jd_extract_messages(job) -> list[dict]:
                 "- Put skills from sections like 'Requirements', 'Your toolkit', 'What you must have', or equivalent in must_have_skills.\n"
                 "- Put skills from sections like 'Nice to have', 'Preferred', 'Bonus', 'Extras that give you an edge', or equivalent in nice_to_have_skills.\n"
                 "- Do not include skills that are mentioned only in a negated section such as 'What this role is NOT'.\n"
+                "- Do NOT extract city names, office locations, or company headquarters as skills (e.g. Stockholm, London, New York). These are locations, not skills.\n"
                 "- Put explicit 'must have' requirements in must_have_skills and optional/preferred items in nice_to_have_skills.\n"
                 "- For Swiss jobs, flag explicit citizenship, work permit, EU/EFTA, right-to-work, or visa sponsorship restrictions in work_authorization with the exact evidence sentence."
             ),
