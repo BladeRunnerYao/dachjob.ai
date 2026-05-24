@@ -27,9 +27,9 @@ class Settings(BaseSettings):
 
     vertex_ai_project_id: str = ""
     vertex_ai_location: str = "global"
-    vertex_ai_model_fast: str = "google/gemini-2.5-flash-lite"
-    vertex_ai_model_quality: str = "google/gemini-2.5-flash"
-    vertex_ai_model_reasoning: str = "google/gemini-2.5-pro"
+    vertex_ai_model_fast: str = "google/gemini-3.1-flash-lite"
+    vertex_ai_model_quality: str = "google/gemini-3.5-flash"
+    vertex_ai_model_reasoning: str = "google/gemini-3.1-pro-preview"
 
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
