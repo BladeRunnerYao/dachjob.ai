@@ -278,7 +278,6 @@ export class ApiClient {
         status: 'new',
         parsed_json: {
           skills: ['GenAI', 'RAG', 'LLMOps', 'PyTorch', 'AWS/Azure/GCP', 'Databricks', 'Spark'],
-          responsibilities: ['Build customer GenAI applications', 'Own production rollouts', 'Advise enterprise customers'],
           years_exp: 5,
         },
         created_at: '2026-05-22T08:00:00Z',
@@ -293,7 +292,6 @@ export class ApiClient {
         status: 'new',
         parsed_json: {
           skills: ['Python', 'LLM/VLM', 'Evaluation', 'SQL', 'BigQuery', 'Airflow', 'Kafka', 'Kubernetes'],
-          responsibilities: ['Lead document interpretation system', 'Own evaluation pipeline', 'Mentor Python practices'],
           years_exp: 4,
         },
         created_at: '2026-05-22T09:00:00Z',
@@ -308,7 +306,6 @@ export class ApiClient {
         status: 'new',
         parsed_json: {
           skills: ['Azure', 'AWS', 'Kubernetes', 'Docker', 'Terraform', 'GitHub Actions', 'Python', 'Bash'],
-          responsibilities: ['Operate cloud infrastructure', 'Build CI/CD pipelines', 'Manage GitOps and Kubernetes platforms'],
           years_exp: 5,
         },
         created_at: '2026-05-22T10:00:00Z',

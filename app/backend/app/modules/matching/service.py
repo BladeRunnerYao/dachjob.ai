@@ -209,21 +209,6 @@ NICE_TO_HAVE_SECTION_STARTS = (
     "wünschenswert",
 )
 
-RESPONSIBILITY_SECTION_STARTS = (
-    "responsibilities",
-    "tasks",
-    "the impact you will have",
-    "what you will do",
-    "what you'll do",
-    "what you'll be doing",
-    "what you’ll be doing",
-    "what awaits you",
-    "your mission",
-    "your responsibilities",
-    "your tasks",
-    "aufgaben",
-)
-
 REQUIREMENT_SECTION_STOPS = (
     "nice to have",
     "nice-to-have",
@@ -718,17 +703,6 @@ def _enrich_parsed_skills(parsed_json: dict, job) -> dict:
     parsed_json["must_have_skills"] = enriched_must
     parsed_json["nice_to_have_skills"] = enriched_nice
     parsed_json["skills"] = _dedupe_preserve_order(enriched_must + enriched_nice)
-    extracted_responsibilities = _extract_responsibilities(raw_jd)
-    current_responsibilities = (
-        parsed_json.get("responsibilities")
-        if isinstance(parsed_json.get("responsibilities"), list)
-        else []
-    )
-    parsed_json["responsibilities"] = (
-        extracted_responsibilities
-        if extracted_responsibilities
-        else _dedupe_preserve_order(list(current_responsibilities))[:12]
-    )
     work_authorization = _extract_work_authorization(job)
     if work_authorization:
         parsed_json["work_authorization"] = work_authorization
@@ -812,79 +786,10 @@ def _deterministic_parse(job):
         "must_have_skills": must_have,
         "nice_to_have_skills": nice_to_have,
         "skills": must_have + nice_to_have,
-        "responsibilities": _extract_responsibilities(job.raw_jd or ""),
         "language_requirements": lang_reqs,
         "dach_signals": dach_signals,
         "raw_preview": job.raw_jd[:500] if job.raw_jd else "",
     }
-
-
-def _extract_responsibilities(raw_jd: str) -> list[str]:
-    start_keywords = RESPONSIBILITY_SECTION_STARTS
-    stop_keywords = (
-        "what this role is not",
-        "requirements",
-        "must have",
-        "what you must have",
-        "what should you bring along",
-        "what you bring along",
-        "your toolkit",
-        "who we are looking for",
-        "nice to have",
-        "nice-to-have",
-        "extras that give you an edge",
-        "benefits",
-        "what do we offer",
-        "how we'll make",
-        "how we’ll make",
-        "how to apply",
-        "start date",
-        "type of employment",
-        "working hours",
-        "seniority level",
-        "employment type",
-        "job function",
-        "industries",
-        "show more",
-    )
-    heading_only = {
-        "tasks",
-        "responsibilities",
-        "requirements",
-        "benefits",
-        "nice to have",
-        "nice-to-have",
-        "must have",
-        "what awaits you",
-        "your mission",
-        "your toolkit",
-        "what should you bring along",
-    }
-
-    items: list[str] = []
-    in_section = False
-    for line in raw_jd.splitlines():
-        stripped = line.strip()
-        lower = stripped.lower()
-        if not stripped:
-            continue
-        if in_section and any(key in lower for key in stop_keywords):
-            break
-        if any(key in lower for key in start_keywords):
-            in_section = True
-            continue
-        if not in_section:
-            continue
-        if stripped.startswith("#"):
-            break
-        item = stripped.lstrip("-*• ").strip()
-        item_lower = item.lower().strip(":")
-        if item_lower in heading_only:
-            continue
-        if len(item) < 18:
-            continue
-        items.append(item)
-    return _dedupe_preserve_order(items)[:12]
 
 
 async def format_raw_jd(
@@ -955,7 +860,7 @@ def _jd_extract_messages(job) -> list[dict]:
                 "Extract JSON with these fields:\n"
                 "title, company, location, work_model (remote/hybrid/onsite), "
                 "language_requirements (list), must_have_skills (list), "
-                "nice_to_have_skills (list), responsibilities (list), "
+                "nice_to_have_skills (list), "
                 "salary_range (string or null), seniority (string or null), "
                 "work_authorization (object or null with status, label, detail, evidence), "
                 "dach_signals (object with location/country/language/work_authorization keys)\n\n"
@@ -981,7 +886,6 @@ def _needs_reasoning_parse_retry(parsed_json: dict, job) -> bool:
     skill_count = len(parsed_json.get("must_have_skills") or []) + len(
         parsed_json.get("nice_to_have_skills") or []
     )
-    responsibilities_count = len(parsed_json.get("responsibilities") or [])
     has_requirement_signal = any(
         signal in raw_jd.lower()
         for signal in (
@@ -990,15 +894,10 @@ def _needs_reasoning_parse_retry(parsed_json: dict, job) -> bool:
             "what you must have",
             "must have",
             "qualifications",
-            "responsibilities",
             "your mission",
         )
     )
-    return (
-        len(raw_jd) > 1200
-        and has_requirement_signal
-        and (skill_count < 4 or responsibilities_count == 0)
-    )
+    return len(raw_jd) > 1200 and has_requirement_signal and skill_count < 4
 
 
 async def parse_job_posting(
@@ -1123,7 +1022,7 @@ def _evidence_coverage(evidence_chunks: list, must_have_skills: list[str] | None
 def _extract_text_for_scoring(job) -> str:
     parts = [job.title or "", job.raw_jd or ""]
     if job.parsed_json:
-        for key in ("must_have_skills", "nice_to_have_skills", "responsibilities"):
+        for key in ("must_have_skills", "nice_to_have_skills"):
             items = job.parsed_json.get(key, [])
             if isinstance(items, list):
                 parts.extend(str(i) for i in items)

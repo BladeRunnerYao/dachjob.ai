@@ -676,4 +676,3 @@ class TestSkillExtraction:
             assert skill in parsed["must_have_skills"]
         for noise in ["Christmas bonus", "6 weeks annual leave", "Hiring"]:
             assert noise not in parsed["skills"]
-        assert any("production-grade AI" in item for item in parsed["responsibilities"])
