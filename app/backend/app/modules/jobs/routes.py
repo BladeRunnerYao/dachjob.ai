@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
-from app.core.tenant import TenantContext, get_tenant_context
+from app.core.auth import TenantContext
+from app.core.tenant import get_tenant_context
 from app.db.session import get_db
 from app.modules.jobs.importer import import_job_urls
 from app.modules.jobs.repository import create_job, get_job, list_jobs_by_tenant

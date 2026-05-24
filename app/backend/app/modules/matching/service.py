@@ -7,7 +7,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.tenant import TenantContext
+from app.core.auth import TenantContext
 from app.db.models import EvidenceChunk, MatchReport
 from app.modules.jobs.repository import get_job, sync_job_skills
 from app.modules.profiles.repository import get_profile_by_tenant
