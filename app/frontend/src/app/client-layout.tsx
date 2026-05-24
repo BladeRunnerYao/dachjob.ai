@@ -8,7 +8,7 @@ import { useEffect } from 'react';
 function AppContent({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const pathname = usePathname();
-  const isAuthPage = pathname === '/login' || pathname === '/register';
+  const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname.startsWith('/reset-password');
 
   useEffect(() => {
     if (!loading && !user && !isAuthPage) {
