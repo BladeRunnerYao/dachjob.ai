@@ -109,21 +109,22 @@ export default function JobDetailPage() {
       setPdfBlobUrl(null);
       return;
     }
+    const artifact = resume;
     let cancelled = false;
     const blobUrls: string[] = [];
 
     async function load() {
       try {
-        if (resume.has_html) {
-          const url = await api.getResumeHtmlUrl(resume.id);
+        if (artifact.has_html) {
+          const url = await api.getResumeHtmlUrl(artifact.id);
           if (cancelled) { URL.revokeObjectURL(url); return; }
           blobUrls.push(url);
           setHtmlBlobUrl(url);
         }
       } catch { /* blob fetch failed */ }
       try {
-        if (resume.has_pdf) {
-          const url = await api.getResumePdfUrl(resume.id);
+        if (artifact.has_pdf) {
+          const url = await api.getResumePdfUrl(artifact.id);
           if (cancelled) { URL.revokeObjectURL(url); return; }
           blobUrls.push(url);
           setPdfBlobUrl(url);
