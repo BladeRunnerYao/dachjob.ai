@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 from datetime import datetime, timezone
 from uuid import UUID
@@ -9,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
+from app.core.redis_client import cache
 from app.core.security import decode_access_token, pwd_context
 from app.db.models import ApiKey, Membership, Tenant, User
 
@@ -111,6 +113,16 @@ async def validate_bearer_token(
     if not token_tenant_id and not tenant_slug:
         raise _unauthorized("Bearer token is missing a valid tenant id")
 
+    token_hash = hashlib.sha256(credentials.credentials.encode()).hexdigest()[:32]
+    cached = await cache.get_json("auth:jwt", token_hash)
+    if cached:
+        tenant_id = _coerce_uuid(cached.get("tenant_id"))
+        stmt = select(User).where(User.id == user_id).limit(1)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        if user:
+            return user, Tenant(id=tenant_id, slug=cached["slug"], name=cached["name"])
+
     stmt = (
         select(User, Tenant)
         .join(Membership, Membership.user_id == User.id)
@@ -126,7 +138,13 @@ async def validate_bearer_token(
     row = result.one_or_none()
     if not row:
         raise _unauthorized("User is not a member of the requested tenant")
-    return row
+
+    user, tenant = row
+    await cache.set_json(
+        "auth:jwt", token_hash,
+        {"tenant_id": str(tenant.id), "slug": tenant.slug, "name": tenant.name},
+    )
+    return user, tenant
 
 
 def _normalize_datetime(value: datetime) -> datetime:
@@ -141,6 +159,16 @@ async def validate_api_key(raw_key: str, db: AsyncSession) -> TenantContext:
 
     now = datetime.now(timezone.utc)
     prefix = _extract_prefix(raw_key)
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()[:16]
+
+    cached = await cache.get_json("auth:apikey", prefix, key_hash)
+    if cached:
+        return TenantContext(
+            id=_coerce_uuid(cached.get("id")),
+            slug=cached["slug"],
+            name=cached["name"],
+        )
+
     result = await db.execute(
         select(ApiKey).where(
             ApiKey.prefix == prefix,
@@ -162,6 +190,11 @@ async def validate_api_key(raw_key: str, db: AsyncSession) -> TenantContext:
 
         key.last_used_at = now
         await db.flush()
+
+        await cache.set_json(
+            "auth:apikey", prefix, key_hash,
+            {"id": str(tenant.id), "slug": tenant.slug, "name": tenant.name},
+        )
         return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)
 
     raise _unauthorized()

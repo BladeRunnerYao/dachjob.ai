@@ -12,6 +12,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.core.redis_client import cache
 from app.db.models import LLMRun
 from app.db.session import async_session_factory
 
@@ -181,6 +182,26 @@ class LLMGateway:
 
         for provider in self.providers:
             selected_model = self._select_model(provider, task, model, model_tier, reasoning)
+
+            cache_key_parts = [str(tenant_id), task, selected_model, prompt_version, input_hash]
+            cached = await cache.get("llm", *cache_key_parts)
+            if cached is not None:
+                await self._log_run(
+                    tenant_id=tenant_id,
+                    task=task,
+                    provider=provider.name,
+                    prompt_version=prompt_version,
+                    model=selected_model,
+                    input_hash=input_hash,
+                    latency_ms=0,
+                    tokens_json=None,
+                    status="cache_hit",
+                )
+                self.provider = provider.name
+                self.last_provider = provider.name
+                self.last_model = selected_model
+                return cached
+
             start = time.monotonic()
             kwargs: dict[str, Any] = dict(
                 model=selected_model,
@@ -215,6 +236,8 @@ class LLMGateway:
                     tokens_json=tokens,
                     status="success",
                 )
+
+                await cache.set("llm", *cache_key_parts, value=content)
 
                 self.provider = provider.name
                 self.client = provider.client
