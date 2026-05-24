@@ -16,7 +16,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ passwordNeedsReset?: boolean }>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
-  requestPasswordReset: (email: string) => Promise<{ message: string; resetLink?: string }>;
+  requestPasswordReset: (email: string) => Promise<{ message: string; resetLink?: string; detail?: string }>;
   resetPassword: (token: string, newPassword: string) => Promise<void>;
 }
 
