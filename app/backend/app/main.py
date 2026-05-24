@@ -6,9 +6,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.auth import is_rate_limit_exempt_route
 from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler
+from app.core.rate_limit import RateLimitMiddleware
 from app.db.session import engine
+from app.modules.auth.api_keys import router as api_keys_router
 from app.modules.auth.routes import router as auth_router
 from app.modules.jobs.routes import router as jobs_router
 from app.modules.llm_gateway.routes import router as llm_gateway_router
@@ -36,6 +39,14 @@ def _load_version() -> dict:
 VERSION = _load_version()
 
 
+def _build_cors_origins() -> list[str]:
+    if settings.cors_origins:
+        return [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    if settings.app_env == "production":
+        return []
+    return ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(
@@ -58,10 +69,18 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_build_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.add_middleware(
+    RateLimitMiddleware,
+    max_requests=settings.rate_limit_requests,
+    window_seconds=settings.rate_limit_window_seconds,
+    redis_url=settings.redis_url,
+    exempt_routes=is_rate_limit_exempt_route,
 )
 
 app.add_exception_handler(AppError, app_error_handler)
@@ -75,6 +94,7 @@ app.include_router(resume_artifact_router)
 app.include_router(llm_gateway_router)
 app.include_router(tracker_router)
 app.include_router(auth_router)
+app.include_router(api_keys_router)
 
 
 @app.get("/api/health")

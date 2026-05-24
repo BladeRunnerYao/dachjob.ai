@@ -10,7 +10,7 @@ async def _attach_latest_match(db: AsyncSession, jobs: list[JobPosting]) -> list
     for job in jobs:
         result = await db.execute(
             select(MatchReport)
-            .where(MatchReport.job_id == job.id)
+            .where(MatchReport.job_id == job.id, MatchReport.tenant_id == job.tenant_id)
             .order_by(MatchReport.created_at.desc())
             .limit(1)
         )
@@ -49,8 +49,13 @@ async def list_jobs_by_tenant(db: AsyncSession, tenant_id: UUID) -> list[JobPost
     return jobs
 
 
-async def get_job(db: AsyncSession, job_id: UUID) -> JobPosting | None:
-    result = await db.execute(select(JobPosting).where(JobPosting.id == job_id))
+async def get_job(
+    db: AsyncSession, job_id: UUID, tenant_id: UUID | None = None
+) -> JobPosting | None:
+    stmt = select(JobPosting).where(JobPosting.id == job_id)
+    if tenant_id is not None:
+        stmt = stmt.where(JobPosting.tenant_id == tenant_id)
+    result = await db.execute(stmt)
     job = result.scalar_one_or_none()
     if not job:
         return None
