@@ -62,7 +62,7 @@ def _gather_providers() -> list[ProviderConfig]:
         providers.append(
             ProviderConfig(
                 name="vertex_ai",
-                model=os.getenv("VERTEX_AI_MODEL_FAST", "google/gemini-2.5-flash-lite"),
+                model=os.getenv("VERTEX_AI_MODEL_FAST", "google/gemini-3.1-flash-lite"),
                 create_client=_vertex_client_factory(vertex_project_id, vertex_location),
             )
         )
