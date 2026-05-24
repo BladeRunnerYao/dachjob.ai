@@ -3,7 +3,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.email import send_reset_email
 from app.core.security import (
     create_access_token,
     create_reset_token,
@@ -152,15 +151,10 @@ async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depend
     settings = get_settings()
     reset_link = f"{settings.cors_origins.split(',')[0]}/reset-password?token={reset_token}"
 
-    email_sent = send_reset_email(user.email, reset_link)
-
-    if not email_sent:
-        return {
-            "message": "Email could not be sent. Please try again later or contact support.",
-            "detail": "SMTP/API error – check server logs.",
-        }
-
-    return {"message": "If that email is registered, a reset link has been sent."}
+    return {
+        "message": "Use the link below to reset your password.",
+        "reset_link": reset_link,
+    }
 
 
 @router.post("/reset-password")
