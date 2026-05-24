@@ -17,22 +17,16 @@ class LLMGateway:
     def __init__(self):
         settings = get_settings()
         provider = settings.llm_provider.lower()
-        if provider == "deepseek" and settings.deepseek_api_key:
-            api_key = settings.deepseek_api_key
-            base_url = settings.deepseek_base_url
-            self.default_model = settings.deepseek_model_fast
-            self.default_model_reasoning = settings.deepseek_model_reasoning
-            self.provider = "deepseek"
-        elif settings.openrouter_api_key:
-            api_key = settings.openrouter_api_key
-            base_url = settings.openrouter_base_url
-            self.default_model = settings.openrouter_model_fast
-            self.default_model_reasoning = settings.openrouter_model_reasoning
-            self.provider = "openrouter"
+        if provider == "gemini" and settings.gemini_api_key:
+            api_key = settings.gemini_api_key
+            base_url = settings.gemini_base_url
+            self.default_model = settings.gemini_model_fast
+            self.default_model_reasoning = settings.gemini_model_reasoning
+            self.provider = "gemini"
         else:
             raise RuntimeError(
                 "No LLM API key configured. "
-                "Set DEEPSEEK_API_KEY or OPENROUTER_API_KEY in .env"
+                "Set GEMINI_API_KEY in .env"
             )
         self.client = AsyncOpenAI(
             api_key=api_key,
@@ -64,8 +58,6 @@ class LLMGateway:
                 messages=messages,
                 temperature=0.3,
             )
-            if reasoning and self.provider == "openrouter":
-                kwargs["extra_body"] = {"reasoning": {"enabled": True}}
             if response_format:
                 kwargs["response_format"] = response_format
 
@@ -135,8 +127,6 @@ class LLMGateway:
                 response_format={"type": "json_object"},
                 temperature=0.3,
             )
-            if thinking and self.provider == "openrouter":
-                kwargs["extra_body"] = {"reasoning": {"enabled": True}}
 
             response = await self.client.chat.completions.create(**kwargs)
             latency_ms = int((time.monotonic() - start) * 1000)
