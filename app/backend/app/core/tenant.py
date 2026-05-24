@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.security import decode_access_token
-from app.db.models import Membership, Tenant, User
+from app.db.models import Tenant
 from app.db.session import get_db
 
 
@@ -32,9 +32,7 @@ async def get_tenant_context(
         payload = decode_access_token(credentials.credentials)
         if payload and payload.get("tenant_id"):
             tenant_id = UUID(payload["tenant_id"])
-            result = await db.execute(
-                select(Tenant).where(Tenant.id == tenant_id).limit(1)
-            )
+            result = await db.execute(select(Tenant).where(Tenant.id == tenant_id).limit(1))
             tenant = result.scalar_one_or_none()
             if tenant:
                 return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)

@@ -3,10 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.errors import AppError
 from app.core.security import (
     create_access_token,
-    decode_access_token,
     hash_password,
     verify_password,
 )
@@ -37,9 +35,7 @@ async def _get_default_tenant(db: AsyncSession) -> Tenant:
 
 @router.post("/register", response_model=AuthResponse)
 async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    existing = await db.execute(
-        select(User).where(User.email == body.email).limit(1)
-    )
+    existing = await db.execute(select(User).where(User.email == body.email).limit(1))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Email already registered")
 
@@ -54,10 +50,12 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     tenant = await _get_default_tenant(db)
 
     result = await db.execute(
-        select(Membership).where(
+        select(Membership)
+        .where(
             Membership.user_id == user.id,
             Membership.tenant_id == tenant.id,
-        ).limit(1)
+        )
+        .limit(1)
     )
     if not result.scalar_one_or_none():
         membership = Membership(
@@ -80,9 +78,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=AuthResponse)
 async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(User).where(User.email == body.email).limit(1)
-    )
+    result = await db.execute(select(User).where(User.email == body.email).limit(1))
     user = result.scalar_one_or_none()
     if not user or not user.password_hash:
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -93,10 +89,12 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     tenant = await _get_default_tenant(db)
 
     result = await db.execute(
-        select(Membership).where(
+        select(Membership)
+        .where(
             Membership.user_id == user.id,
             Membership.tenant_id == tenant.id,
-        ).limit(1)
+        )
+        .limit(1)
     )
     membership = result.scalar_one_or_none()
     if not membership:
@@ -142,13 +140,16 @@ async def google_login(
 
     token_url = "https://oauth2.googleapis.com/token"
     async with httpx.AsyncClient() as client:
-        resp = await client.post(token_url, data={
-            "code": body.code,
-            "client_id": settings.google_client_id,
-            "client_secret": settings.google_client_secret,
-            "redirect_uri": body.redirect_uri,
-            "grant_type": "authorization_code",
-        })
+        resp = await client.post(
+            token_url,
+            data={
+                "code": body.code,
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+                "redirect_uri": body.redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
         if resp.status_code != 200:
             raise HTTPException(status_code=400, detail="Failed to exchange Google code")
 
@@ -168,9 +169,7 @@ async def google_login(
         name = google_user.get("name", email.split("@")[0])
 
     result = await db.execute(
-        select(User).where(
-            (User.google_id == google_id) | (User.email == email)
-        ).limit(1)
+        select(User).where((User.google_id == google_id) | (User.email == email)).limit(1)
     )
     user = result.scalar_one_or_none()
 
@@ -189,10 +188,12 @@ async def google_login(
     tenant = await _get_default_tenant(db)
 
     result = await db.execute(
-        select(Membership).where(
+        select(Membership)
+        .where(
             Membership.user_id == user.id,
             Membership.tenant_id == tenant.id,
-        ).limit(1)
+        )
+        .limit(1)
     )
     membership = result.scalar_one_or_none()
     if not membership:
@@ -210,5 +211,5 @@ async def google_login(
         user_id=user.id,
         email=user.email,
         name=user.name,
-        tenant_id=tenant_id,
+        tenant_id=tenant.id,
     )

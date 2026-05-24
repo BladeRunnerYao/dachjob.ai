@@ -1,19 +1,16 @@
 import uuid
-from datetime import datetime
 
 from sqlalchemy import (
     Column,
-    Text,
+    DateTime,
+    Float,
+    ForeignKey,
     Integer,
     Numeric,
-    DateTime,
-    ForeignKey,
-    Float,
+    Text,
     UniqueConstraint,
-    Index,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
-from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.sql import func
 
 from app.db.session import Base
@@ -43,12 +40,8 @@ class Membership(Base):
     __tablename__ = "memberships"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(
-        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False
-    )
-    user_id = Column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
-    )
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     role = Column(Text, nullable=False)
 
 
@@ -56,9 +49,7 @@ class CandidateProfile(Base):
     __tablename__ = "candidate_profiles"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(
-        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     full_name = Column(Text, nullable=False)
     headline = Column(Text, nullable=False)
     location = Column(Text, nullable=True)
@@ -66,21 +57,15 @@ class CandidateProfile(Base):
     raw_cv_md = Column(Text, nullable=False)
     profile_json = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class EvidenceChunk(Base):
     __tablename__ = "evidence_chunks"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(
-        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
-    )
-    profile_id = Column(
-        UUID(as_uuid=True), ForeignKey("candidate_profiles.id"), nullable=False
-    )
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    profile_id = Column(UUID(as_uuid=True), ForeignKey("candidate_profiles.id"), nullable=False)
     source_type = Column(Text, nullable=False)
     source_label = Column(Text, nullable=False)
     content = Column(Text, nullable=False)
@@ -93,9 +78,7 @@ class JobPosting(Base):
     __tablename__ = "job_postings"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(
-        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     title = Column(Text, nullable=False)
     company = Column(Text, nullable=False)
     url = Column(Text, nullable=True)
@@ -111,20 +94,19 @@ class JobPosting(Base):
     scraped_json = Column(JSONB, nullable=True)
     status = Column(Text, nullable=False, default="new")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class JobSkill(Base):
     __tablename__ = "job_skills"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(
-        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     job_id = Column(
-        UUID(as_uuid=True), ForeignKey("job_postings.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("job_postings.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     name = Column(Text, nullable=False)
     category = Column(Text, nullable=False)
@@ -141,12 +123,8 @@ class MatchReport(Base):
     __tablename__ = "match_reports"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(
-        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
-    )
-    job_id = Column(
-        UUID(as_uuid=True), ForeignKey("job_postings.id"), nullable=False
-    )
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    job_id = Column(UUID(as_uuid=True), ForeignKey("job_postings.id"), nullable=False)
     overall_score = Column(Numeric, nullable=False)
     recommendation = Column(Text, nullable=False)
     breakdown_json = Column(JSONB, nullable=False)
@@ -159,15 +137,9 @@ class ResumeArtifact(Base):
     __tablename__ = "resume_artifacts"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(
-        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
-    )
-    job_id = Column(
-        UUID(as_uuid=True), ForeignKey("job_postings.id"), nullable=False
-    )
-    match_report_id = Column(
-        UUID(as_uuid=True), ForeignKey("match_reports.id"), nullable=True
-    )
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    job_id = Column(UUID(as_uuid=True), ForeignKey("job_postings.id"), nullable=False)
+    match_report_id = Column(UUID(as_uuid=True), ForeignKey("match_reports.id"), nullable=True)
     html_object_key = Column(Text, nullable=False)
     pdf_object_key = Column(Text, nullable=True)
     provenance_json = Column(JSONB, nullable=False)
@@ -178,12 +150,8 @@ class Application(Base):
     __tablename__ = "applications"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(
-        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
-    )
-    job_id = Column(
-        UUID(as_uuid=True), ForeignKey("job_postings.id"), nullable=False
-    )
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    job_id = Column(UUID(as_uuid=True), ForeignKey("job_postings.id"), nullable=False)
     resume_artifact_id = Column(
         UUID(as_uuid=True), ForeignKey("resume_artifacts.id"), nullable=True
     )
@@ -192,18 +160,14 @@ class Application(Base):
     notes = Column(Text, nullable=True)
     next_action_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class LLMRun(Base):
     __tablename__ = "llm_runs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(
-        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     task = Column(Text, nullable=False)
     provider = Column(Text, nullable=False)
     model = Column(Text, nullable=False)

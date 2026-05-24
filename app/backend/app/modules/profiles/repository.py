@@ -6,19 +6,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import CandidateProfile, EvidenceChunk
 
 
-async def get_profile_by_tenant(
-    db: AsyncSession, tenant_id: UUID
-) -> CandidateProfile | None:
+async def get_profile_by_tenant(db: AsyncSession, tenant_id: UUID) -> CandidateProfile | None:
     result = await db.execute(
-        select(CandidateProfile).where(
-            CandidateProfile.tenant_id == tenant_id
-        ).limit(1)
+        select(CandidateProfile).where(CandidateProfile.tenant_id == tenant_id).limit(1)
     )
     return result.scalar_one_or_none()
 
 
 async def upsert_profile(
-    db: AsyncSession, tenant_id: UUID, full_name: str, headline: str, raw_cv_md: str,
+    db: AsyncSession,
+    tenant_id: UUID,
+    full_name: str,
+    headline: str,
+    raw_cv_md: str,
     location: str | None = None,
 ) -> CandidateProfile:
     profile = await get_profile_by_tenant(db, tenant_id)
@@ -41,9 +41,7 @@ async def upsert_profile(
     return profile
 
 
-async def list_evidence_by_profile(
-    db: AsyncSession, profile_id: UUID
-) -> list[EvidenceChunk]:
+async def list_evidence_by_profile(db: AsyncSession, profile_id: UUID) -> list[EvidenceChunk]:
     result = await db.execute(
         select(EvidenceChunk)
         .where(EvidenceChunk.profile_id == profile_id)
@@ -72,9 +70,7 @@ async def create_evidence_chunks(
 
 
 async def delete_evidence_by_profile(db: AsyncSession, profile_id: UUID) -> None:
-    result = await db.execute(
-        select(EvidenceChunk).where(EvidenceChunk.profile_id == profile_id)
-    )
+    result = await db.execute(select(EvidenceChunk).where(EvidenceChunk.profile_id == profile_id))
     for chunk in result.scalars().all():
         await db.delete(chunk)
     await db.flush()
