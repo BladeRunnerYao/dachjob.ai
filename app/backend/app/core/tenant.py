@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext, is_public_route, validate_auth
 from app.core.config import get_settings
+from app.core.redis_client import cache
 from app.db.models import Tenant
 from app.db.session import get_db
 
@@ -20,10 +21,25 @@ async def get_tenant_context(
     if is_public_route(request.url.path, request.method):
         settings = get_settings()
         slug = settings.default_tenant_slug
+        cached = await cache.get_json("tenant:slug", slug)
+        if cached:
+            return TenantContext(id=_coerce_uuid(cached.get("id")), slug=cached["slug"], name=cached["name"])
         result = await db.execute(select(Tenant).where(Tenant.slug == slug).limit(1))
         tenant = result.scalar_one_or_none()
         if tenant:
+            await cache.set_json("tenant:slug", slug, {"id": str(tenant.id), "slug": tenant.slug, "name": tenant.name})
+            await cache.set_json("tenant:id", str(tenant.id), {"id": str(tenant.id), "slug": tenant.slug, "name": tenant.name})
             return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)
         return TenantContext(slug=slug, name=slug)
 
     return await validate_auth(credentials, x_api_key=x_api_key, db=db)
+
+
+def _coerce_uuid(value: str | None):
+    if not value:
+        return None
+    from uuid import UUID
+    try:
+        return UUID(value)
+    except ValueError:
+        return None

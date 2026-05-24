@@ -27,6 +27,7 @@ services:
       - dachjob-net
 
   redis:
+    profiles: ["redis"]
     image: redis:7-alpine
     container_name: dachjob-redis
     ports:
@@ -94,8 +95,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
       createbucket:
         condition: service_completed_successfully
     networks:
@@ -117,8 +116,6 @@ services:
     command: celery -A app.workers.celery_app worker --loglevel=info
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       minio:
         condition: service_healthy

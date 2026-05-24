@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     database_name: str = "dachjob"
     cloud_sql_connection_name: str = ""
     redis_url: str = "redis://localhost:6379/0"
+    redis_enabled: bool = True
     google_cloud_project: str = ""
 
     llm_provider: str = "vertex_ai"

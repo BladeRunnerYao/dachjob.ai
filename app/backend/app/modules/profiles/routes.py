@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext
+from app.core.redis_client import cache
 from app.core.tenant import get_tenant_context
 from app.db.models import CandidateProfile
 from app.db.session import get_db
@@ -44,6 +45,10 @@ def _parse_name_and_headline(md: str) -> tuple[str | None, str | None]:
 
 
 async def _profile_response(db: AsyncSession, tenant_id: UUID):
+    cached = await cache.get_json("profile", str(tenant_id))
+    if cached is not None:
+        return cached
+
     result = await db.execute(
         select(CandidateProfile).where(CandidateProfile.tenant_id == tenant_id).limit(1)
     )
@@ -51,7 +56,7 @@ async def _profile_response(db: AsyncSession, tenant_id: UUID):
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
     chunks = await list_evidence_by_profile(db, profile.id)
-    return {
+    response = {
         "id": str(profile.id),
         "tenant_id": str(profile.tenant_id),
         "full_name": profile.full_name,
@@ -73,6 +78,12 @@ async def _profile_response(db: AsyncSession, tenant_id: UUID):
         "created_at": profile.created_at.isoformat() if profile.created_at else None,
         "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
     }
+    await cache.set_json("profile", str(tenant_id), response)
+    return response
+
+
+async def _invalidate_profile_cache(tenant_id: UUID):
+    await cache.delete("profile", str(tenant_id))
 
 
 @router.get("", response_model=ProfileResponse | None)
@@ -111,6 +122,7 @@ async def import_profile_from_url(
     if chunks:
         await create_evidence_chunks(db, tenant.id, profile.id, chunks)
 
+    await _invalidate_profile_cache(tenant.id)
     return await _profile_response(db, tenant.id)
 
 
@@ -139,6 +151,7 @@ async def import_profile_from_pdf(
     if chunks:
         await create_evidence_chunks(db, tenant.id, profile.id, chunks)
 
+    await _invalidate_profile_cache(tenant.id)
     return await _profile_response(db, tenant.id)
 
 
@@ -160,4 +173,5 @@ async def upload_cv(
     if chunks:
         await create_evidence_chunks(db, tenant.id, profile.id, chunks)
 
+    await _invalidate_profile_cache(tenant.id)
     return await _profile_response(db, tenant.id)

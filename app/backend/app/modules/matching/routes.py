@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext
 from app.core.errors import AppError
+from app.core.redis_client import cache
 from app.core.tenant import get_tenant_context
 from app.db.models import MatchReport
 from app.db.session import get_db
@@ -26,6 +27,7 @@ async def parse_job(
     if not job:
         raise AppError("job_not_found", "Job posting not found", status_code=404)
     result = await parse_job_posting(db, tenant, job, force=True)
+    await cache.delete("jobs:list", str(tenant.id))
     return ParseResponse(
         job_id=job.id, status=result["status"], parsed_json=result.get("parsed_json")
     )
@@ -38,6 +40,7 @@ async def match_job(
     tenant: TenantContext = Depends(get_tenant_context),
 ):
     report = await compute_match(db, tenant, job_id)
+    await cache.delete("jobs:list", str(tenant.id))
     return report
 
 
