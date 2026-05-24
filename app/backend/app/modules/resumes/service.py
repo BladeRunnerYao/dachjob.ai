@@ -183,7 +183,8 @@ async def generate_resume(
         provenance = {
             "method": "llm",
             "job_id": str(job_id),
-            "model": gateway.default_model,
+            "provider": gateway.last_provider,
+            "model": gateway.last_model,
         }
     except Exception:
         pass
