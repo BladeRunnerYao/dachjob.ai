@@ -3,6 +3,15 @@ WORKDIR /app
 ENV PYTHONPATH=/app
 RUN groupadd --system app && useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
+    libffi8 \
+    libcairo2 \
+    && rm -rf /var/lib/apt/lists/*
+
 ARG GIT_BRANCH=unknown
 ARG GIT_COMMIT_SHA=unknown
 
