@@ -64,7 +64,7 @@ def _coerce_uuid(value: str | None) -> UUID | None:
         return None
 
 
-def _is_resume_html_route(path: str, method: str) -> bool:
+def _is_resume_public_route(path: str, method: str) -> bool:
     if method.upper() != "GET":
         return False
     parts = path.strip("/").split("/")
@@ -72,7 +72,7 @@ def _is_resume_html_route(path: str, method: str) -> bool:
         len(parts) == 4
         and parts[0] == "api"
         and parts[1] == "resumes"
-        and parts[3] == "html"
+        and parts[3] in ("html", "pdf")
         and _coerce_uuid(parts[2]) is not None
     )
 
@@ -83,7 +83,7 @@ def is_public_route(path: str, method: str = "GET") -> bool:
         return True
     if (normalized_method, path) in PUBLIC_ROUTES:
         return True
-    if _is_resume_html_route(path, normalized_method):
+    if _is_resume_public_route(path, normalized_method):
         return True
     return False
 
