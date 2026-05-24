@@ -3,9 +3,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.email import send_reset_email
 from app.core.security import (
     create_access_token,
+    create_reset_token,
+    decode_reset_token,
     hash_password,
+    validate_password,
     verify_password,
 )
 from app.db.models import Membership, Tenant, User
@@ -13,9 +17,11 @@ from app.db.session import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import (
     AuthResponse,
+    ForgotPasswordRequest,
     GoogleLoginRequest,
     LoginRequest,
     RegisterRequest,
+    ResetPasswordRequest,
     UserResponse,
 )
 
@@ -38,6 +44,10 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     existing = await db.execute(select(User).where(User.email == body.email).limit(1))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Email already registered")
+
+    errors = validate_password(body.password)
+    if errors:
+        raise HTTPException(status_code=422, detail=" ".join(errors))
 
     user = User(
         email=body.email,
@@ -86,6 +96,8 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     if not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
+    password_needs_reset = bool(validate_password(body.password))
+
     tenant = await _get_default_tenant(db)
 
     result = await db.execute(
@@ -113,6 +125,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         email=user.email,
         name=user.name,
         tenant_id=tenant.id,
+        password_needs_reset=password_needs_reset,
     )
 
 
@@ -125,6 +138,51 @@ async def me(
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
+
+
+@router.post("/forgot-password")
+async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == body.email).limit(1))
+    user = result.scalar_one_or_none()
+
+    if not user or not user.password_hash:
+        return {"message": "If that email is registered, a reset link has been sent."}
+
+    reset_token = create_reset_token(user.id, user.email)
+    settings = get_settings()
+    reset_link = f"{settings.cors_origins.split(',')[0]}/reset-password?token={reset_token}"
+
+    email_sent = send_reset_email(user.email, reset_link)
+
+    if not email_sent:
+        return {
+            "message": "If that email is registered, a reset link has been sent.",
+            "reset_link": reset_link,
+        }
+
+    return {"message": "If that email is registered, a reset link has been sent."}
+
+
+@router.post("/reset-password")
+async def reset_password(body: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    payload = decode_reset_token(body.token)
+    if not payload:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    errors = validate_password(body.new_password)
+    if errors:
+        raise HTTPException(status_code=422, detail=" ".join(errors))
+
+    user_id = payload["sub"]
+    result = await db.execute(select(User).where(User.id == user_id).limit(1))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+
+    user.password_hash = hash_password(body.new_password)
+    await db.flush()
+
+    return {"message": "Password has been reset successfully."}
 
 
 @router.post("/google", response_model=AuthResponse)
