@@ -7,7 +7,7 @@ from app.core.errors import AppError
 from app.core.tenant import TenantContext, get_tenant_context
 from app.db.session import get_db
 from app.modules.jobs.importer import import_job_urls
-from app.modules.jobs.schemas import JobResponse, JobCreateRequest, JobImportRequest
+from app.modules.jobs.schemas import JobResponse, JobCreateRequest, JobImportRequest, JobImportResponse, ImportError
 from app.modules.jobs.repository import list_jobs_by_tenant, get_job, create_job
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
@@ -34,7 +34,7 @@ async def create_job_endpoint(
     )
 
 
-@router.post("/import", response_model=list[JobResponse], status_code=201)
+@router.post("/import", response_model=JobImportResponse, status_code=201)
 async def import_jobs_endpoint(
     body: JobImportRequest,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -47,7 +47,11 @@ async def import_jobs_endpoint(
         raise AppError("job_urls_required", "Provide at least one job URL")
     if len(urls) > 10:
         raise AppError("too_many_job_urls", "Import at most 10 job URLs at a time")
-    return await import_job_urls(db, tenant, urls)
+    imported, errors = await import_job_urls(db, tenant, urls)
+    return JobImportResponse(
+        imported=imported,
+        errors=[ImportError(url=e["url"], error=e["error"]) for e in errors],
+    )
 
 
 @router.get("/{job_id}", response_model=JobResponse)

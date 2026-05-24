@@ -45,6 +45,16 @@ class JobImportRequest(BaseModel):
     urls: list[str]
 
 
+class ImportError(BaseModel):
+    url: str
+    error: str
+
+
+class JobImportResponse(BaseModel):
+    imported: list[JobResponse] = Field(default_factory=list)
+    errors: list[ImportError] = Field(default_factory=list)
+
+
 class JobSkillResponse(BaseModel):
     id: UUID
     name: str

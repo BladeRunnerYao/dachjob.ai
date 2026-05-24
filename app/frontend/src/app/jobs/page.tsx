@@ -27,10 +27,17 @@ export default function JobsPage() {
     setImporting(true);
     setImportError(null);
     try {
-      const importedJobs = await api.importJobs(urlText);
-      const importedIds = new Set(importedJobs.map((job) => job.id));
-      setJobs([...importedJobs, ...jobs.filter((job) => !importedIds.has(job.id))]);
-      setShowForm(false);
+      const result = await api.importJobs(urlText);
+      const importedIds = new Set(result.imported.map((job) => job.id));
+      setJobs([...result.imported, ...jobs.filter((job) => !importedIds.has(job.id))]);
+      if (result.errors.length > 0) {
+        const errorMessages = result.errors.map(
+          (e) => `${e.url}: ${e.error}`
+        ).join('\n');
+        setImportError(errorMessages);
+      } else {
+        setShowForm(false);
+      }
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Could not import jobs');
     } finally {
