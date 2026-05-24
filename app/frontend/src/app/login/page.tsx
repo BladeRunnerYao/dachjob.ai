@@ -11,12 +11,18 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const [passwordWarning, setPasswordWarning] = useState(false);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    setPasswordWarning(false);
     setSubmitting(true);
     try {
-      await login(email, password);
+      const result = await login(email, password);
+      if (result.passwordNeedsReset) {
+        setPasswordWarning(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -36,6 +42,16 @@ export default function LoginPage() {
           {error && (
             <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
               {error}
+            </div>
+          )}
+          {passwordWarning && (
+            <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              Your password does not meet the current security requirements (8+ characters with
+              letters, numbers, and a special character).{' '}
+              <Link href="/forgot-password" className="font-medium underline hover:text-amber-800">
+                Reset your password
+              </Link>{' '}
+              to continue.
             </div>
           )}
 
