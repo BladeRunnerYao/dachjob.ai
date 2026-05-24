@@ -296,17 +296,6 @@ export class ApiClient {
     }
   }
 
-  async createResumeArtifact(jobId: string): Promise<ResumeArtifact> {
-    const artifact = await this.post<{
-      id: string;
-      job_id: string;
-      html_object_key: string;
-      pdf_object_key?: string | null;
-      provenance_json?: unknown[];
-    }>(`/api/jobs/${jobId}/resume`, {});
-    return this.toResumeArtifact(artifact);
-  }
-
   async getResumeArtifact(jobId: string): Promise<ResumeArtifact> {
     const cached = await this.getLatestResumeArtifact(jobId);
     return cached || this.getMockResume(jobId);
