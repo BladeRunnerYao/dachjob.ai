@@ -112,12 +112,22 @@ async def health():
 
 @app.get("/api/version")
 async def version():
+    provider_models = {
+        "vertex_ai": (settings.vertex_ai_model_fast, settings.vertex_ai_model_reasoning),
+        "gemini": (settings.gemini_model_fast, settings.gemini_model_reasoning),
+        "deepseek": (settings.deepseek_model_fast, settings.deepseek_model_reasoning),
+        "openrouter": (settings.openrouter_model_fast, settings.openrouter_model_reasoning),
+    }
+    model_fast, model_reasoning = provider_models.get(
+        settings.llm_provider,
+        (settings.vertex_ai_model_fast, settings.vertex_ai_model_reasoning),
+    )
     return {
         "service": "dachjob.ai-api",
         "version": app.version,
         "git_branch": VERSION.get("branch"),
         "git_commit": VERSION.get("commit"),
         "llm_provider": settings.llm_provider,
-        "llm_model_fast": settings.gemini_model_fast,
-        "llm_model_reasoning": settings.gemini_model_reasoning,
+        "llm_model_fast": model_fast,
+        "llm_model_reasoning": model_reasoning,
     }
