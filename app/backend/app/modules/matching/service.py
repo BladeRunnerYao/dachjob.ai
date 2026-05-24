@@ -7,7 +7,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.tenant import TenantContext
+from app.core.auth import TenantContext
 from app.db.models import EvidenceChunk, MatchReport
 from app.modules.jobs.repository import get_job, sync_job_skills
 from app.modules.profiles.repository import get_profile_by_tenant
@@ -1239,11 +1239,11 @@ async def compute_match(
     tenant: TenantContext,
     job_id: uuid.UUID,
 ) -> MatchReport:
-    job = await get_job(db, job_id)
+    job = await get_job(db, job_id, tenant.id)
     if not job:
         from app.core.errors import AppError
 
-        raise AppError("job_not_found", "Job posting not found")
+        raise AppError("job_not_found", "Job posting not found", status_code=404)
 
     if not job.parsed_json:
         await parse_job_posting(db, tenant, job)

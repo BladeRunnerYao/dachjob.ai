@@ -5,7 +5,8 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.tenant import TenantContext, get_tenant_context
+from app.core.auth import TenantContext
+from app.core.tenant import get_tenant_context
 from app.db.models import ResumeArtifact
 from app.db.session import get_db
 from app.modules.profiles.repository import get_profile_by_tenant
@@ -42,11 +43,12 @@ async def create_resume(
 @router.get("/resume", response_model=ResumeResponse | None)
 async def get_latest_resume(
     job_id: UUID,
+    tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(ResumeArtifact)
-        .where(ResumeArtifact.job_id == job_id)
+        .where(ResumeArtifact.job_id == job_id, ResumeArtifact.tenant_id == tenant.id)
         .order_by(ResumeArtifact.created_at.desc())
         .limit(1)
     )
