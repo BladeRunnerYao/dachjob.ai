@@ -1,3 +1,6 @@
+import json
+import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -16,11 +19,28 @@ from app.modules.llm_gateway.routes import router as llm_gateway_router
 from app.modules.tracker.routes import router as tracker_router
 from app.modules.auth.routes import router as auth_router
 
+logger = logging.getLogger("uvicorn")
+
 settings = get_settings()
+
+
+def _load_version() -> dict:
+    path = os.path.join(os.path.dirname(__file__), "..", "version.json")
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return {"branch": "unknown", "commit": "unknown"}
+
+VERSION = _load_version()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info(
+        "dachjob.ai API starting | branch=%s commit=%s provider=%s",
+        VERSION.get("branch"), VERSION.get("commit"), settings.llm_provider,
+    )
     async with engine.begin() as conn:
         pass
     yield
@@ -64,4 +84,17 @@ async def health():
             "redis": "ok",
             "object_storage": "ok",
         },
+    }
+
+
+@app.get("/api/version")
+async def version():
+    return {
+        "service": "dachjob.ai-api",
+        "version": app.version,
+        "git_branch": VERSION.get("branch"),
+        "git_commit": VERSION.get("commit"),
+        "llm_provider": settings.llm_provider,
+        "llm_model_fast": settings.gemini_model_fast,
+        "llm_model_reasoning": settings.gemini_model_reasoning,
     }
