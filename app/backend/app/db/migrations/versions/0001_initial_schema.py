@@ -5,12 +5,12 @@ Revises:
 Create Date: 2026-05-22
 
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
-
 
 revision: str = "0001_initial_schema"
 down_revision: Union[str, None] = None
@@ -42,7 +42,9 @@ def upgrade() -> None:
     op.create_table(
         "candidate_profiles",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
+        sa.Column(
+            "tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False
+        ),
         sa.Column("full_name", sa.Text(), nullable=False),
         sa.Column("headline", sa.Text(), nullable=False),
         sa.Column("location", sa.Text(), nullable=True),
@@ -57,7 +59,9 @@ def upgrade() -> None:
     op.create_table(
         "job_postings",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
+        sa.Column(
+            "tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False
+        ),
         sa.Column("title", sa.Text(), nullable=False),
         sa.Column("company", sa.Text(), nullable=False),
         sa.Column("url", sa.Text(), nullable=True),
@@ -73,7 +77,9 @@ def upgrade() -> None:
     op.create_table(
         "llm_runs",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
+        sa.Column(
+            "tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False
+        ),
         sa.Column("task", sa.Text(), nullable=False),
         sa.Column("provider", sa.Text(), nullable=False),
         sa.Column("model", sa.Text(), nullable=False),
@@ -90,16 +96,27 @@ def upgrade() -> None:
     op.create_table(
         "memberships",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column(
+            "tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False
+        ),
+        sa.Column(
+            "user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False
+        ),
         sa.Column("role", sa.Text(), nullable=False),
     )
 
     op.create_table(
         "evidence_chunks",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
-        sa.Column("profile_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("candidate_profiles.id"), nullable=False),
+        sa.Column(
+            "tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False
+        ),
+        sa.Column(
+            "profile_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("candidate_profiles.id"),
+            nullable=False,
+        ),
         sa.Column("source_type", sa.Text(), nullable=False),
         sa.Column("source_label", sa.Text(), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
@@ -112,8 +129,15 @@ def upgrade() -> None:
     op.create_table(
         "match_reports",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
-        sa.Column("job_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("job_postings.id"), nullable=False),
+        sa.Column(
+            "tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False
+        ),
+        sa.Column(
+            "job_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("job_postings.id"),
+            nullable=False,
+        ),
         sa.Column("overall_score", sa.Numeric(), nullable=False),
         sa.Column("recommendation", sa.Text(), nullable=False),
         sa.Column("breakdown_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
@@ -126,9 +150,21 @@ def upgrade() -> None:
     op.create_table(
         "resume_artifacts",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
-        sa.Column("job_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("job_postings.id"), nullable=False),
-        sa.Column("match_report_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("match_reports.id"), nullable=True),
+        sa.Column(
+            "tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False
+        ),
+        sa.Column(
+            "job_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("job_postings.id"),
+            nullable=False,
+        ),
+        sa.Column(
+            "match_report_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("match_reports.id"),
+            nullable=True,
+        ),
         sa.Column("html_object_key", sa.Text(), nullable=False),
         sa.Column("pdf_object_key", sa.Text(), nullable=True),
         sa.Column("provenance_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
@@ -139,9 +175,21 @@ def upgrade() -> None:
     op.create_table(
         "applications",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
-        sa.Column("job_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("job_postings.id"), nullable=False),
-        sa.Column("resume_artifact_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("resume_artifacts.id"), nullable=True),
+        sa.Column(
+            "tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False
+        ),
+        sa.Column(
+            "job_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("job_postings.id"),
+            nullable=False,
+        ),
+        sa.Column(
+            "resume_artifact_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("resume_artifacts.id"),
+            nullable=True,
+        ),
         sa.Column("status", sa.Text(), nullable=False),
         sa.Column("score", sa.Numeric(), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),

@@ -1,0 +1,24 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+        exclude: ^app/backend/app/db/migrations/|^app/backend/app/db/seed_demo\.py|^app/backend/app/modules/llm_gateway/fake_provider\.py|^app/backend/tests/|^app/backend/\.venv/|^app/frontend/|^app/backend/app/modules/matching/service\.py|^app/backend/app/modules/profiles/extractor\.py|^app/backend/app/modules/resumes/service\.py|^app/backend/app/modules/tracker/autofill\.py
+      - id: ruff-format
+        exclude: ^app/backend/app/db/migrations/|^app/backend/app/db/seed_demo\.py|^app/backend/app/modules/llm_gateway/fake_provider\.py|^app/backend/tests/|^app/backend/\.venv/|^app/frontend/

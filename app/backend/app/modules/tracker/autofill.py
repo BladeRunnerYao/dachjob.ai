@@ -18,8 +18,12 @@ def generate_autofill_payload(
         first_name=first_name,
         last_name=last_name,
         location=profile.location if profile and profile.location else "",
-        current_employer=_extract_current_employer(profile.raw_cv_md) if profile and profile.raw_cv_md else "",
-        years_of_experience=_extract_years_experience(profile.raw_cv_md) if profile and profile.raw_cv_md else 0,
+        current_employer=_extract_current_employer(profile.raw_cv_md)
+        if profile and profile.raw_cv_md
+        else "",
+        years_of_experience=_extract_years_experience(profile.raw_cv_md)
+        if profile and profile.raw_cv_md
+        else 0,
         resume_link=resume_link or "",
         cover_note=_generate_cover_note(profile, match_report) if profile else "",
     )
@@ -50,10 +54,10 @@ def _generate_cover_note(profile: CandidateProfile | None, match_report: MatchRe
     if not profile:
         return ""
     name = profile.full_name or "Candidate"
-    note = f"Dear Hiring Team,\n\nI am writing to express my interest in the position. "
+    note = "Dear Hiring Team,\n\nI am writing to express my interest in the position. "
     note += f"As a {profile.headline or 'professional'} with experience in {', '.join(_extract_top_skills(profile.raw_cv_md)[:3])}, "
     if match_report and match_report.explanation:
-        note += f"I believe my background aligns well with this role. "
+        note += "I believe my background aligns well with this role. "
     note += f"\n\nI have attached my CV for your review.\n\nBest regards,\n{name}"
     return note
 

@@ -4,7 +4,7 @@ Tests for the JD formatting pipeline (format_raw_jd).
 Run with:
     cd app/backend && source .venv/bin/activate && PYTHONPATH=. python3 -m pytest tests/test_jd_format.py -v
 """
-import re
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -266,8 +266,12 @@ class TestImportFlowRawJD:
     def test_bmwgroup_uses_plain_request_headers(self):
         from app.modules.jobs.importer import _request_headers_for_url
 
-        bmw_headers = _request_headers_for_url("https://www.bmwgroup.jobs/de/en/jobfinder/job-description-copy.182180.html")
-        greenhouse_headers = _request_headers_for_url("https://job-boards.greenhouse.io/contentful/jobs/7760966")
+        bmw_headers = _request_headers_for_url(
+            "https://www.bmwgroup.jobs/de/en/jobfinder/job-description-copy.182180.html"
+        )
+        greenhouse_headers = _request_headers_for_url(
+            "https://job-boards.greenhouse.io/contentful/jobs/7760966"
+        )
 
         assert "Chrome" not in bmw_headers["User-Agent"]
         assert "Chrome" in greenhouse_headers["User-Agent"]
@@ -336,11 +340,37 @@ class TestImportFlowRawJD:
         """
 
         assert _greenhouse_board_from_html(html) == "getyourguide"
-        assert _greenhouse_job_id_from_url_or_html("https://getyourguide.careers/jobs/7581804?gh_jid=7581804", html) == "7581804"
-        assert _greenhouse_board_from_url("https://job-boards.greenhouse.io/embed/job_app/confirmation?for=yoodliinc&token=4246665009") == "yoodliinc"
-        assert _greenhouse_job_id_from_url_or_html("https://job-boards.greenhouse.io/embed/job_app/confirmation?for=yoodliinc&token=4246665009", "") == "4246665009"
-        assert _greenhouse_board_from_known_host("https://traderepublic.com/en-de/about?jobId=7685049003") == "traderepublicbank"
-        assert _greenhouse_job_id_from_url_or_html("https://traderepublic.com/en-de/about?jobId=7685049003", "") == "7685049003"
+        assert (
+            _greenhouse_job_id_from_url_or_html(
+                "https://getyourguide.careers/jobs/7581804?gh_jid=7581804", html
+            )
+            == "7581804"
+        )
+        assert (
+            _greenhouse_board_from_url(
+                "https://job-boards.greenhouse.io/embed/job_app/confirmation?for=yoodliinc&token=4246665009"
+            )
+            == "yoodliinc"
+        )
+        assert (
+            _greenhouse_job_id_from_url_or_html(
+                "https://job-boards.greenhouse.io/embed/job_app/confirmation?for=yoodliinc&token=4246665009",
+                "",
+            )
+            == "4246665009"
+        )
+        assert (
+            _greenhouse_board_from_known_host(
+                "https://traderepublic.com/en-de/about?jobId=7685049003"
+            )
+            == "traderepublicbank"
+        )
+        assert (
+            _greenhouse_job_id_from_url_or_html(
+                "https://traderepublic.com/en-de/about?jobId=7685049003", ""
+            )
+            == "7685049003"
+        )
 
     def test_known_non_job_pages_are_rejected(self):
         from app.modules.jobs.importer import _looks_like_non_job_page
@@ -413,8 +443,8 @@ class TestImportFlowRawJD:
                     url,
                     text=(
                         "<title>Senior Software Engineer, Search Platform | Jobs at GetYourGuide</title>"
-                        "<meta name=\"api_id\" content=\"7581804\"/>"
-                        "<div id=\"wrapper-el\"></div>"
+                        '<meta name="api_id" content="7581804"/>'
+                        '<div id="wrapper-el"></div>'
                         "<script>const jobId = '7581804'; "
                         "fetch(`https://boards-api.greenhouse.io/v1/boards/getyourguide/jobs/${jobId}`)</script>"
                         "<h3>Similar jobs</h3>"
@@ -497,6 +527,7 @@ class TestImportFlowRawJD:
 
     def test_import_flow_does_not_format_raw_jd_with_llm(self):
         import inspect
+
         from app.modules.jobs import importer
 
         source = inspect.getsource(importer.import_job_urls)
@@ -543,9 +574,27 @@ class TestSkillExtraction:
 
         parsed = _enrich_parsed_skills({"must_have_skills": [], "nice_to_have_skills": []}, job)
 
-        for skill in ["Java", "Spring Boot", "PHP", "Vue.js", "TypeScript", "PostgreSQL", "GraphQL", "Kafka", "Kubernetes", "Distributed systems", "Observability"]:
+        for skill in [
+            "Java",
+            "Spring Boot",
+            "PHP",
+            "Vue.js",
+            "TypeScript",
+            "PostgreSQL",
+            "GraphQL",
+            "Kafka",
+            "Kubernetes",
+            "Distributed systems",
+            "Observability",
+        ]:
             assert skill in parsed["must_have_skills"]
-        for skill in ["Elasticsearch", "Apache Solr", "Apache Lucene", "A/B testing", "Event-based analytics"]:
+        for skill in [
+            "Elasticsearch",
+            "Apache Solr",
+            "Apache Lucene",
+            "A/B testing",
+            "Event-based analytics",
+        ]:
             assert skill in parsed["nice_to_have_skills"]
         assert "Elasticsearch" not in parsed["must_have_skills"]
 
@@ -570,7 +619,17 @@ class TestSkillExtraction:
 
         parsed = _enrich_parsed_skills({"must_have_skills": [], "nice_to_have_skills": []}, job)
 
-        for skill in ["Networking", "TCP/IP", "UDP", "WebRTC", "gRPC", "MQTT", "ROS2/DDS", "Middleware integration", "Linux"]:
+        for skill in [
+            "Networking",
+            "TCP/IP",
+            "UDP",
+            "WebRTC",
+            "gRPC",
+            "MQTT",
+            "ROS2/DDS",
+            "Middleware integration",
+            "Linux",
+        ]:
             assert skill in parsed["must_have_skills"]
         for skill in ["Cloud-to-edge architecture", "Mobile Edge Computing", "Python", "Go"]:
             assert skill in parsed["nice_to_have_skills"]
@@ -603,7 +662,17 @@ class TestSkillExtraction:
 
         parsed = _enrich_parsed_skills({"must_have_skills": [], "nice_to_have_skills": []}, job)
 
-        for skill in ["Python", "Machine Learning", "GenAI", "LLMs", "RAG", "AWS", "Azure", "CI/CD pipelines", "Monitoring"]:
+        for skill in [
+            "Python",
+            "Machine Learning",
+            "GenAI",
+            "LLMs",
+            "RAG",
+            "AWS",
+            "Azure",
+            "CI/CD pipelines",
+            "Monitoring",
+        ]:
             assert skill in parsed["must_have_skills"]
         for noise in ["Christmas bonus", "6 weeks annual leave", "Hiring"]:
             assert noise not in parsed["skills"]

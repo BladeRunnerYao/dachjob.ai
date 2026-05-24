@@ -16,7 +16,6 @@ from app.db.models import JobPosting
 from app.modules.jobs.repository import create_job, get_job
 from app.modules.matching.service import parse_job_posting
 
-
 DEFAULT_JOB_REQUEST_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -52,7 +51,20 @@ class _TextExtractor(HTMLParser):
         if tag in {"script", "style", "noscript", "svg"} and self._skip_depth:
             self._skip_depth -= 1
             return
-        if tag in {"p", "li", "div", "section", "article", "tr", "h1", "h2", "h3", "h4", "h5", "h6"}:
+        if tag in {
+            "p",
+            "li",
+            "div",
+            "section",
+            "article",
+            "tr",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+        }:
             self.parts.append("\n")
 
     def handle_data(self, data: str) -> None:
@@ -231,11 +243,18 @@ def _location_from_title(title: str | None) -> str | None:
 def _clean_source_text(source: str, text: str) -> str:
     cleaned = text
     if "linkedin." in source:
-        start_markers = ["About You", "Mission", "The Impact You Will Have", "Tasks", "Responsibilities", "Report this job"]
+        start_markers = [
+            "About You",
+            "Mission",
+            "The Impact You Will Have",
+            "Tasks",
+            "Responsibilities",
+            "Report this job",
+        ]
         for marker in start_markers:
             index = cleaned.find(marker)
             if index >= 0:
-                cleaned = cleaned[index + len(marker):]
+                cleaned = cleaned[index + len(marker) :]
                 break
         end_markers = [
             "Referrals increase your chances",
@@ -300,7 +319,9 @@ def _bmwgroup_description_from_html(html_text: str) -> str | None:
 
 
 def _bmwgroup_labeled_item(html_text: str, class_name: str) -> str | None:
-    pattern = rf'<div[^>]+class=["\'][^"\']*\b{re.escape(class_name)}\b[^"\']*["\'][^>]*>(.*?)</div>'
+    pattern = (
+        rf'<div[^>]+class=["\'][^"\']*\b{re.escape(class_name)}\b[^"\']*["\'][^>]*>(.*?)</div>'
+    )
     match = re.search(pattern, html_text, re.IGNORECASE | re.DOTALL)
     return _strip_html(match.group(1)) if match else None
 
@@ -309,8 +330,16 @@ def _bmwgroup_location_from_html(html_text: str) -> str | None:
     location = _bmwgroup_labeled_item(html_text, "grp-jobdescription__jobLocation")
     if location:
         return location
-    locality_match = re.search(r'<div[^>]+itemprop=["\']addressLocality["\'][^>]*>(.*?)</div>', html_text, re.IGNORECASE | re.DOTALL)
-    region_match = re.search(r'<div[^>]+itemprop=["\']addressRegion["\'][^>]*>(.*?)</div>', html_text, re.IGNORECASE | re.DOTALL)
+    locality_match = re.search(
+        r'<div[^>]+itemprop=["\']addressLocality["\'][^>]*>(.*?)</div>',
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    region_match = re.search(
+        r'<div[^>]+itemprop=["\']addressRegion["\'][^>]*>(.*?)</div>',
+        html_text,
+        re.IGNORECASE | re.DOTALL,
+    )
     parts = [_strip_html(match.group(1)) for match in (locality_match, region_match) if match]
     return ", ".join(part for part in parts if part) or None
 
@@ -341,7 +370,9 @@ def _bmwgroup_employment_type_from_html(html_text: str) -> str | None:
 
 
 def _bmwgroup_posted_at_from_html(html_text: str) -> datetime | None:
-    match = re.search(r'<div[^>]+itemprop=["\']datePosted["\'][^>]*>(\d{8})</div>', html_text, re.IGNORECASE)
+    match = re.search(
+        r'<div[^>]+itemprop=["\']datePosted["\'][^>]*>(\d{8})</div>', html_text, re.IGNORECASE
+    )
     if not match:
         return None
     try:
@@ -459,14 +490,10 @@ async def _scrape_greenhouse_job(
         or _greenhouse_board_from_known_host(requested_url)
         or _greenhouse_board_from_known_host(final_url)
     )
-    board = (
-        direct_or_known_board
-        or _greenhouse_board_from_html(html_text)
-    )
-    job_id = (
-        _greenhouse_job_id_from_url_or_html(final_url, html_text)
-        or _greenhouse_job_id_from_url_or_html(requested_url, html_text)
-    )
+    board = direct_or_known_board or _greenhouse_board_from_html(html_text)
+    job_id = _greenhouse_job_id_from_url_or_html(
+        final_url, html_text
+    ) or _greenhouse_job_id_from_url_or_html(requested_url, html_text)
     if not board or not job_id:
         return None
 
@@ -646,7 +673,9 @@ async def scrape_job_url(url: str) -> ScrapedJob:
 
     workplace = job_json.get("jobLocationType") if job_json else None
     if not workplace:
-        location_line = _extract_labeled_value(description, "Location") or _extract_labeled_value(meta_description, "Location")
+        location_line = _extract_labeled_value(description, "Location") or _extract_labeled_value(
+            meta_description, "Location"
+        )
         if location_line and "remote" in location_line.lower():
             workplace = "remote"
     if not workplace and ("remote" in description.lower() or "remote" in meta_description.lower()):
@@ -692,7 +721,9 @@ async def import_job_urls(
         try:
             scraped = await scrape_job_url(url)
         except httpx.HTTPStatusError as e:
-            errors.append({"url": url, "error": f"HTTP {e.response.status_code}: could not fetch page"})
+            errors.append(
+                {"url": url, "error": f"HTTP {e.response.status_code}: could not fetch page"}
+            )
             continue
         except httpx.TimeoutException:
             errors.append({"url": url, "error": "Request timed out after 20s"})

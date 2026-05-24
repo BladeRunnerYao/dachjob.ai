@@ -1,5 +1,5 @@
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.engine import URL
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import get_settings
@@ -20,9 +20,7 @@ def get_async_database_url(settings=None):
             database=settings.database_name,
             query={"host": f"/cloudsql/{settings.cloud_sql_connection_name}"},
         )
-    return settings.database_url.replace(
-        "postgresql+psycopg://", "postgresql+asyncpg://"
-    )
+    return settings.database_url.replace("postgresql+psycopg://", "postgresql+asyncpg://")
 
 
 def get_engine():
@@ -36,9 +34,7 @@ def get_engine():
 
 
 engine = get_engine()
-async_session_factory = async_sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
-)
+async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def get_db():

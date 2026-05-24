@@ -2,13 +2,12 @@ from uuid import UUID
 
 from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.security import decode_access_token
-from app.db.models import Membership, Tenant, User
+from app.db.models import Tenant, User
 from app.db.session import get_db
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -30,9 +29,7 @@ async def get_current_user(
         if not user_id:
             raise AppError("invalid_token", "Token missing user_id")
 
-        result = await db.execute(
-            select(User).where(User.id == UUID(user_id)).limit(1)
-        )
+        result = await db.execute(select(User).where(User.id == UUID(user_id)).limit(1))
         user = result.scalar_one_or_none()
         if not user:
             raise AppError("user_not_found", "User not found")
@@ -49,9 +46,7 @@ async def get_current_user(
         if not slug:
             slug = "default"
 
-        result = await db.execute(
-            select(Tenant).where(Tenant.slug == slug).limit(1)
-        )
+        result = await db.execute(select(Tenant).where(Tenant.slug == slug).limit(1))
         tenant = result.scalar_one_or_none()
         if not tenant:
             raise AppError("tenant_not_found", "Tenant not found")
@@ -62,6 +57,7 @@ async def get_current_user(
         slug = x_tenant_slug
     else:
         from app.core.config import get_settings
+
         slug = get_settings().default_tenant_slug
 
     result = await db.execute(select(Tenant).where(Tenant.slug == slug).limit(1))
