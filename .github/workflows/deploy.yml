@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: Branch to deploy
-        required: true
-        default: main
+        description: Optional branch override. Leave empty to deploy the selected workflow branch.
+        required: false
+        default: ""
       target:
         description: Deployment target
         required: true
@@ -76,6 +76,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -117,6 +119,7 @@ jobs:
       branch: ${{ steps.inputs.outputs.branch }}
       target: ${{ steps.inputs.outputs.target }}
       image_tag: ${{ steps.tag.outputs.image_tag }}
+      commit_sha: ${{ steps.tag.outputs.commit_sha }}
       deploy_api: ${{ steps.inputs.outputs.deploy_api }}
       deploy_frontend: ${{ steps.inputs.outputs.deploy_frontend }}
       deploy_worker: ${{ steps.inputs.outputs.deploy_worker }}
@@ -127,7 +130,10 @@ jobs:
       - name: Resolve inputs
         id: inputs
         run: |
-          branch="${{ github.event.inputs.branch || github.ref_name }}"
+          branch="${{ github.event.inputs.branch }}"
+          if [[ -z "${branch}" ]]; then
+            branch="${GITHUB_REF_NAME}"
+          fi
           target="${{ github.event.inputs.target || 'all' }}"
           terraform_apply="${{ github.event.inputs.terraform_apply || 'false' }}"
           run_migrations="${{ github.event.inputs.run_migrations || 'true' }}"
@@ -150,8 +156,10 @@ jobs:
       - name: Create image tag
         id: tag
         run: |
+          commit_sha="$(git rev-parse HEAD)"
           short_sha="$(git rev-parse --short=12 HEAD)"
           echo "image_tag=${short_sha}-${GITHUB_RUN_NUMBER}" >> "${GITHUB_OUTPUT}"
+          echo "commit_sha=${commit_sha}" >> "${GITHUB_OUTPUT}"
 
   terraform:
     name: Terraform plan/apply
@@ -246,7 +254,7 @@ jobs:
           push: true
           build-args: |
             GIT_BRANCH=${{ needs.prepare.outputs.branch }}
-            GIT_COMMIT_SHA=${{ github.sha }}
+            GIT_COMMIT_SHA=${{ needs.prepare.outputs.commit_sha }}
           tags: |
             ${{ steps.meta.outputs.image }}
             ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-api/api:latest
@@ -353,7 +361,7 @@ jobs:
           push: true
           build-args: |
             GIT_BRANCH=${{ needs.prepare.outputs.branch }}
-            GIT_COMMIT_SHA=${{ github.sha }}
+            GIT_COMMIT_SHA=${{ needs.prepare.outputs.commit_sha }}
           tags: |
             ${{ steps.meta.outputs.image }}
             ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-worker/worker:latest
