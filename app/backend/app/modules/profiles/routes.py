@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.tenant import TenantContext, get_tenant_context
+from app.core.auth import TenantContext
+from app.core.tenant import get_tenant_context
 from app.db.models import CandidateProfile
 from app.db.session import get_db
 from app.modules.profiles.extractor import (

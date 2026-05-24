@@ -11,7 +11,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.tenant import TenantContext
+from app.core.auth import TenantContext
 from app.db.models import JobPosting
 from app.modules.jobs.repository import create_job, get_job
 from app.modules.matching.service import parse_job_posting
