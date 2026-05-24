@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,13 +55,16 @@ async def get_latest_resume(
     return result.scalar_one_or_none()
 
 
-@artifact_router.get("/{artifact_id}/html", response_class=HTMLResponse)
+@artifact_router.get("/{artifact_id}/html")
 async def get_resume_html(
     artifact_id: UUID,
+    tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(ResumeArtifact).where(ResumeArtifact.id == artifact_id).limit(1)
+        select(ResumeArtifact)
+        .where(ResumeArtifact.id == artifact_id, ResumeArtifact.tenant_id == tenant.id)
+        .limit(1)
     )
     artifact = result.scalar_one_or_none()
     if not artifact:
@@ -74,3 +77,34 @@ async def get_resume_html(
         raise HTTPException(status_code=404, detail="Resume HTML not found") from exc
 
     return HTMLResponse(html)
+
+
+@artifact_router.get("/{artifact_id}/pdf")
+async def get_resume_pdf(
+    artifact_id: UUID,
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ResumeArtifact)
+        .where(ResumeArtifact.id == artifact_id, ResumeArtifact.tenant_id == tenant.id)
+        .limit(1)
+    )
+    artifact = result.scalar_one_or_none()
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Resume artifact not found")
+
+    if not artifact.pdf_object_key:
+        raise HTTPException(status_code=404, detail="PDF not available for this artifact")
+
+    storage = StorageService()
+    try:
+        pdf_bytes = storage.download(artifact.pdf_object_key)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="Resume PDF not found") from exc
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=resume-{artifact_id}.pdf"},
+    )

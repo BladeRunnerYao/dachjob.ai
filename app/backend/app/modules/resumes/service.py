@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from weasyprint import HTML
 
 from app.core.auth import TenantContext
 from app.db.models import CandidateProfile, EvidenceChunk, MatchReport, ResumeArtifact
@@ -203,9 +204,15 @@ async def generate_resume(
         html, prov = _generate_html_resume(profile, evidence_for_resume, parsed_job)
         provenance = {**provenance, **prov}
 
-    object_key = f"resumes/{job_id}/{uuid.uuid4()}.html"
     storage = StorageService()
-    storage.upload(object_key, html.encode("utf-8"), content_type="text/html; charset=utf-8")
+    file_id = uuid.uuid4()
+
+    html_object_key = f"resumes/{job_id}/{file_id}.html"
+    storage.upload(html_object_key, html.encode("utf-8"), content_type="text/html; charset=utf-8")
+
+    pdf_bytes = _html_to_pdf(html)
+    pdf_object_key = f"resumes/{job_id}/{file_id}.pdf"
+    storage.upload(pdf_object_key, pdf_bytes, content_type="application/pdf")
 
     match_result = await db.execute(
         select(MatchReport)
@@ -223,7 +230,8 @@ async def generate_resume(
         tenant_id=tenant.id,
         job_id=job_id,
         match_report_id=match_report.id if match_report else None,
-        html_object_key=object_key,
+        html_object_key=html_object_key,
+        pdf_object_key=pdf_object_key,
         provenance_json=provenance,
     )
     db.add(artifact)
@@ -355,3 +363,7 @@ def _generate_html_resume(
         for c in evidence_chunks
     ]
     return html, provenance
+
+
+def _html_to_pdf(html: str) -> bytes:
+    return HTML(string=html).write_pdf()
