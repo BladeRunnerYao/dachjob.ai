@@ -454,6 +454,57 @@ def _extract_responsibilities(raw_jd: str) -> list[str]:
     return _dedupe_preserve_order(items)[:12]
 
 
+async def format_raw_jd(
+    tenant: TenantContext,
+    raw_text: str,
+    title: str,
+    company: str,
+) -> str | None:
+    if not raw_text or len(raw_text.strip()) < 100:
+        return None
+
+    from app.modules.llm_gateway.gateway import LLMGateway
+
+    logger = logging.getLogger(__name__)
+    gateway = LLMGateway()
+    try:
+        content = await gateway.run_text(
+            tenant_id=tenant.id,
+            task="jd_format",
+            prompt_version="1.0",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a job description formatter. Reformat the raw job posting text "
+                        "into clean, well-structured Markdown. CRITICAL RULES:\n"
+                        "- PRESERVE ALL original content. Do NOT summarize, paraphrase, shorten, or omit any information.\n"
+                        "- Do NOT add any facts, opinions, skills, requirements, or commentary that are not explicitly in the original text.\n"
+                        "- Only improve the FORMATTING: add appropriate ## and ### headings (e.g. ## About the Role, ## Responsibilities, "
+                        "## Requirements, ## Benefits, ## About the Company), convert lists to bullet points (- ), and add paragraph breaks.\n"
+                        "- Remove obvious boilerplate, cookie consent notices, login prompts, navigation text, and page chrome that are not part of the job description.\n"
+                        "- Keep the original language and wording. Do not translate, rewrite sentences, or change tone.\n"
+                        "- Output ONLY the formatted Markdown. No preamble, no postamble, no explanations."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Job Title: {title}\n"
+                        f"Company: {company}\n\n"
+                        f"RAW TEXT TO FORMAT:\n{raw_text[:15000]}"
+                    ),
+                },
+            ],
+        )
+        if content and len(content.strip()) > 80:
+            return content.strip()
+    except Exception:
+        logger.exception("LLM JD formatting failed, keeping original raw_jd")
+
+    return None
+
+
 async def parse_job_posting(
     db: AsyncSession,
     tenant: TenantContext,
