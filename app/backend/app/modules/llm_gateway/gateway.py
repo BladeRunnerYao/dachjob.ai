@@ -19,7 +19,17 @@ class LLMProvider:
     name: str
     client: AsyncOpenAI
     default_model: str
+    quality_model: str
     reasoning_model: str
+
+
+TASK_MODEL_TIERS = {
+    "jd_format": "fast",
+    "jd_extract": "quality",
+    "fit_explanation": "fast",
+    "resume_generate": "quality",
+    "profile_extract": "quality",
+}
 
 
 class LLMGateway:
@@ -46,6 +56,7 @@ class LLMGateway:
             name="gemini",
             client=AsyncOpenAI(api_key=settings.gemini_api_key, base_url=settings.gemini_base_url),
             default_model=settings.gemini_model_fast,
+            quality_model=settings.gemini_model_quality,
             reasoning_model=settings.gemini_model_reasoning,
         )
 
@@ -56,6 +67,7 @@ class LLMGateway:
         api_key: str,
         base_url: str,
         model_fast: str,
+        model_quality: str,
         model_reasoning: str,
     ) -> LLMProvider | None:
         if not api_key:
@@ -64,6 +76,7 @@ class LLMGateway:
             name=name,
             client=AsyncOpenAI(api_key=api_key, base_url=base_url),
             default_model=model_fast,
+            quality_model=model_quality,
             reasoning_model=model_reasoning,
         )
 
@@ -81,6 +94,7 @@ class LLMGateway:
                     api_key=settings.deepseek_api_key,
                     base_url=settings.deepseek_base_url,
                     model_fast=settings.deepseek_model_fast,
+                    model_quality=settings.deepseek_model_quality,
                     model_reasoning=settings.deepseek_model_reasoning,
                 )
             elif name == "openrouter":
@@ -89,6 +103,7 @@ class LLMGateway:
                     api_key=settings.openrouter_api_key,
                     base_url=settings.openrouter_base_url,
                     model_fast=settings.openrouter_model_fast,
+                    model_quality=settings.openrouter_model_quality,
                     model_reasoning=settings.openrouter_model_reasoning,
                 )
             if provider:
@@ -102,6 +117,7 @@ class LLMGateway:
         prompt_version: str,
         messages: list[dict],
         model: str | None = None,
+        model_tier: str | None = None,
         reasoning: bool = False,
         response_format: dict | None = None,
     ) -> str:
@@ -110,7 +126,7 @@ class LLMGateway:
         last_error: Exception | None = None
 
         for provider in self.providers:
-            selected_model = model or (provider.reasoning_model if reasoning else provider.default_model)
+            selected_model = self._select_model(provider, task, model, model_tier, reasoning)
             start = time.monotonic()
             kwargs: dict[str, Any] = dict(
                 model=selected_model,
@@ -180,6 +196,7 @@ class LLMGateway:
         messages: list[dict],
         output_schema: type[BaseModel],
         model: str | None = None,
+        model_tier: str | None = None,
         thinking: bool = False,
     ) -> BaseModel:
         content = await self.run_text(
@@ -188,11 +205,31 @@ class LLMGateway:
             prompt_version=prompt_version,
             messages=messages,
             model=model,
+            model_tier=model_tier,
             reasoning=thinking,
             response_format={"type": "json_object"},
         )
         parsed = json.loads(content or "{}")
         return output_schema(**parsed)
+
+    @staticmethod
+    def _select_model(
+        provider: LLMProvider,
+        task: str,
+        model: str | None,
+        model_tier: str | None,
+        reasoning: bool,
+    ) -> str:
+        if model:
+            return model
+        if reasoning:
+            return provider.reasoning_model
+        tier = model_tier or TASK_MODEL_TIERS.get(task, "fast")
+        if tier == "quality":
+            return provider.quality_model or provider.default_model
+        if tier == "reasoning":
+            return provider.reasoning_model
+        return provider.default_model
 
     async def _log_run(self, **kwargs: Any) -> None:
         try:

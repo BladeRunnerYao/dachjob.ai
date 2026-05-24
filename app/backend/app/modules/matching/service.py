@@ -751,6 +751,7 @@ async def format_raw_jd(
             tenant_id=tenant.id,
             task="jd_format",
             prompt_version="1.0",
+            model_tier="fast",
             messages=[
                 {
                     "role": "system",
@@ -859,6 +860,7 @@ async def parse_job_posting(
             tenant_id=tenant.id,
             task="jd_extract",
             prompt_version="1.1",
+            model_tier="quality",
             messages=messages,
             response_format={"type": "json_object"},
         )
@@ -1102,6 +1104,7 @@ async def compute_match(
             tenant_id=tenant.id,
             task="fit_explanation",
             prompt_version="1.0",
+            model_tier="fast",
             messages=[
                 {
                     "role": "system",
