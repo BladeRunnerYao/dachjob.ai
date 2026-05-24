@@ -151,7 +151,7 @@ class _ResumeOutput(BaseModel):
 async def generate_resume(
     db: AsyncSession, tenant: TenantContext, job_id: uuid.UUID
 ) -> ResumeArtifact:
-    job = await get_job(db, job_id)
+    job = await get_job(db, job_id, tenant.id)
     if not job:
         raise ValueError(f"Job {job_id} not found")
 

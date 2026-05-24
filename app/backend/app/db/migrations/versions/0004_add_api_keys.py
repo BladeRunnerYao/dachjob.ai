@@ -27,9 +27,8 @@ def upgrade() -> None:
         sa.Column(
             "tenant_id",
             UUID(as_uuid=True),
-            sa.ForeignKey("tenants.id"),
+            sa.ForeignKey("tenants.id", ondelete="CASCADE"),
             nullable=False,
-            index=True,
         ),
         sa.Column("key_hash", sa.Text(), nullable=False),
         sa.Column("prefix", sa.Text(), nullable=False),
@@ -37,16 +36,18 @@ def upgrade() -> None:
         sa.Column("created_by", sa.Text(), nullable=True),
         sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column(
-            "is_active", sa.Integer(), nullable=False, server_default="1"
-        ),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
             server_default=sa.text("now()"),
         ),
     )
+    op.create_index(op.f("ix_api_keys_tenant_id"), "api_keys", ["tenant_id"])
+    op.create_index(op.f("ix_api_keys_prefix"), "api_keys", ["prefix"])
 
 
 def downgrade() -> None:
+    op.drop_index(op.f("ix_api_keys_prefix"), table_name="api_keys")
+    op.drop_index(op.f("ix_api_keys_tenant_id"), table_name="api_keys")
     op.drop_table("api_keys")

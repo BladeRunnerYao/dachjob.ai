@@ -2,7 +2,7 @@ import secrets
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import Header, Request
+from fastapi import Header
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.core.security import decode_access_token, pwd_context
-from app.db.models import ApiKey, Tenant
+from app.db.models import ApiKey, Membership, Tenant, User
 
 
 class TenantContext(BaseModel):
@@ -24,14 +24,14 @@ class TenantContext(BaseModel):
 API_KEY_PREFIX = "dach_"
 
 PUBLIC_ROUTES = {
-    "/api/health",
-    "/api/version",
-    "/api/auth/register",
-    "/api/auth/login",
-    "/api/auth/google",
+    ("GET", "/api/health"),
+    ("GET", "/api/version"),
+    ("POST", "/api/auth/register"),
+    ("POST", "/api/auth/login"),
+    ("POST", "/api/auth/forgot-password"),
+    ("POST", "/api/auth/reset-password"),
+    ("POST", "/api/auth/google"),
 }
-
-PUBLIC_ROUTE_PREFIXES = ("/api/resumes/",)
 
 
 def generate_api_key() -> str:
@@ -51,67 +51,135 @@ def _extract_prefix(raw: str) -> str:
     return raw[: len(API_KEY_PREFIX) + 8]
 
 
-def is_public_route(path: str) -> bool:
-    if path in PUBLIC_ROUTES:
+def _unauthorized(message: str = "Valid Bearer token or X-API-Key header is required") -> AppError:
+    return AppError("authentication_required", message, status_code=401)
+
+
+def _coerce_uuid(value: str | None) -> UUID | None:
+    if not value:
+        return None
+    try:
+        return UUID(value)
+    except ValueError:
+        return None
+
+
+def _is_resume_html_route(path: str, method: str) -> bool:
+    if method.upper() != "GET":
+        return False
+    parts = path.strip("/").split("/")
+    return (
+        len(parts) == 4
+        and parts[0] == "api"
+        and parts[1] == "resumes"
+        and parts[3] == "html"
+        and _coerce_uuid(parts[2]) is not None
+    )
+
+
+def is_public_route(path: str, method: str = "GET") -> bool:
+    normalized_method = method.upper()
+    if normalized_method == "OPTIONS":
         return True
-    for prefix in PUBLIC_ROUTE_PREFIXES:
-        if path.startswith(prefix):
-            return True
+    if (normalized_method, path) in PUBLIC_ROUTES:
+        return True
+    if _is_resume_html_route(path, normalized_method):
+        return True
     return False
 
 
+def is_rate_limit_exempt_route(path: str, method: str = "GET") -> bool:
+    return method.upper() == "OPTIONS" or path in {"/api/health", "/api/version"}
+
+
+async def validate_bearer_token(
+    credentials: HTTPAuthorizationCredentials | None,
+    db: AsyncSession,
+    tenant_slug: str | None = None,
+) -> tuple[User, Tenant]:
+    if not credentials:
+        raise _unauthorized("Bearer token is required")
+
+    payload = decode_access_token(credentials.credentials)
+    if not payload:
+        raise _unauthorized("Invalid or expired Bearer token")
+
+    user_id = _coerce_uuid(payload.get("sub"))
+    token_tenant_id = _coerce_uuid(payload.get("tenant_id"))
+    if not user_id:
+        raise _unauthorized("Bearer token is missing a valid user id")
+    if not token_tenant_id and not tenant_slug:
+        raise _unauthorized("Bearer token is missing a valid tenant id")
+
+    stmt = (
+        select(User, Tenant)
+        .join(Membership, Membership.user_id == User.id)
+        .join(Tenant, Tenant.id == Membership.tenant_id)
+        .where(User.id == user_id)
+    )
+    if tenant_slug:
+        stmt = stmt.where(Tenant.slug == tenant_slug)
+    else:
+        stmt = stmt.where(Tenant.id == token_tenant_id)
+
+    result = await db.execute(stmt.limit(1))
+    row = result.one_or_none()
+    if not row:
+        raise _unauthorized("User is not a member of the requested tenant")
+    return row
+
+
+def _normalize_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+async def validate_api_key(raw_key: str, db: AsyncSession) -> TenantContext:
+    if not raw_key.startswith(API_KEY_PREFIX):
+        raise _unauthorized()
+
+    now = datetime.now(timezone.utc)
+    prefix = _extract_prefix(raw_key)
+    result = await db.execute(
+        select(ApiKey).where(
+            ApiKey.prefix == prefix,
+            ApiKey.is_active.is_(True),
+        )
+    )
+    keys = result.scalars().all()
+
+    for key in keys:
+        if not verify_api_key(raw_key, key.key_hash):
+            continue
+        if key.expires_at and _normalize_datetime(key.expires_at) <= now:
+            continue
+
+        result = await db.execute(select(Tenant).where(Tenant.id == key.tenant_id).limit(1))
+        tenant = result.scalar_one_or_none()
+        if not tenant:
+            continue
+
+        key.last_used_at = now
+        await db.flush()
+        return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)
+
+    raise _unauthorized()
+
+
 async def validate_auth(
-    request: Request,
     credentials: HTTPAuthorizationCredentials | None,
     x_api_key: str | None = Header(None),
     db: AsyncSession | None = None,
 ) -> TenantContext:
-    if credentials:
-        payload = decode_access_token(credentials.credentials)
-        if payload and payload.get("tenant_id"):
-            tenant_id = UUID(payload["tenant_id"])
-            result = await db.execute(
-                select(Tenant).where(Tenant.id == tenant_id).limit(1)
-            )
-            tenant = result.scalar_one_or_none()
-            if tenant:
-                return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)
+    if db is None:
+        raise RuntimeError("Database session is required for authentication")
 
-        if payload and payload.get("sub"):
-            result = await db.execute(
-                select(Tenant).where(Tenant.slug == "default").limit(1)
-            )
-            tenant = result.scalar_one_or_none()
-            if tenant:
-                return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)
+    if credentials:
+        _user, tenant = await validate_bearer_token(credentials, db)
+        return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)
 
     if x_api_key:
-        prefix = _extract_prefix(x_api_key)
-        keys = (
-            await db.execute(
-                select(ApiKey).where(
-                    ApiKey.prefix == prefix,
-                    ApiKey.is_active == 1,
-                )
-            )
-        ).scalars().all()
+        return await validate_api_key(x_api_key, db)
 
-        for key in keys:
-            if verify_api_key(x_api_key, key.key_hash):
-                if key.expires_at and key.expires_at < datetime.now(timezone.utc):
-                    continue
-                key.last_used_at = datetime.now(timezone.utc)
-                await db.flush()
-
-                result = await db.execute(
-                    select(Tenant).where(Tenant.id == key.tenant_id).limit(1)
-                )
-                tenant = result.scalar_one_or_none()
-                if tenant:
-                    return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)
-
-    raise AppError(
-        "authentication_required",
-        "Valid Bearer token or X-API-Key header is required",
-        status_code=401,
-    )
+    raise _unauthorized()

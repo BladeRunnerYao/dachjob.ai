@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.auth import is_public_route
+from app.core.auth import is_rate_limit_exempt_route
 from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler
 from app.core.rate_limit import RateLimitMiddleware
@@ -42,7 +42,9 @@ VERSION = _load_version()
 def _build_cors_origins() -> list[str]:
     if settings.cors_origins:
         return [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-    return ["*"]
+    if settings.app_env == "production":
+        return []
+    return ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 
 @asynccontextmanager
@@ -77,7 +79,8 @@ app.add_middleware(
     RateLimitMiddleware,
     max_requests=settings.rate_limit_requests,
     window_seconds=settings.rate_limit_window_seconds,
-    exempt_paths=is_public_route,
+    redis_url=settings.redis_url,
+    exempt_routes=is_rate_limit_exempt_route,
 )
 
 app.add_exception_handler(AppError, app_error_handler)
