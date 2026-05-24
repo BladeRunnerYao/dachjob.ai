@@ -39,6 +39,7 @@ class GoogleLoginRequest(BaseModel):
 
 class ApiKeyCreateRequest(BaseModel):
     name: str
+    expires_at: datetime | None = None
 
 
 class ApiKeyResponse(BaseModel):

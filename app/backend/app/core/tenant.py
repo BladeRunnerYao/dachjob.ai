@@ -17,7 +17,7 @@ async def get_tenant_context(
     x_api_key: str | None = Header(None),
     db: AsyncSession = Depends(get_db),
 ) -> TenantContext:
-    if is_public_route(request.url.path):
+    if is_public_route(request.url.path, request.method):
         settings = get_settings()
         slug = settings.default_tenant_slug
         result = await db.execute(select(Tenant).where(Tenant.slug == slug).limit(1))
@@ -26,4 +26,4 @@ async def get_tenant_context(
             return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)
         return TenantContext(slug=slug, name=slug)
 
-    return await validate_auth(request, credentials, x_api_key=x_api_key, db=db)
+    return await validate_auth(credentials, x_api_key=x_api_key, db=db)

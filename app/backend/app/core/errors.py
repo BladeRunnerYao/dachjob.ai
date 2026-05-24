@@ -29,7 +29,7 @@ class ErrorResponse(BaseModel):
 
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(
-        status_code=400,
+        status_code=exc.status_code,
         content={
             "error": {
                 "code": exc.code,
