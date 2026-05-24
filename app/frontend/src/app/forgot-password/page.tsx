@@ -8,6 +8,7 @@ export default function ForgotPasswordPage() {
   const { requestPasswordReset } = useAuth();
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
+  const [resetLink, setResetLink] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -15,10 +16,14 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError('');
     setMessage('');
+    setResetLink('');
     setSubmitting(true);
     try {
       const result = await requestPasswordReset(email);
       setMessage(result.message);
+      if (result.resetLink) {
+        setResetLink(result.resetLink);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -32,7 +37,7 @@ export default function ForgotPasswordPage() {
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold text-slate-900">Reset your password</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Enter your email and we&apos;ll send you a reset link.
+            Enter your email to get a password reset link.
           </p>
         </div>
 
@@ -45,6 +50,17 @@ export default function ForgotPasswordPage() {
           {message && (
             <div className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-600">
               {message}
+            </div>
+          )}
+          {resetLink && (
+            <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm">
+              <p className="text-slate-700 font-medium mb-1">Reset link:</p>
+              <a
+                href={resetLink}
+                className="text-blue-600 underline break-all hover:text-blue-800"
+              >
+                {resetLink}
+              </a>
             </div>
           )}
 
