@@ -332,6 +332,23 @@ VISA_SPONSORSHIP_WARNING_PATTERNS = [
     r"\b(?:must|need to)\b.{0,80}\b(?:already|currently)\b.{0,80}\b(?:authorized|eligible|right to work)\b",
 ]
 
+# Common city/office names that frequently appear in "About Us" / "Global Offices"
+# sections and should never be treated as skills.
+SKILL_CITY_BLACKLIST: set[str] = {
+    "amsterdam", "athens", "atlanta", "austin", "bangalore", "bangkok",
+    "barcelona", "beijing", "berlin", "boston", "brussels", "budapest",
+    "buenos aires", "chicago", "copenhagen", "dallas", "denver", "dubai",
+    "dublin", "edinburgh", "frankfurt", "geneva", "hamburg", "helsinki",
+    "hong kong", "istanbul", "jakarta", "lisbon", "london", "los angeles",
+    "madrid", "manchester", "melbourne", "mexico city", "miami", "milan",
+    "montreal", "moscow", "mumbai", "munich", "new orleans", "new york",
+    "oslo", "paris", "prague", "riga", "rio de janeiro", "rome",
+    "san francisco", "santiago", "sao paulo", "seattle", "seoul",
+    "shanghai", "singapore", "stockholm", "sydney", "tallinn", "tel aviv",
+    "tokyo", "toronto", "vancouver", "vienna", "vilnius", "warsaw",
+    "zurich", "basel", "bern", "lausanne",
+}
+
 
 def _dedupe_preserve_order(items: list[str]) -> list[str]:
     seen: set[str] = set()
@@ -636,6 +653,10 @@ def _enrich_parsed_skills(parsed_json: dict, job) -> dict:
     enriched_nice = _dedupe_preserve_order(
         [skill for skill in nice_seed if skill.casefold() not in enriched_must_keys]
     )
+
+    # Sanity: remove city/office names that leak through LLM or regex extraction
+    enriched_must = [s for s in enriched_must if s.casefold() not in SKILL_CITY_BLACKLIST]
+    enriched_nice = [s for s in enriched_nice if s.casefold() not in SKILL_CITY_BLACKLIST]
 
     parsed_json["must_have_skills"] = enriched_must
     parsed_json["nice_to_have_skills"] = enriched_nice
