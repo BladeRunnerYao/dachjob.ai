@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+import google.auth
+import google.auth.transport.requests
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
@@ -17,7 +19,7 @@ from app.db.session import async_session_factory
 @dataclass
 class LLMProvider:
     name: str
-    client: AsyncOpenAI
+    client: Any
     default_model: str
     quality_model: str
     reasoning_model: str
@@ -32,14 +34,45 @@ TASK_MODEL_TIERS = {
 }
 
 
+class VertexAIClientRefresher:
+    def __init__(self, *, project_id: str, location: str):
+        self.credentials, detected_project = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        self.project_id = project_id or detected_project
+        if not self.project_id:
+            raise RuntimeError("Vertex AI project id is not configured")
+        self.location = location or "global"
+        self.request = google.auth.transport.requests.Request()
+        self.client = AsyncOpenAI(
+            api_key="PLACEHOLDER",
+            base_url=(
+                "https://aiplatform.googleapis.com/v1/"
+                f"projects/{self.project_id}/locations/{self.location}/endpoints/openapi"
+            ),
+        )
+
+    def _refresh_if_needed(self) -> None:
+        if not self.credentials.valid:
+            self.credentials.refresh(self.request)
+            if not self.credentials.valid:
+                raise RuntimeError("Unable to refresh Vertex AI credentials")
+        self.client.api_key = self.credentials.token
+
+    @property
+    def chat(self):
+        self._refresh_if_needed()
+        return self.client.chat
+
+
 class LLMGateway:
     def __init__(self):
         settings = get_settings()
         self.providers = self._build_providers(settings)
         if not self.providers:
             raise RuntimeError(
-                "No LLM API key configured. "
-                "Set GEMINI_API_KEY, DEEPSEEK_API_KEY, or OPENROUTER_API_KEY in .env"
+                "No LLM provider configured. "
+                "Configure Vertex AI ADC, GEMINI_API_KEY, DEEPSEEK_API_KEY, or OPENROUTER_API_KEY."
             )
         self.provider = self.providers[0].name
         self.client = self.providers[0].client
@@ -58,6 +91,23 @@ class LLMGateway:
             default_model=settings.gemini_model_fast,
             quality_model=settings.gemini_model_quality,
             reasoning_model=settings.gemini_model_reasoning,
+        )
+
+    def _build_vertex_ai_provider(self, settings) -> LLMProvider | None:
+        try:
+            client = VertexAIClientRefresher(
+                project_id=settings.vertex_ai_project_id or settings.google_cloud_project,
+                location=settings.vertex_ai_location,
+            )
+        except Exception:
+            return None
+
+        return LLMProvider(
+            name="vertex_ai",
+            client=client,
+            default_model=settings.vertex_ai_model_fast,
+            quality_model=settings.vertex_ai_model_quality,
+            reasoning_model=settings.vertex_ai_model_reasoning,
         )
 
     def _build_openai_provider(
@@ -81,12 +131,16 @@ class LLMGateway:
         )
 
     def _build_providers(self, settings) -> list[LLMProvider]:
-        preferred = (settings.llm_provider or "gemini").lower()
-        ordered_names = list(dict.fromkeys([preferred, "gemini", "deepseek", "openrouter"]))
+        preferred = (settings.llm_provider or "vertex_ai").lower()
+        ordered_names = list(
+            dict.fromkeys([preferred, "vertex_ai", "gemini", "deepseek", "openrouter"])
+        )
         providers: list[LLMProvider] = []
         for name in ordered_names:
             provider = None
-            if name == "gemini":
+            if name == "vertex_ai":
+                provider = self._build_vertex_ai_provider(settings)
+            elif name == "gemini":
                 provider = self._build_gemini_provider(settings)
             elif name == "deepseek":
                 provider = self._build_openai_provider(

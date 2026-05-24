@@ -63,6 +63,7 @@ export default function LLMRunsPage() {
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
                 <th className="px-4 py-3 font-medium">Task</th>
+                <th className="px-4 py-3 font-medium">Provider</th>
                 <th className="px-4 py-3 font-medium">Model</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Latency (ms)</th>
@@ -77,6 +78,7 @@ export default function LLMRunsPage() {
                     className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                   >
                     <td className="px-4 py-3 font-medium text-slate-900">{run.task}</td>
+                    <td className="px-4 py-3 text-slate-600">{run.provider}</td>
                     <td className="px-4 py-3 text-slate-600">{run.model}</td>
                     <td className="px-4 py-3">
                       <Badge variant={run.status === 'success' || run.status === 'completed' ? 'green' : 'red'}>{run.status}</Badge>
@@ -86,7 +88,7 @@ export default function LLMRunsPage() {
                   </tr>
                   {expandedId === run.id && run.error_message && (
                     <tr className="bg-red-50">
-                      <td colSpan={5} className="px-4 py-3">
+                      <td colSpan={6} className="px-4 py-3">
                         <p className="text-xs text-red-700 font-medium">Error:</p>
                         <p className="text-sm text-red-600">{run.error_message}</p>
                       </td>

@@ -92,7 +92,15 @@ resource "google_cloud_run_v2_service" "api" {
       }
       env {
         name  = "LLM_PROVIDER"
-        value = "gemini"
+        value = "vertex_ai"
+      }
+      env {
+        name  = "VERTEX_AI_PROJECT_ID"
+        value = var.project_id
+      }
+      env {
+        name  = "VERTEX_AI_LOCATION"
+        value = "global"
       }
       env {
         name = "JWT_SECRET"
