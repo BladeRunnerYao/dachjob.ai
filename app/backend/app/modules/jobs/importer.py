@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.tenant import TenantContext
 from app.db.models import JobPosting
 from app.modules.jobs.repository import create_job, get_job
-from app.modules.matching.service import parse_job_posting
+from app.modules.matching.service import format_raw_jd, parse_job_posting
 
 
 class _TextExtractor(HTMLParser):
@@ -177,11 +177,13 @@ def _clean_source_text(source: str, text: str) -> str:
             "Explore top content",
             "LinkedIn ©",
         ]
+        earliest_index = None
         for marker in end_markers:
             index = cleaned.find(marker)
-            if index >= 0:
-                cleaned = cleaned[:index]
-                break
+            if index >= 0 and (earliest_index is None or index < earliest_index):
+                earliest_index = index
+        if earliest_index is not None:
+            cleaned = cleaned[:earliest_index]
     return _normalize_text(cleaned)
 
 
@@ -342,6 +344,17 @@ async def import_job_urls(
         except Exception as e:
             errors.append({"url": url, "error": f"Scrape error: {str(e)[:200]}"})
             continue
+
+        scraped.scraped_json["raw_text_original"] = scraped.raw_jd[:5000]
+
+        try:
+            formatted = await format_raw_jd(tenant, scraped.raw_jd, scraped.title, scraped.company)
+            if formatted:
+                scraped.raw_jd = formatted
+            else:
+                scraped.scraped_json["format_skipped"] = True
+        except Exception:
+            scraped.scraped_json["format_failed"] = True
 
         existing_result = await db.execute(
             select(JobPosting).where(

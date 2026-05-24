@@ -173,23 +173,46 @@ English (Fluent), German (B2), Mandarin (Native)
 
 LinkedIn source: https://www.linkedin.com/jobs/view/4414035441/
 
-### Role summary
-Customer-facing AI Forward Deployed Engineering role focused on helping enterprise customers build and productionize first-of-its-kind GenAI applications. The role is listed in Munich, with the posting also describing Germany-remote eligibility and EMEA collaboration.
+**Location:** Germany - Remote
+**Req ID:** CSQ327R197
+**Recruiter:** Dina Hussain
 
-### Responsibilities
-- Build GenAI solutions for customer problems using current Databricks AI research and platform capabilities.
-- Own production rollouts for internal and consumer-facing GenAI applications.
-- Act as a trusted technical advisor for customers across domains.
-- Collaborate with product and engineering teams to influence roadmap priorities.
-- Share technical ideas through customer work, internal thought leadership, and conferences.
+### Mission
+The AI Forward Deployed Engineering (AI FDE) team is a highly specialized customer-facing AI team at Databricks. We deliver professional services engagements to help our customers build and productionize first-of-its-kind AI applications. We work cross-functionally to shape long-term strategic priorities and initiatives alongside engineering, product, and developer relations, as well as support internal subject matter expert (SME) teams. We view our team as an ensemble: we look for individuals with strong, unique specializations to improve the overall strength of the team. This team is the right fit for you if you love working with customers, teammates, and fueling your curiosity for the latest trends in GenAI, LLMOps, and ML more broadly.
 
-### Requirements
-- Experience building GenAI applications such as RAG, multi-agent systems, Text2SQL, fine-tuning, or similar systems.
-- Hands-on use of tools and frameworks such as Hugging Face, LangChain, DSPy, pandas, scikit-learn, and PyTorch.
-- Experience deploying and evaluating production-grade GenAI or ML applications.
-- Cloud ML deployment experience on AWS, Azure, or GCP.
-- Strong communication skills with technical and non-technical audiences.
-- Preferred: Databricks platform, Apache Spark, large-scale data processing, and willingness to travel periodically for customer work.
+We welcome remote applicants located near our offices. Preferred locations (in priority order): London (UK), Madrid (Spain), Paris (France), and Amsterdam (NL).
+
+Reporting to: Senior Manager - AI FDE, EMEA
+
+### The Impact You Will Have
+- Develop cutting-edge GenAI solutions, incorporating the latest techniques from Databricks AI research to solve customer problems
+- Own production rollouts of consumer and internally facing GenAI applications
+- Serve as a trusted technical advisor to customers across a variety of domains
+- Present at conferences such as Data + AI Summit, recognized as a thought leader internally and externally
+- Collaborate cross-functionally with the product and engineering teams to influence priorities and shape the product roadmap
+
+### What We Look For
+- Experience building GenAI applications, including RAG, multi-agent systems, Text2SQL, fine-tuning, etc., with tools such as HuggingFace, LangChain, and DSPy
+- Expertise in deploying production-grade GenAI applications, including evaluation and optimizations
+- Extensive years of hands-on industry data science experience, leveraging common machine learning and data science tools, i.e. pandas, scikit-learn, PyTorch, etc.
+- Experience building production-grade machine learning deployments on AWS, Azure, or GCP
+- Graduate degree in a quantitative discipline (Computer Science, Engineering, Statistics, Operations Research, etc.) or equivalent practical experience
+- Experience communicating and/or teaching technical concepts to non-technical and technical audiences alike
+- Passion for collaboration, life-long learning, and driving business value through AI
+- [Preferred] Experience using the Databricks Intelligence Platform and Apache Spark to process large-scale distributed datasets
+- Willing to travel once every 4-8 weeks to see customers (as needed)
+
+### About Databricks
+Databricks is the data and AI company. More than 10,000 organizations worldwide — including Comcast, Condé Nast, Grammarly, and over 50% of the Fortune 500 — rely on the Databricks Data Intelligence Platform to unify and democratize data, analytics and AI. Databricks is headquartered in San Francisco, with offices around the globe and was founded by the original creators of Lakehouse, Apache Spark, Delta Lake and MLflow.
+
+### Benefits
+At Databricks, we strive to provide comprehensive benefits and perks that meet the needs of all of our employees. For specific details on the benefits offered in your region click here.
+
+### Our Commitment to Diversity and Inclusion
+At Databricks, we are committed to fostering a diverse and inclusive culture where everyone can excel. We take great care to ensure that our hiring practices are inclusive and meet equal employment opportunity standards. Individuals looking for employment at Databricks are considered without regard to age, color, disability, ethnicity, family or marital status, gender identity or expression, language, national origin, physical and mental ability, political affiliation, race, religion, sexual orientation, socio-economic status, veteran status, and other protected characteristics.
+
+### Compliance
+If access to export-controlled technology or source code is required for performance of job duties, it is within Employer's discretion whether to apply for a U.S. government license for such positions, and Employer may decline to proceed with an applicant on this basis alone.
 """,
             },
             {
