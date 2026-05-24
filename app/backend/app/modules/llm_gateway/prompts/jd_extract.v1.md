@@ -10,7 +10,6 @@ Rules:
 - Split combined requirements into separate skills. Example: "GCP infrastructure (Cloud Run, networking, IAM, TLS, firewall rules)" becomes "GCP", "Cloud Run", "Networking", "IAM", "TLS", and "Firewall rules".
 - Treat capabilities such as RBAC, job queues, CI/CD pipelines, GitHub Actions, E2E tests, QA, rollbacks, on-call, incident response, observability, monitoring, vulnerability scanning, penetration testing, and infrastructure hardening as skills when present.
 - Do not include skills that are mentioned only in a negated section such as "What this role is NOT".
-- `responsibilities`: key duties extracted from the job description.
 - `salary_range`: extract if mentioned (e.g. "70.000 - 90.000 €"), otherwise null.
 - `seniority`: e.g. "Senior", "Junior", "Lead", "Entry", or null.
 - `dach_signals`: capture DACH-specific signals like visa sponsorship offered ("visa_sponsorship"), remote contract type ("remote_contract"), "München" or "Berlin" location preference.
@@ -24,7 +23,6 @@ Output JSON exactly matching this schema:
   "language_requirements": ["string"],
   "must_have_skills": ["string"],
   "nice_to_have_skills": ["string"],
-  "responsibilities": ["string"],
   "salary_range": "string | null",
   "seniority": "string | null",
   "dach_signals": {"key": "value"}

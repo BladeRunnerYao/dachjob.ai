@@ -28,7 +28,6 @@ class FakeLLMGateway:
                 language_requirements=["German (C1)", "English (B2)"],
                 must_have_skills=["Python", "AWS"],
                 nice_to_have_skills=["Kubernetes"],
-                responsibilities=["Build and maintain microservices"],
                 salary_range="75.000 - 95.000 €",
                 seniority="Senior",
                 dach_signals={"visa_sponsorship": "yes"},
