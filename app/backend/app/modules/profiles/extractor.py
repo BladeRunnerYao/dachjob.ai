@@ -152,6 +152,7 @@ async def convert_to_cv_markdown(
         tenant_id=tenant_id,
         task="profile_extract",
         prompt_version="1.0",
+        model_tier="quality",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Raw text to extract from ({source_label}):\n\n{raw_text}"},

@@ -175,6 +175,7 @@ async def generate_resume(
             tenant_id=tenant.id,
             task="resume_generate",
             prompt_version="1.0",
+            model_tier="quality",
             messages=messages,
             output_schema=_ResumeOutput,
             thinking=False,
