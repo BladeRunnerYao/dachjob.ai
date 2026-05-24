@@ -13,9 +13,11 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ passwordNeedsReset?: boolean }>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
+  requestPasswordReset: (email: string) => Promise<{ message: string; resetLink?: string; detail?: string }>;
+  resetPassword: (token: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -70,7 +72,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('auth_token', data.token);
     setToken(data.token);
     setUser({ id: data.user_id, email: data.email, name: data.name });
-    router.push('/');
+    if (!data.password_needs_reset) {
+      router.push('/');
+    }
+    return { passwordNeedsReset: data.password_needs_reset };
   }, [router]);
 
   const register = useCallback(async (email: string, password: string, name: string) => {
@@ -90,6 +95,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/');
   }, [router]);
 
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const res = await fetch(`${getApiBase()}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    return {
+      message: data.message || 'If that email is registered, a reset link has been sent.',
+      resetLink: data.reset_link || undefined,
+    };
+  }, []);
+
+  const resetPassword = useCallback(async (token: string, newPassword: string) => {
+    const res = await fetch(`${getApiBase()}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Password reset failed' }));
+      throw new Error(err.detail || 'Password reset failed');
+    }
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('auth_token');
     setToken(null);
@@ -98,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, requestPasswordReset, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );

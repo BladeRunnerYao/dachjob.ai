@@ -50,6 +50,23 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
 
+    cors_origins: str = ""
+
+    rate_limit_requests: int = 60
+    rate_limit_window_seconds: int = 60
+
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = "noreply@dachjob.ai"
+    smtp_use_tls: bool = True
+
+    resend_api_key: str = ""
+    resend_from_email: str = "onboarding@resend.dev"
+
+    password_reset_token_minutes: int = 60
+
     model_config = {"env_file": ".env", "extra": "allow"}
 
 

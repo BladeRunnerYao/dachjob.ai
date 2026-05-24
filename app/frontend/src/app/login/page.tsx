@@ -11,12 +11,18 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const [passwordWarning, setPasswordWarning] = useState(false);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    setPasswordWarning(false);
     setSubmitting(true);
     try {
-      await login(email, password);
+      const result = await login(email, password);
+      if (result.passwordNeedsReset) {
+        setPasswordWarning(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -38,6 +44,16 @@ export default function LoginPage() {
               {error}
             </div>
           )}
+          {passwordWarning && (
+            <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              Your password does not meet the current security requirements (8+ characters with
+              letters, numbers, and a special character).{' '}
+              <Link href="/forgot-password" className="font-medium underline hover:text-amber-800">
+                Reset your password
+              </Link>{' '}
+              to continue.
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-slate-700">Email</label>
@@ -47,7 +63,6 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="demo@dachjob.ai"
             />
           </div>
 
@@ -59,8 +74,16 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="demo1234"
             />
+            <p className="mt-1 text-xs text-slate-400">
+              Must be at least 8 characters with letters, numbers, and a special character.
+            </p>
+          </div>
+
+          <div className="text-right">
+            <Link href="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-500">
+              Forgot password?
+            </Link>
           </div>
 
           <button
@@ -78,10 +101,6 @@ export default function LoginPage() {
             Create one
           </Link>
         </p>
-
-        <div className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-xs text-slate-400">
-          Demo: <strong>demo@dachjob.ai</strong> / <strong>demo1234</strong>
-        </div>
       </div>
     </div>
   );
