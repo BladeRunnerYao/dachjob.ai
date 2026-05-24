@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.tenant import TenantContext
+from app.core.auth import TenantContext
 from app.db.models import CandidateProfile, EvidenceChunk, MatchReport, ResumeArtifact
 from app.modules.jobs.repository import get_job
 from app.modules.llm_gateway.gateway import LLMGateway

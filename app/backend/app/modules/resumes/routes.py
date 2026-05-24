@@ -5,7 +5,8 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.tenant import TenantContext, get_tenant_context
+from app.core.auth import TenantContext
+from app.core.tenant import get_tenant_context
 from app.db.models import ResumeArtifact
 from app.db.session import get_db
 from app.modules.profiles.repository import get_profile_by_tenant
