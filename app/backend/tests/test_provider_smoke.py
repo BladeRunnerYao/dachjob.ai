@@ -2,7 +2,9 @@
 Provider smoke tests that validate live LLM API keys are working.
 
 These tests make real API calls. Run them with:
-    cd app/backend && source .venv/bin/activate && PYTHONPATH=. pytest tests/test_provider_smoke.py -v
+    cd app/backend
+    source .venv/bin/activate
+    PYTHONPATH=. pytest tests/test_provider_smoke.py -v
 
 Each provider test is independent. The suite passes as long as at least one
 configured provider responds successfully. Individual failures are warnings
@@ -12,56 +14,91 @@ so operators know which keys need attention.
 import asyncio
 import os
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
 from openai import AsyncOpenAI
+
+from app.modules.llm_gateway.gateway import VertexAIClientRefresher
 
 
 @dataclass
 class ProviderConfig:
     name: str
-    api_key: str
-    base_url: str
     model: str
+    create_client: Callable[[], Any]
+
+
+def _vertex_client_factory(project_id: str, location: str) -> Callable[[], Any]:
+    def _create_client() -> Any:
+        return VertexAIClientRefresher(project_id=project_id, location=location)
+
+    return _create_client
+
+
+def _openai_client_factory(api_key: str, base_url: str) -> Callable[[], AsyncOpenAI]:
+    def _create_client() -> AsyncOpenAI:
+        return AsyncOpenAI(api_key=api_key, base_url=base_url)
+
+    return _create_client
 
 
 def _gather_providers() -> list[ProviderConfig]:
     """Read provider configs from the same env vars as Settings."""
     providers: list[ProviderConfig] = []
 
+    preferred_provider = os.getenv("LLM_PROVIDER", "").lower()
+    vertex_project_id = (
+        os.getenv("VERTEX_AI_PROJECT_ID")
+        or os.getenv("GOOGLE_CLOUD_PROJECT")
+        or os.getenv("PROJECT_ID")
+        or ""
+    )
+    vertex_requested = preferred_provider in {"vertex_ai", "vertex", "vertex-ai"}
+    if vertex_requested or vertex_project_id:
+        vertex_location = os.getenv("VERTEX_AI_LOCATION", "global")
+        providers.append(
+            ProviderConfig(
+                name="vertex_ai",
+                model=os.getenv("VERTEX_AI_MODEL_FAST", "google/gemini-2.5-flash-lite"),
+                create_client=_vertex_client_factory(vertex_project_id, vertex_location),
+            )
+        )
+
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     if gemini_key:
+        gemini_base_url = os.getenv(
+            "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/"
+        )
         providers.append(
             ProviderConfig(
                 name="gemini",
-                api_key=gemini_key,
-                base_url=os.getenv(
-                    "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/"
-                ),
                 model=os.getenv("GEMINI_MODEL_FAST", "gemini-3.1-flash-lite"),
+                create_client=_openai_client_factory(gemini_key, gemini_base_url),
             )
         )
 
     deepseek_key = os.getenv("DEEPSEEK_API_KEY", "")
     if deepseek_key:
+        deepseek_base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
         providers.append(
             ProviderConfig(
                 name="deepseek",
-                api_key=deepseek_key,
-                base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
                 model=os.getenv("DEEPSEEK_MODEL_FAST", "deepseek-v4-flash"),
+                create_client=_openai_client_factory(deepseek_key, deepseek_base_url),
             )
         )
 
     openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
     if openrouter_key:
+        openrouter_base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
         providers.append(
             ProviderConfig(
                 name="openrouter",
-                api_key=openrouter_key,
-                base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
                 model=os.getenv("OPENROUTER_MODEL_FAST", "deepseek/deepseek-v4-flash"),
+                create_client=_openai_client_factory(openrouter_key, openrouter_base_url),
             )
         )
 
@@ -70,8 +107,8 @@ def _gather_providers() -> list[ProviderConfig]:
 
 async def _check_provider(cfg: ProviderConfig) -> tuple[str, bool, str]:
     """Send a minimal chat request to one provider. Returns (name, ok, detail)."""
-    client = AsyncOpenAI(api_key=cfg.api_key, base_url=cfg.base_url)
     try:
+        client = cfg.create_client()
         response = await asyncio.wait_for(
             client.chat.completions.create(
                 model=cfg.model,
@@ -96,7 +133,7 @@ class TestProviderSmoke:
     async def test_at_least_one_provider_works(self):
         providers = _gather_providers()
         if not providers:
-            pytest.skip("No LLM API keys configured in environment")
+            pytest.skip("No LLM providers configured in environment")
 
         results = []
         for cfg in providers:

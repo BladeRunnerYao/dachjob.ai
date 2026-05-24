@@ -87,7 +87,11 @@ spec:
             - name: GOOGLE_CLOUD_PROJECT
               value: dachjob-ai-platform
             - name: LLM_PROVIDER
-              value: gemini
+              value: vertex_ai
+            - name: VERTEX_AI_PROJECT_ID
+              value: dachjob-ai-platform
+            - name: VERTEX_AI_LOCATION
+              value: global
           resources:
             requests:
               cpu: "500m"

@@ -44,21 +44,15 @@ def _provider(name: str, completions: _FakeCompletions) -> LLMProvider:
     )
 
 
-def test_build_providers_prefers_gemini(monkeypatch):
-    gateway = LLMGateway.__new__(LLMGateway)
-    monkeypatch.setattr(
-        gateway,
-        "_build_gemini_provider",
-        lambda settings: _provider("gemini", _FakeCompletions("gemini")),
-    )
-    monkeypatch.setattr(
-        gateway,
-        "_build_openai_provider",
-        lambda **kwargs: _provider(kwargs["name"], _FakeCompletions(kwargs["name"])),
-    )
-
-    settings = SimpleNamespace(
-        llm_provider="gemini",
+def _provider_settings(llm_provider: str = "gemini") -> SimpleNamespace:
+    return SimpleNamespace(
+        llm_provider=llm_provider,
+        vertex_ai_project_id="vertex-project",
+        google_cloud_project="google-project",
+        vertex_ai_location="global",
+        vertex_ai_model_fast="vertex-fast",
+        vertex_ai_model_quality="vertex-quality",
+        vertex_ai_model_reasoning="vertex-reasoning",
         deepseek_api_key="deepseek-key",
         deepseek_base_url="https://deepseek.example",
         deepseek_model_fast="deepseek-fast",
@@ -71,13 +65,83 @@ def test_build_providers_prefers_gemini(monkeypatch):
         openrouter_model_reasoning="openrouter-reasoning",
     )
 
-    providers = gateway._build_providers(settings)
+
+def test_build_providers_prefers_gemini(monkeypatch):
+    gateway = LLMGateway.__new__(LLMGateway)
+    monkeypatch.setattr(
+        gateway,
+        "_build_vertex_ai_provider",
+        lambda settings: _provider("vertex_ai", _FakeCompletions("vertex_ai")),
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_gemini_provider",
+        lambda settings: _provider("gemini", _FakeCompletions("gemini")),
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_openai_provider",
+        lambda **kwargs: _provider(kwargs["name"], _FakeCompletions(kwargs["name"])),
+    )
+
+    providers = gateway._build_providers(_provider_settings("gemini"))
 
     assert [provider.name for provider in providers] == [
+        "gemini",
+        "vertex_ai",
+        "deepseek",
+        "openrouter",
+    ]
+
+
+def test_build_providers_prefers_vertex_ai(monkeypatch):
+    gateway = LLMGateway.__new__(LLMGateway)
+    monkeypatch.setattr(
+        gateway,
+        "_build_vertex_ai_provider",
+        lambda settings: _provider("vertex_ai", _FakeCompletions("vertex_ai")),
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_gemini_provider",
+        lambda settings: _provider("gemini", _FakeCompletions("gemini")),
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_openai_provider",
+        lambda **kwargs: _provider(kwargs["name"], _FakeCompletions(kwargs["name"])),
+    )
+
+    providers = gateway._build_providers(_provider_settings("vertex_ai"))
+
+    assert [provider.name for provider in providers] == [
+        "vertex_ai",
         "gemini",
         "deepseek",
         "openrouter",
     ]
+
+
+def test_build_vertex_ai_provider_uses_vertex_models(monkeypatch):
+    import app.modules.llm_gateway.gateway as gateway_module
+
+    class _FakeVertexClient:
+        def __init__(self, *, project_id: str, location: str):
+            self.project_id = project_id
+            self.location = location
+
+    monkeypatch.setattr(gateway_module, "VertexAIClientRefresher", _FakeVertexClient)
+    gateway = LLMGateway.__new__(LLMGateway)
+
+    provider = gateway._build_vertex_ai_provider(_provider_settings("vertex_ai"))
+
+    assert provider is not None
+    assert provider.name == "vertex_ai"
+    assert provider.default_model == "vertex-fast"
+    assert provider.quality_model == "vertex-quality"
+    assert provider.reasoning_model == "vertex-reasoning"
+    assert provider.client.project_id == "vertex-project"
+    assert provider.client.location == "global"
 
 
 @pytest.mark.asyncio
@@ -111,6 +175,40 @@ async def test_run_text_falls_back_after_provider_error(monkeypatch):
     assert [log["status"] for log in logs] == ["error", "success"]
     assert gateway.last_provider == "deepseek"
     assert gateway.last_model == "deepseek-fast"
+
+
+@pytest.mark.asyncio
+async def test_run_text_falls_back_after_vertex_error(monkeypatch):
+    gateway = LLMGateway.__new__(LLMGateway)
+    vertex = _FakeCompletions("vertex_ai", error=RuntimeError("vertex unavailable"))
+    deepseek = _FakeCompletions("deepseek", content="ok")
+    gateway.providers = [
+        _provider("vertex_ai", vertex),
+        _provider("deepseek", deepseek),
+    ]
+    gateway.last_provider = "vertex_ai"
+    gateway.last_model = "vertex_ai-fast"
+
+    logs = []
+
+    async def _capture_log(**kwargs):
+        logs.append(kwargs)
+
+    monkeypatch.setattr(gateway, "_log_run", _capture_log)
+
+    result = await gateway.run_text(
+        tenant_id=uuid4(),
+        task="jd_extract",
+        prompt_version="1",
+        messages=[{"role": "user", "content": "hello"}],
+    )
+
+    assert result == "ok"
+    assert [log["provider"] for log in logs] == ["vertex_ai", "deepseek"]
+    assert [log["status"] for log in logs] == ["error", "success"]
+    assert [log["model"] for log in logs] == ["vertex_ai-quality", "deepseek-quality"]
+    assert gateway.last_provider == "deepseek"
+    assert gateway.last_model == "deepseek-quality"
 
 
 class TestModelSelection:

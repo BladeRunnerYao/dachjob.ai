@@ -327,12 +327,12 @@ export class ApiClient {
 
   getMockLLMRuns(): LLMRun[] {
     return [
-      { id: 'r1', task: 'match_resume', model: 'gpt-4o', status: 'completed', latency_ms: 3240, created_at: '2026-05-16T09:15:00Z' },
-      { id: 'r2', task: 'parse_jd', model: 'gpt-4o-mini', status: 'completed', latency_ms: 890, created_at: '2026-05-16T09:10:00Z' },
-      { id: 'r3', task: 'generate_cv', model: 'gpt-4o', status: 'failed', latency_ms: 15200, created_at: '2026-05-15T14:30:00Z', error_message: 'Token limit exceeded. Consider reducing the input size.' },
-      { id: 'r4', task: 'extract_evidence', model: 'gpt-4o-mini', status: 'completed', latency_ms: 2100, created_at: '2026-05-15T12:00:00Z' },
-      { id: 'r5', task: 'match_resume', model: 'gpt-4o', status: 'completed', latency_ms: 4100, created_at: '2026-05-14T16:45:00Z' },
-      { id: 'r6', task: 'parse_jd', model: 'gpt-4o-mini', status: 'completed', latency_ms: 750, created_at: '2026-05-14T10:20:00Z' },
+      { id: 'r1', task: 'match_resume', provider: 'vertex_ai', model: 'google/gemini-2.5-flash', status: 'completed', latency_ms: 3240, created_at: '2026-05-16T09:15:00Z' },
+      { id: 'r2', task: 'parse_jd', provider: 'vertex_ai', model: 'google/gemini-2.5-flash-lite', status: 'completed', latency_ms: 890, created_at: '2026-05-16T09:10:00Z' },
+      { id: 'r3', task: 'generate_cv', provider: 'gemini', model: 'gemini-2.5-pro', status: 'failed', latency_ms: 15200, created_at: '2026-05-15T14:30:00Z', error_message: 'Token limit exceeded. Consider reducing the input size.' },
+      { id: 'r4', task: 'extract_evidence', provider: 'vertex_ai', model: 'google/gemini-2.5-flash-lite', status: 'completed', latency_ms: 2100, created_at: '2026-05-15T12:00:00Z' },
+      { id: 'r5', task: 'match_resume', provider: 'vertex_ai', model: 'google/gemini-2.5-flash', status: 'completed', latency_ms: 4100, created_at: '2026-05-14T16:45:00Z' },
+      { id: 'r6', task: 'parse_jd', provider: 'deepseek', model: 'deepseek-v4-flash', status: 'completed', latency_ms: 750, created_at: '2026-05-14T10:20:00Z' },
     ];
   }
 

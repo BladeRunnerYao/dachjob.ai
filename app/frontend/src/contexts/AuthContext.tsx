@@ -27,35 +27,33 @@ function getApiBase() {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const initialToken =
+    typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(initialToken);
+  const [loading, setLoading] = useState(!!initialToken);
   const router = useRouter();
 
   useEffect(() => {
-    const stored = localStorage.getItem('auth_token');
-    if (stored) {
-      setToken(stored);
-      fetch(`${getApiBase()}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${stored}` },
+    if (!token) return;
+
+    fetch(`${getApiBase()}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Token invalid');
+        return res.json();
       })
-        .then((res) => {
-          if (!res.ok) throw new Error('Token invalid');
-          return res.json();
-        })
-        .then((data) => {
-          setUser(data);
-          setLoading(false);
-        })
-        .catch(() => {
-          localStorage.removeItem('auth_token');
-          setToken(null);
-          setLoading(false);
-          router.push('/login');
-        });
-    } else {
-      setLoading(false);
-    }
+      .then((data) => {
+        setUser(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        localStorage.removeItem('auth_token');
+        setToken(null);
+        setLoading(false);
+        router.push('/login');
+      });
   }, [router]);
 
   const login = useCallback(async (email: string, password: string) => {
