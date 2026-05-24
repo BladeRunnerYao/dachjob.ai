@@ -92,7 +92,7 @@ spec:
             - name: GOOGLE_CLOUD_PROJECT
               value: dachjob-ai-platform
             - name: LLM_PROVIDER
-              value: deepseek
+              value: gemini
           resources:
             requests:
               cpu: "500m"

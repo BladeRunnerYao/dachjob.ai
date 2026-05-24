@@ -15,7 +15,14 @@ class Settings(BaseSettings):
     cloud_sql_connection_name: str = ""
     redis_url: str = "redis://localhost:6379/0"
 
-    llm_provider: str = "deepseek"
+    google_cloud_project: str = ""
+
+    llm_provider: str = "gemini"
+
+    gemini_project_id: str = ""
+    gemini_location: str = "global"
+    gemini_model_fast: str = "google/gemini-2.5-flash"
+    gemini_model_reasoning: str = "google/gemini-2.5-flash"
 
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
