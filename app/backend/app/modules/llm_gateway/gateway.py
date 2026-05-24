@@ -50,6 +50,7 @@ class VertexAIClientRefresher:
                 "https://aiplatform.googleapis.com/v1/"
                 f"projects/{self.project_id}/locations/{self.location}/endpoints/openapi"
             ),
+            timeout=120.0,
         )
 
     def _refresh_if_needed(self) -> None:
@@ -87,7 +88,11 @@ class LLMGateway:
             return None
         return LLMProvider(
             name="gemini",
-            client=AsyncOpenAI(api_key=settings.gemini_api_key, base_url=settings.gemini_base_url),
+            client=AsyncOpenAI(
+                api_key=settings.gemini_api_key,
+                base_url=settings.gemini_base_url,
+                timeout=120.0,
+            ),
             default_model=settings.gemini_model_fast,
             quality_model=settings.gemini_model_quality,
             reasoning_model=settings.gemini_model_reasoning,
@@ -124,7 +129,7 @@ class LLMGateway:
             return None
         return LLMProvider(
             name=name,
-            client=AsyncOpenAI(api_key=api_key, base_url=base_url),
+            client=AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=120.0),
             default_model=model_fast,
             quality_model=model_quality,
             reasoning_model=model_reasoning,
