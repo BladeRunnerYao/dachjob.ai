@@ -79,6 +79,7 @@ export interface Application {
 export interface LLMRun {
   id: string;
   task: string;
+  provider: string;
   model: string;
   status: string;
   latency_ms: number;
