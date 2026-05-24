@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     smtp_from_email: str = "noreply@dachjob.ai"
     smtp_use_tls: bool = True
 
+    resend_api_key: str = ""
+    resend_from_email: str = "onboarding@resend.dev"
+
     password_reset_token_minutes: int = 60
 
     model_config = {"env_file": ".env", "extra": "allow"}
