@@ -72,7 +72,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('auth_token', data.token);
     setToken(data.token);
     setUser({ id: data.user_id, email: data.email, name: data.name });
-    router.push('/');
+    if (!data.password_needs_reset) {
+      router.push('/');
+    }
     return { passwordNeedsReset: data.password_needs_reset };
   }, [router]);
 
