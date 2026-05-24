@@ -22,6 +22,16 @@ class Settings(BaseSettings):
     gemini_model_fast: str = "gemini-3.1-flash-lite"
     gemini_model_reasoning: str = "gemini-2.5-pro"
 
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_model_fast: str = "deepseek-v4-flash"
+    deepseek_model_reasoning: str = "deepseek-v4-pro"
+
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_model_fast: str = "deepseek/deepseek-v4-flash"
+    openrouter_model_reasoning: str = "deepseek/deepseek-v4-pro"
+
     s3_endpoint_url: str = "http://localhost:9000"
     s3_access_key_id: str = "minioadmin"
     s3_secret_access_key: str = "minioadmin"
