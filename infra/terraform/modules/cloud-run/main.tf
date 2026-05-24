@@ -92,7 +92,7 @@ resource "google_cloud_run_v2_service" "api" {
       }
       env {
         name  = "LLM_PROVIDER"
-        value = "deepseek"
+        value = "gemini"
       }
       env {
         name = "JWT_SECRET"

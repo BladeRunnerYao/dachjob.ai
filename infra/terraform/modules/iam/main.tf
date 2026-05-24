@@ -32,6 +32,12 @@ resource "google_project_iam_member" "api_cloudtrace_agent" {
   member  = "serviceAccount:${google_service_account.api.email}"
 }
 
+resource "google_project_iam_member" "api_vertex_ai_user" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.api.email}"
+}
+
 # Frontend service account — minimal permissions
 resource "google_service_account" "frontend" {
   account_id   = "${var.name_prefix}-frontend-sa"
@@ -59,6 +65,12 @@ resource "google_project_iam_member" "worker_secret_accessor" {
 resource "google_project_iam_member" "worker_storage_object_user" {
   project = var.project_id
   role    = "roles/storage.objectUser"
+  member  = "serviceAccount:${google_service_account.worker.email}"
+}
+
+resource "google_project_iam_member" "worker_vertex_ai_user" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
   member  = "serviceAccount:${google_service_account.worker.email}"
 }
 

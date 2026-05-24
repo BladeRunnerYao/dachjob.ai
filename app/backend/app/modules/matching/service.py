@@ -511,7 +511,7 @@ async def parse_job_posting(
             parsed_json = _enrich_parsed_skills(parsed_json, job)
             job.parsed_json = parsed_json
             job.status = "parsed"
-            await sync_job_skills(db, job, parsed_json, source="deepseek")
+            await sync_job_skills(db, job, parsed_json, source=gateway.last_provider)
             await db.flush()
             return {"status": "parsed", "parsed_json": parsed_json}
     except Exception:
