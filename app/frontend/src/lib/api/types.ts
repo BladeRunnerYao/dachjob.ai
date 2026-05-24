@@ -60,8 +60,8 @@ export interface MatchReport {
 export interface ResumeArtifact {
   id: string;
   job_id: string;
-  html_url: string;
-  pdf_url?: string;
+  has_html: boolean;
+  has_pdf: boolean;
   provenance: unknown[];
 }
 

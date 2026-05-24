@@ -83,8 +83,6 @@ def is_public_route(path: str, method: str = "GET") -> bool:
         return True
     if (normalized_method, path) in PUBLIC_ROUTES:
         return True
-    if _is_resume_public_route(path, normalized_method):
-        return True
     return False
 
 

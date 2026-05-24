@@ -55,13 +55,16 @@ async def get_latest_resume(
     return result.scalar_one_or_none()
 
 
-@artifact_router.get("/{artifact_id}/html", response_class=HTMLResponse)
+@artifact_router.get("/{artifact_id}/html")
 async def get_resume_html(
     artifact_id: UUID,
+    tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(ResumeArtifact).where(ResumeArtifact.id == artifact_id).limit(1)
+        select(ResumeArtifact)
+        .where(ResumeArtifact.id == artifact_id, ResumeArtifact.tenant_id == tenant.id)
+        .limit(1)
     )
     artifact = result.scalar_one_or_none()
     if not artifact:
@@ -79,10 +82,13 @@ async def get_resume_html(
 @artifact_router.get("/{artifact_id}/pdf")
 async def get_resume_pdf(
     artifact_id: UUID,
+    tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(ResumeArtifact).where(ResumeArtifact.id == artifact_id).limit(1)
+        select(ResumeArtifact)
+        .where(ResumeArtifact.id == artifact_id, ResumeArtifact.tenant_id == tenant.id)
+        .limit(1)
     )
     artifact = result.scalar_one_or_none()
     if not artifact:
