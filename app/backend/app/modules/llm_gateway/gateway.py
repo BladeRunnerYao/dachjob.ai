@@ -2,6 +2,7 @@ import hashlib
 import json
 import time
 import uuid
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -13,26 +14,86 @@ from app.db.models import LLMRun
 from app.db.session import async_session_factory
 
 
+@dataclass
+class LLMProvider:
+    name: str
+    client: AsyncOpenAI
+    default_model: str
+    reasoning_model: str
+
+
 class LLMGateway:
     def __init__(self):
         settings = get_settings()
-        provider = settings.llm_provider.lower()
-        if provider == "gemini" and settings.gemini_api_key:
-            api_key = settings.gemini_api_key
-            base_url = settings.gemini_base_url
-            self.default_model = settings.gemini_model_fast
-            self.default_model_reasoning = settings.gemini_model_reasoning
-            self.provider = "gemini"
-        else:
+        self.providers = self._build_providers(settings)
+        if not self.providers:
             raise RuntimeError(
                 "No LLM API key configured. "
-                "Set GEMINI_API_KEY in .env"
+                "Set GEMINI_API_KEY, DEEPSEEK_API_KEY, or OPENROUTER_API_KEY in .env"
             )
-        self.client = AsyncOpenAI(
-            api_key=api_key,
-            base_url=base_url,
-        )
+        self.provider = self.providers[0].name
+        self.client = self.providers[0].client
+        self.default_model = self.providers[0].default_model
+        self.default_model_reasoning = self.providers[0].reasoning_model
+        self.last_provider = self.provider
+        self.last_model = self.default_model
         self.settings = settings
+
+    def _build_gemini_provider(self, settings) -> LLMProvider | None:
+        if not settings.gemini_api_key:
+            return None
+        return LLMProvider(
+            name="gemini",
+            client=AsyncOpenAI(api_key=settings.gemini_api_key, base_url=settings.gemini_base_url),
+            default_model=settings.gemini_model_fast,
+            reasoning_model=settings.gemini_model_reasoning,
+        )
+
+    def _build_openai_provider(
+        self,
+        *,
+        name: str,
+        api_key: str,
+        base_url: str,
+        model_fast: str,
+        model_reasoning: str,
+    ) -> LLMProvider | None:
+        if not api_key:
+            return None
+        return LLMProvider(
+            name=name,
+            client=AsyncOpenAI(api_key=api_key, base_url=base_url),
+            default_model=model_fast,
+            reasoning_model=model_reasoning,
+        )
+
+    def _build_providers(self, settings) -> list[LLMProvider]:
+        preferred = (settings.llm_provider or "gemini").lower()
+        ordered_names = list(dict.fromkeys([preferred, "gemini", "deepseek", "openrouter"]))
+        providers: list[LLMProvider] = []
+        for name in ordered_names:
+            provider = None
+            if name == "gemini":
+                provider = self._build_gemini_provider(settings)
+            elif name == "deepseek":
+                provider = self._build_openai_provider(
+                    name="deepseek",
+                    api_key=settings.deepseek_api_key,
+                    base_url=settings.deepseek_base_url,
+                    model_fast=settings.deepseek_model_fast,
+                    model_reasoning=settings.deepseek_model_reasoning,
+                )
+            elif name == "openrouter":
+                provider = self._build_openai_provider(
+                    name="openrouter",
+                    api_key=settings.openrouter_api_key,
+                    base_url=settings.openrouter_base_url,
+                    model_fast=settings.openrouter_model_fast,
+                    model_reasoning=settings.openrouter_model_reasoning,
+                )
+            if provider:
+                providers.append(provider)
+        return providers
 
     async def run_text(
         self,
@@ -44,63 +105,72 @@ class LLMGateway:
         reasoning: bool = False,
         response_format: dict | None = None,
     ) -> str:
-        model = model or (
-            self.default_model_reasoning if reasoning else self.default_model
-        )
-
-        start = time.monotonic()
         input_text = json.dumps(messages, sort_keys=True)
         input_hash = hashlib.sha256(input_text.encode()).hexdigest()[:16]
+        last_error: Exception | None = None
 
-        try:
+        for provider in self.providers:
+            selected_model = model or (provider.reasoning_model if reasoning else provider.default_model)
+            start = time.monotonic()
             kwargs: dict[str, Any] = dict(
-                model=model,
+                model=selected_model,
                 messages=messages,
                 temperature=0.3,
             )
             if response_format:
                 kwargs["response_format"] = response_format
 
-            response = await self.client.chat.completions.create(**kwargs)
-            latency_ms = int((time.monotonic() - start) * 1000)
+            try:
+                response = await provider.client.chat.completions.create(**kwargs)
+                latency_ms = int((time.monotonic() - start) * 1000)
 
-            content = response.choices[0].message.content or ""
+                content = response.choices[0].message.content or ""
 
-            tokens = None
-            if response.usage:
-                tokens = {
-                    "prompt": response.usage.prompt_tokens,
-                    "completion": response.usage.completion_tokens,
-                    "total": response.usage.total_tokens,
-                }
+                tokens = None
+                if response.usage:
+                    tokens = {
+                        "prompt": response.usage.prompt_tokens,
+                        "completion": response.usage.completion_tokens,
+                        "total": response.usage.total_tokens,
+                    }
 
-            await self._log_run(
-                tenant_id=tenant_id,
-                task=task,
-                prompt_version=prompt_version,
-                model=model,
-                input_hash=input_hash,
-                latency_ms=latency_ms,
-                tokens_json=tokens,
-                status="success",
-            )
+                await self._log_run(
+                    tenant_id=tenant_id,
+                    task=task,
+                    provider=provider.name,
+                    prompt_version=prompt_version,
+                    model=selected_model,
+                    input_hash=input_hash,
+                    latency_ms=latency_ms,
+                    tokens_json=tokens,
+                    status="success",
+                )
 
-            return content
+                self.provider = provider.name
+                self.client = provider.client
+                self.last_provider = provider.name
+                self.last_model = selected_model
+                return content
 
-        except Exception as e:
-            latency_ms = int((time.monotonic() - start) * 1000)
-            await self._log_run(
-                tenant_id=tenant_id,
-                task=task,
-                prompt_version=prompt_version,
-                model=model,
-                input_hash=input_hash,
-                latency_ms=latency_ms,
-                tokens_json=None,
-                status="error",
-                error_message=str(e),
-            )
-            raise
+            except Exception as e:
+                latency_ms = int((time.monotonic() - start) * 1000)
+                await self._log_run(
+                    tenant_id=tenant_id,
+                    task=task,
+                    provider=provider.name,
+                    prompt_version=prompt_version,
+                    model=selected_model,
+                    input_hash=input_hash,
+                    latency_ms=latency_ms,
+                    tokens_json=None,
+                    status="error",
+                    error_message=str(e),
+                )
+                last_error = e
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("No LLM provider available")
 
     async def run_json(
         self,
@@ -112,64 +182,17 @@ class LLMGateway:
         model: str | None = None,
         thinking: bool = False,
     ) -> BaseModel:
-        model = model or (
-            self.default_model_reasoning if thinking else self.default_model
+        content = await self.run_text(
+            tenant_id=tenant_id,
+            task=task,
+            prompt_version=prompt_version,
+            messages=messages,
+            model=model,
+            reasoning=thinking,
+            response_format={"type": "json_object"},
         )
-
-        start = time.monotonic()
-        input_text = json.dumps(messages, sort_keys=True)
-        input_hash = hashlib.sha256(input_text.encode()).hexdigest()[:16]
-
-        try:
-            kwargs: dict[str, Any] = dict(
-                model=model,
-                messages=messages,
-                response_format={"type": "json_object"},
-                temperature=0.3,
-            )
-
-            response = await self.client.chat.completions.create(**kwargs)
-            latency_ms = int((time.monotonic() - start) * 1000)
-
-            content = response.choices[0].message.content or "{}"
-            parsed = json.loads(content)
-            validated = output_schema(**parsed)
-
-            tokens = None
-            if response.usage:
-                tokens = {
-                    "prompt": response.usage.prompt_tokens,
-                    "completion": response.usage.completion_tokens,
-                    "total": response.usage.total_tokens,
-                }
-
-            await self._log_run(
-                tenant_id=tenant_id,
-                task=task,
-                prompt_version=prompt_version,
-                model=model,
-                input_hash=input_hash,
-                latency_ms=latency_ms,
-                tokens_json=tokens,
-                status="success",
-            )
-
-            return validated
-
-        except Exception as e:
-            latency_ms = int((time.monotonic() - start) * 1000)
-            await self._log_run(
-                tenant_id=tenant_id,
-                task=task,
-                prompt_version=prompt_version,
-                model=model,
-                input_hash=input_hash,
-                latency_ms=latency_ms,
-                tokens_json=None,
-                status="error",
-                error_message=str(e),
-            )
-            raise
+        parsed = json.loads(content or "{}")
+        return output_schema(**parsed)
 
     async def _log_run(self, **kwargs: Any) -> None:
         try:
@@ -178,7 +201,7 @@ class LLMGateway:
                     id=uuid.uuid4(),
                     tenant_id=kwargs["tenant_id"],
                     task=kwargs["task"],
-                    provider=self.provider,
+                    provider=kwargs.get("provider", self.provider),
                     model=kwargs["model"],
                     prompt_version=kwargs.get("prompt_version"),
                     input_hash=kwargs.get("input_hash"),
