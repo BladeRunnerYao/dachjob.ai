@@ -73,6 +73,32 @@ export class ApiClient {
     }
   }
 
+  async requestBlob(path: string): Promise<Blob> {
+    const url = `${getApiBase()}${path}`;
+    const res = await fetch(url, {
+      headers: { ...this.getAuthHeaders() } as Record<string, string>,
+    });
+    if (res.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+    if (!res.ok) {
+      throw new Error(`Failed to fetch: ${res.status}`);
+    }
+    return res.blob();
+  }
+
+  async getResumeHtmlUrl(artifactId: string): Promise<string> {
+    const blob = await this.requestBlob(`/api/resumes/${artifactId}/html`);
+    return URL.createObjectURL(blob);
+  }
+
+  async getResumePdfUrl(artifactId: string): Promise<string> {
+    const blob = await this.requestBlob(`/api/resumes/${artifactId}/pdf`);
+    return URL.createObjectURL(blob);
+  }
+
   async fetch<T>(path: string): Promise<T> {
     return this.request<T>(path);
   }
@@ -249,10 +275,8 @@ export class ApiClient {
     return {
       id: artifact.id,
       job_id: artifact.job_id,
-      html_url: `${getPublicApiBase()}/api/resumes/${artifact.id}/html`,
-      pdf_url: artifact.pdf_object_key
-        ? `${getPublicApiBase()}/api/resumes/${artifact.id}/pdf`
-        : undefined,
+      has_html: !!artifact.html_object_key,
+      has_pdf: !!artifact.pdf_object_key,
       provenance: artifact.provenance_json || [],
     };
   }
@@ -398,8 +422,8 @@ export class ApiClient {
     return {
       id: `r-${jobId}`,
       job_id: jobId,
-      html_url: '#',
-      pdf_url: undefined,
+      has_html: false,
+      has_pdf: false,
       provenance: [{ step: 'match', score: 4.2 }, { step: 'generate', model: 'gpt-4o' }],
     };
   }

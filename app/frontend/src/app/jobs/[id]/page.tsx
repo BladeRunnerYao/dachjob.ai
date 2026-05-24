@@ -78,6 +78,8 @@ export default function JobDetailPage() {
   const [job, setJob] = useState<JobPosting | null>(null);
   const [match, setMatch] = useState<MatchReport | null>(null);
   const [resume, setResume] = useState<ResumeArtifact | null>(null);
+  const [htmlBlobUrl, setHtmlBlobUrl] = useState<string | null>(null);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [matching, setMatching] = useState(false);
   const [generatingResume, setGeneratingResume] = useState(false);
@@ -100,6 +102,42 @@ export default function JobDetailPage() {
       setLoading(false);
     });
   }, [id]);
+
+  useEffect(() => {
+    if (!resume) {
+      setHtmlBlobUrl(null);
+      setPdfBlobUrl(null);
+      return;
+    }
+    let cancelled = false;
+    const blobUrls: string[] = [];
+
+    async function load() {
+      try {
+        if (resume.has_html) {
+          const url = await api.getResumeHtmlUrl(resume.id);
+          if (cancelled) { URL.revokeObjectURL(url); return; }
+          blobUrls.push(url);
+          setHtmlBlobUrl(url);
+        }
+      } catch { /* blob fetch failed */ }
+      try {
+        if (resume.has_pdf) {
+          const url = await api.getResumePdfUrl(resume.id);
+          if (cancelled) { URL.revokeObjectURL(url); return; }
+          blobUrls.push(url);
+          setPdfBlobUrl(url);
+        }
+      } catch { /* blob fetch failed */ }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
+      blobUrls.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [resume?.id, resume?.has_html, resume?.has_pdf]);
 
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
   if (!job) return <p className="text-sm text-red-500">Job not found</p>;
@@ -412,11 +450,10 @@ export default function JobDetailPage() {
                 <p className="text-xs text-slate-500">Tailored to match skills confirmed in your Parsed Requirements tab</p>
               </div>
               <div className="flex items-center gap-2">
-                {resume?.pdf_url && (
+                {pdfBlobUrl && (
                   <a
-                    href={resume.pdf_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href={pdfBlobUrl}
+                    download="resume.pdf"
                     className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 inline-flex items-center gap-2"
                   >
                     <Download className="h-4 w-4" />
@@ -438,16 +475,16 @@ export default function JobDetailPage() {
               <p className="text-sm text-red-700">{resumeError}</p>
             </div>
           )}
-          {resume?.html_url && resume.html_url !== '#' && (
+          {htmlBlobUrl && (
             <div className="rounded-lg border border-slate-200 overflow-hidden">
               <iframe
-                src={resume.html_url}
+                src={htmlBlobUrl}
                 className="w-full h-[600px]"
                 title="Generated CV"
               />
             </div>
           )}
-          {(!resume?.html_url || resume.html_url === '#') && !resumeError && (
+          {!htmlBlobUrl && !resumeError && (
             <div className="flex items-center justify-center h-48 rounded-lg border border-dashed border-slate-300">
               <p className="text-sm text-slate-400">Click &quot;Generate CV&quot; to preview your tailored resume</p>
             </div>
