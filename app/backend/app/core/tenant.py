@@ -23,12 +23,18 @@ async def get_tenant_context(
         slug = settings.default_tenant_slug
         cached = await cache.get_json("tenant:slug", slug)
         if cached:
-            return TenantContext(id=_coerce_uuid(cached.get("id")), slug=cached["slug"], name=cached["name"])
+            ctx = TenantContext(
+                id=_coerce_uuid(cached.get("id")),
+                slug=cached["slug"],
+                name=cached["name"],
+            )
+            return ctx
         result = await db.execute(select(Tenant).where(Tenant.slug == slug).limit(1))
         tenant = result.scalar_one_or_none()
         if tenant:
-            await cache.set_json("tenant:slug", slug, {"id": str(tenant.id), "slug": tenant.slug, "name": tenant.name})
-            await cache.set_json("tenant:id", str(tenant.id), {"id": str(tenant.id), "slug": tenant.slug, "name": tenant.name})
+            data = {"id": str(tenant.id), "slug": tenant.slug, "name": tenant.name}
+            await cache.set_json("tenant:slug", slug, data)
+            await cache.set_json("tenant:id", str(tenant.id), data)
             return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)
         return TenantContext(slug=slug, name=slug)
 
@@ -39,6 +45,7 @@ def _coerce_uuid(value: str | None):
     if not value:
         return None
     from uuid import UUID
+
     try:
         return UUID(value)
     except ValueError:
