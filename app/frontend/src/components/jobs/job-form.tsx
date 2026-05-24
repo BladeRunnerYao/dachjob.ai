@@ -38,7 +38,7 @@ export function JobForm({ onClose, onSave, saving = false, error }: JobFormProps
             placeholder="https://www.linkedin.com/jobs/view/4414035441/"
           />
           {error && (
-            <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+            <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 whitespace-pre-line">{error}</p>
           )}
           <div className="mt-4 flex justify-end gap-2">
             <button

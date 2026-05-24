@@ -199,6 +199,9 @@ jobs:
           file: app/backend/Dockerfile
           platforms: linux/amd64
           push: true
+          build-args: |
+            GIT_BRANCH=${{ needs.prepare.outputs.branch }}
+            GIT_COMMIT_SHA=${{ github.sha }}
           tags: |
             ${{ steps.meta.outputs.image }}
             ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-api/api:latest
@@ -303,6 +306,9 @@ jobs:
           file: app/backend/Dockerfile
           platforms: linux/amd64
           push: true
+          build-args: |
+            GIT_BRANCH=${{ needs.prepare.outputs.branch }}
+            GIT_COMMIT_SHA=${{ github.sha }}
           tags: |
             ${{ steps.meta.outputs.image }}
             ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-worker/worker:latest
@@ -348,7 +354,7 @@ jobs:
             --vpc-connector="${VPC_CONNECTOR}" \
             --vpc-egress=private-ranges-only \
             --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},REDIS_HOST=${REDIS_HOST},REDIS_PORT=${REDIS_PORT},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=gemini" \
-            --update-secrets="DATABASE_PASSWORD=dachjob-dev-db-password:latest,JWT_SECRET=dachjob-dev-jwt-secret-key:latest,SECRET_KEY=dachjob-dev-jwt-secret-key:latest,OPENROUTER_API_KEY=dachjob-dev-openrouter-api-key:latest,DEEPSEEK_API_KEY=dachjob-dev-deepseek-api-key:latest"
+            --update-secrets="DATABASE_PASSWORD=dachjob-dev-db-password:latest,JWT_SECRET=dachjob-dev-jwt-secret-key:latest,SECRET_KEY=dachjob-dev-jwt-secret-key:latest,GEMINI_API_KEY=dachjob-dev-gemini-api-key:latest"
 
       - name: Deploy migration job
         if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
@@ -363,7 +369,7 @@ jobs:
             --vpc-egress=private-ranges-only \
             --command=alembic \
             --args=-c,app/db/migrations/alembic.ini,upgrade,head \
-            --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=gemini" \
+            --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=deepseek" \
             --update-secrets="DATABASE_PASSWORD=dachjob-dev-db-password:latest,JWT_SECRET=dachjob-dev-jwt-secret-key:latest,SECRET_KEY=dachjob-dev-jwt-secret-key:latest,OPENROUTER_API_KEY=dachjob-dev-openrouter-api-key:latest,DEEPSEEK_API_KEY=dachjob-dev-deepseek-api-key:latest"
 
       - name: Run migration job
@@ -490,8 +496,7 @@ jobs:
           set +x
           database_password="$(gcloud secrets versions access latest --secret=dachjob-dev-db-password --project="${PROJECT_ID}")"
           jwt_secret_key="$(gcloud secrets versions access latest --secret=dachjob-dev-jwt-secret-key --project="${PROJECT_ID}")"
-          openrouter_api_key="$(gcloud secrets versions access latest --secret=dachjob-dev-openrouter-api-key --project="${PROJECT_ID}" 2>/dev/null || true)"
-          deepseek_api_key="$(gcloud secrets versions access latest --secret=dachjob-dev-deepseek-api-key --project="${PROJECT_ID}" 2>/dev/null || true)"
+          gemini_api_key="$(gcloud secrets versions access latest --secret=dachjob-dev-gemini-api-key --project="${PROJECT_ID}" 2>/dev/null || true)"
           database_url="postgresql+psycopg://postgres:${database_password}@localhost/dachjob?host=/cloudsql/${CLOUD_SQL_CONNECTION_NAME}"
 
           kubectl create namespace "${GKE_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
@@ -500,8 +505,7 @@ jobs:
             --from-literal=database_password="${database_password}" \
             --from-literal=database_url="${database_url}" \
             --from-literal=jwt_secret_key="${jwt_secret_key}" \
-            --from-literal=openrouter_api_key="${openrouter_api_key}" \
-            --from-literal=deepseek_api_key="${deepseek_api_key}" \
+            --from-literal=gemini_api_key="${gemini_api_key}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Apply worker manifests

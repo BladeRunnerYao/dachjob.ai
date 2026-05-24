@@ -1,4 +1,4 @@
-import type { JobPosting, CandidateProfile, Application, LLMRun, MatchReport, ResumeArtifact } from './types';
+import type { JobPosting, CandidateProfile, Application, LLMRun, MatchReport, ResumeArtifact, JobImportResponse } from './types';
 
 function getApiBase() {
   if (typeof window === 'undefined') {
@@ -37,9 +37,26 @@ export class ApiClient {
         window.location.href = '/login';
         throw new Error('Unauthorized');
       }
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      if (!res.ok) {
+        let message = `API error: ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body?.error?.message) {
+            message = body.error.message;
+          } else if (body?.detail) {
+            message = body.detail;
+          }
+        } catch {
+          try {
+            const text = await res.text();
+            if (text) message = text.slice(0, 512);
+          } catch {}
+        }
+        throw new Error(message);
+      }
       return res.json();
-    } catch {
+    } catch (e) {
+      if (e instanceof Error) throw e;
       throw new Error('API unreachable');
     }
   }
@@ -84,7 +101,7 @@ export class ApiClient {
     });
   }
 
-  async importJobs(urlText: string): Promise<JobPosting[]> {
+  async importJobs(urlText: string): Promise<JobImportResponse> {
     const urls = Array.from(new Set(
       urlText
         .split(/[\s,]+/)
@@ -94,7 +111,7 @@ export class ApiClient {
     if (urls.length === 0) {
       throw new Error('No valid job URLs found');
     }
-    return this.post<JobPosting[]>('/api/jobs/import', { urls });
+    return this.post<JobImportResponse>('/api/jobs/import', { urls });
   }
 
   async getApplications(): Promise<Application[]> {
