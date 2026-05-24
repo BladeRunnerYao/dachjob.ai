@@ -113,19 +113,10 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
       env {
-        name = "OPENROUTER_API_KEY"
+        name = "GEMINI_API_KEY"
         value_source {
           secret_key_ref {
-            secret  = data.google_secret_manager_secret.openrouter_api_key.secret_id
-            version = "latest"
-          }
-        }
-      }
-      env {
-        name = "DEEPSEEK_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = data.google_secret_manager_secret.deepseek_api_key.secret_id
+            secret  = data.google_secret_manager_secret.gemini_api_key.secret_id
             version = "latest"
           }
         }
@@ -196,12 +187,8 @@ resource "google_cloud_run_v2_service_iam_member" "frontend_noauth" {
 }
 
 # Reference the secrets created in the secret-manager module
-data "google_secret_manager_secret" "openrouter_api_key" {
-  secret_id = "${var.name_prefix}-openrouter-api-key"
-}
-
-data "google_secret_manager_secret" "deepseek_api_key" {
-  secret_id = "${var.name_prefix}-deepseek-api-key"
+data "google_secret_manager_secret" "gemini_api_key" {
+  secret_id = "${var.name_prefix}-gemini-api-key"
 }
 
 data "google_secret_manager_secret" "jwt_secret" {

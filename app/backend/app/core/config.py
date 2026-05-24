@@ -15,24 +15,12 @@ class Settings(BaseSettings):
     cloud_sql_connection_name: str = ""
     redis_url: str = "redis://localhost:6379/0"
 
-    google_cloud_project: str = ""
-
     llm_provider: str = "gemini"
 
-    gemini_project_id: str = ""
-    gemini_location: str = "global"
-    gemini_model_fast: str = "google/gemini-3.1-flash-lite"
-    gemini_model_reasoning: str = "google/gemini-3.1-flash-lite"
-
-    deepseek_api_key: str = ""
-    deepseek_base_url: str = "https://api.deepseek.com"
-    deepseek_model_fast: str = "deepseek-v4-flash"
-    deepseek_model_reasoning: str = "deepseek-v4-pro"
-
-    openrouter_api_key: str = ""
-    openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    openrouter_model_fast: str = "deepseek/deepseek-v4-flash"
-    openrouter_model_reasoning: str = "deepseek/deepseek-v4-flash"
+    gemini_api_key: str = ""
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    gemini_model_fast: str = "gemini-3.1-flash-lite"
+    gemini_model_reasoning: str = "gemini-2.5-pro"
 
     s3_endpoint_url: str = "http://localhost:9000"
     s3_access_key_id: str = "minioadmin"

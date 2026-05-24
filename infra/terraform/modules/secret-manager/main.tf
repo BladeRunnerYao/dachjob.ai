@@ -19,6 +19,15 @@ resource "google_secret_manager_secret" "deepseek_api_key" {
   }
 }
 
+resource "google_secret_manager_secret" "gemini_api_key" {
+  secret_id = "${var.name_prefix}-gemini-api-key"
+  labels    = var.labels
+
+  replication {
+    auto {}
+  }
+}
+
 resource "google_secret_manager_secret" "jwt_secret_key" {
   secret_id = "${var.name_prefix}-jwt-secret-key"
   labels    = var.labels

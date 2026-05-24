@@ -85,3 +85,13 @@ export interface LLMRun {
   created_at: string;
   error_message?: string;
 }
+
+export interface ImportError {
+  url: string;
+  error: string;
+}
+
+export interface JobImportResponse {
+  imported: JobPosting[];
+  errors: ImportError[];
+}
