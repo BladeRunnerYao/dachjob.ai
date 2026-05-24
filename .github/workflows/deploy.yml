@@ -38,6 +38,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   PROJECT_ID: dachjob-ai-platform
   PROJECT_NUMBER: "936971254595"
   REGION: europe-west1
