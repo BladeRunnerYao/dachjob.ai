@@ -14,24 +14,32 @@ function getPublicApiBase() {
 }
 
 export class ApiClient {
+  private RESUME_GENERATE_TIMEOUT_MS = 120_000;
+
   private getAuthHeaders(): Record<string, string> {
     if (typeof window === 'undefined') return {};
     const token = localStorage.getItem('auth_token');
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  private async request<T>(path: string, options?: RequestInit): Promise<T> {
+  private async request<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
+    const { timeoutMs, ...fetchOptions } = options || {};
     const url = `${getApiBase()}${path}`;
+    const controller = timeoutMs ? new AbortController() : undefined;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+
     try {
       const res = await fetch(url, {
         headers: {
           'Content-Type': 'application/json',
           ...this.getAuthHeaders(),
-          ...options?.headers,
+          ...fetchOptions.headers,
         } as Record<string, string>,
         cache: 'no-store',
-        ...options,
+        signal: controller?.signal,
+        ...fetchOptions,
       });
+      if (timer) clearTimeout(timer);
       if (res.status === 401 && typeof window !== 'undefined') {
         localStorage.removeItem('auth_token');
         window.location.href = '/login';
@@ -56,9 +64,39 @@ export class ApiClient {
       }
       return res.json();
     } catch (e) {
+      if (timer) clearTimeout(timer);
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        throw new Error(`Request timed out after ${Math.round(timeoutMs! / 1000)}s`);
+      }
       if (e instanceof Error) throw e;
       throw new Error('API unreachable');
     }
+  }
+
+  async requestBlob(path: string): Promise<Blob> {
+    const url = `${getApiBase()}${path}`;
+    const res = await fetch(url, {
+      headers: { ...this.getAuthHeaders() } as Record<string, string>,
+    });
+    if (res.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+    if (!res.ok) {
+      throw new Error(`Failed to fetch: ${res.status}`);
+    }
+    return res.blob();
+  }
+
+  async getResumeHtmlUrl(artifactId: string): Promise<string> {
+    const blob = await this.requestBlob(`/api/resumes/${artifactId}/html`);
+    return URL.createObjectURL(blob);
+  }
+
+  async getResumePdfUrl(artifactId: string): Promise<string> {
+    const blob = await this.requestBlob(`/api/resumes/${artifactId}/pdf`);
+    return URL.createObjectURL(blob);
   }
 
   async fetch<T>(path: string): Promise<T> {
@@ -67,6 +105,21 @@ export class ApiClient {
 
   async post<T>(path: string, body: unknown): Promise<T> {
     return this.request<T>(path, { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  async createResumeArtifact(jobId: string): Promise<ResumeArtifact> {
+    const artifact = await this.request<{
+      id: string;
+      job_id: string;
+      html_object_key: string;
+      pdf_object_key?: string | null;
+      provenance_json?: unknown[];
+    }>(`/api/jobs/${jobId}/resume`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+      timeoutMs: this.RESUME_GENERATE_TIMEOUT_MS,
+    });
+    return this.toResumeArtifact(artifact);
   }
 
   async patch<T>(path: string, body: unknown): Promise<T> {
@@ -222,8 +275,8 @@ export class ApiClient {
     return {
       id: artifact.id,
       job_id: artifact.job_id,
-      html_url: `${getPublicApiBase()}/api/resumes/${artifact.id}/html`,
-      pdf_url: artifact.pdf_object_key || undefined,
+      has_html: !!artifact.html_object_key,
+      has_pdf: !!artifact.pdf_object_key,
       provenance: artifact.provenance_json || [],
     };
   }
@@ -241,17 +294,6 @@ export class ApiClient {
     } catch {
       return null;
     }
-  }
-
-  async createResumeArtifact(jobId: string): Promise<ResumeArtifact> {
-    const artifact = await this.post<{
-      id: string;
-      job_id: string;
-      html_object_key: string;
-      pdf_object_key?: string | null;
-      provenance_json?: unknown[];
-    }>(`/api/jobs/${jobId}/resume`, {});
-    return this.toResumeArtifact(artifact);
   }
 
   async getResumeArtifact(jobId: string): Promise<ResumeArtifact> {
@@ -367,8 +409,8 @@ export class ApiClient {
     return {
       id: `r-${jobId}`,
       job_id: jobId,
-      html_url: '#',
-      pdf_url: '#',
+      has_html: false,
+      has_pdf: false,
       provenance: [{ step: 'match', score: 4.2 }, { step: 'generate', model: 'gpt-4o' }],
     };
   }
