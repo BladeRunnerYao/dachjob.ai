@@ -13,7 +13,6 @@ class ParsedJobPosting(BaseModel):
     language_requirements: list[str] = []
     must_have_skills: list[str] = []
     nice_to_have_skills: list[str] = []
-    responsibilities: list[str] = []
     salary_range: str | None = None
     seniority: str | None = None
     dach_signals: dict[str, str] = {}
