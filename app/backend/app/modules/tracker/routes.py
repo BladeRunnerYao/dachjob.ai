@@ -16,11 +16,11 @@ from app.modules.tracker.repository import (
     update_application,
 )
 from app.modules.tracker.schemas import (
+    VALID_STATUSES,
     ApplicationCreate,
     ApplicationResponse,
     ApplicationUpdate,
     AutofillPayload,
-    VALID_STATUSES,
 )
 
 router = APIRouter(prefix="/api/applications", tags=["tracker"])
@@ -113,9 +113,7 @@ async def update_application_endpoint(
             status_code=422,
             detail=f"Invalid status: {body.status}. Must be one of {VALID_STATUSES}",
         )
-    result = await update_application(
-        db, application_id, body.model_dump(exclude_unset=True)
-    )
+    result = await update_application(db, application_id, body.model_dump(exclude_unset=True))
     if not result:
         raise HTTPException(status_code=404, detail="Application not found")
     return result

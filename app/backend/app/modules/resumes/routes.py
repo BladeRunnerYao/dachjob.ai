@@ -10,7 +10,7 @@ from app.db.models import ResumeArtifact
 from app.db.session import get_db
 from app.modules.profiles.repository import get_profile_by_tenant
 from app.modules.resumes.schemas import EvidenceResponse, ResumeResponse
-from app.modules.resumes.service import list_evidence, generate_resume
+from app.modules.resumes.service import generate_resume, list_evidence
 from app.modules.storage.service import StorageService
 
 router = APIRouter(prefix="/api/jobs/{job_id}", tags=["resumes"])

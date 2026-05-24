@@ -7,7 +7,9 @@ from app.modules.llm_gateway.gateway import LLMGateway, LLMProvider
 
 
 class _FakeCompletions:
-    def __init__(self, provider_name: str, content: str | None = None, error: Exception | None = None):
+    def __init__(
+        self, provider_name: str, content: str | None = None, error: Exception | None = None
+    ):
         self.provider_name = provider_name
         self.content = content
         self.error = error
@@ -113,7 +115,7 @@ async def test_run_text_falls_back_after_provider_error(monkeypatch):
 
 class TestModelSelection:
     def test_fast_tier_for_jd_format(self):
-        from app.modules.llm_gateway.gateway import LLMGateway, TASK_MODEL_TIERS
+        from app.modules.llm_gateway.gateway import LLMGateway
 
         provider = _provider("gemini", _FakeCompletions("gemini"))
         model = LLMGateway._select_model(provider, "jd_format", None, None, False)

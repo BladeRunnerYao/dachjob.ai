@@ -9,8 +9,8 @@ from app.core.tenant import TenantContext, get_tenant_context
 from app.db.models import MatchReport
 from app.db.session import get_db
 from app.modules.jobs.repository import get_job
-from app.modules.matching.schemas import ParseResponse, MatchResponse
-from app.modules.matching.service import parse_job_posting, compute_match
+from app.modules.matching.schemas import MatchResponse, ParseResponse
+from app.modules.matching.service import compute_match, parse_job_posting
 
 router = APIRouter(prefix="/api/jobs/{job_id}", tags=["matching"])
 

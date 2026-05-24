@@ -5,8 +5,8 @@ from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import get_settings
-from app.db.session import Base, get_async_database_url
 from app.db.models import *  # noqa: F401, F403
+from app.db.session import Base, get_async_database_url
 
 config = context.config
 if config.config_file_name is not None:

@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.modules.tenants.schemas import TenantResponse
 from app.modules.tenants.repository import list_tenants
+from app.modules.tenants.schemas import TenantResponse
 
 router = APIRouter(prefix="/api/tenants", tags=["tenants"])
 

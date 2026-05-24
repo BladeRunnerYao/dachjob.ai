@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tenant import TenantContext
-from app.db.models import MatchReport, EvidenceChunk
+from app.db.models import EvidenceChunk, MatchReport
 from app.modules.jobs.repository import get_job, sync_job_skills
 from app.modules.profiles.repository import get_profile_by_tenant
 
@@ -21,7 +21,16 @@ SKILL_PATTERNS = [
     ("Vue.js", [r"\bvue(?:\.js)?\b"]),
     ("SASS", [r"\bsass\b", r"\bscss\b"]),
     ("FastAPI", [r"\bfastapi\b"]),
-    ("Go", [r"\bgolang\b", r"\bgo programming\b", r"\bgo language\b", r"\bpython or go\b", r"\bgo for testing\b"]),
+    (
+        "Go",
+        [
+            r"\bgolang\b",
+            r"\bgo programming\b",
+            r"\bgo language\b",
+            r"\bpython or go\b",
+            r"\bgo for testing\b",
+        ],
+    ),
     ("Java", [r"\bjava\b"]),
     ("Spring Boot", [r"\bspring boot\b"]),
     ("PHP", [r"\bphp\b"]),
@@ -32,11 +41,17 @@ SKILL_PATTERNS = [
     ("MySQL", [r"\bmysql\b"]),
     ("MongoDB", [r"\bmongodb\b"]),
     ("Redis", [r"\bredis\b"]),
-    ("Production databases", [r"production (?:database|databases|dbs)", r"databases in production"]),
+    (
+        "Production databases",
+        [r"production (?:database|databases|dbs)", r"databases in production"],
+    ),
     ("Database performance", [r"database performance", r"performance, scaling, and reliability"]),
     ("GraphQL", [r"\bgraphql\b"]),
     ("Docker", [r"\bdocker\b"]),
-    ("Containerization", [r"\bcontaineri[sz]ed\b", r"\bcontaineri[sz]ation\b", r"container-based deployments?"]),
+    (
+        "Containerization",
+        [r"\bcontaineri[sz]ed\b", r"\bcontaineri[sz]ation\b", r"container-based deployments?"],
+    ),
     ("Kubernetes", [r"\bkubernetes\b", r"\bk8s\b"]),
     ("GCP", [r"\bgcp\b", r"google cloud"]),
     ("Cloud Run", [r"\bcloud run\b"]),
@@ -258,21 +273,51 @@ WORK_MODEL_KEYWORDS = {
 }
 
 DACH_CITIES = [
-    "berlin", "munich", "hamburg", "cologne", "frankfurt", "stuttgart",
-    "düsseldorf", "leipzig", "dresden", "bonn", "zurich", "geneva",
-    "bern", "basel", "lausanne", "vienna", "salzburg", "graz", "linz",
+    "berlin",
+    "munich",
+    "hamburg",
+    "cologne",
+    "frankfurt",
+    "stuttgart",
+    "düsseldorf",
+    "leipzig",
+    "dresden",
+    "bonn",
+    "zurich",
+    "geneva",
+    "bern",
+    "basel",
+    "lausanne",
+    "vienna",
+    "salzburg",
+    "graz",
+    "linz",
 ]
 
 DACH_COUNTRIES = ["germany", "switzerland", "austria", "deutschland"]
 
 GERMAN_KEYWORDS = [
-    "german", "deutsch", "deutschkenntnisse", "fließend deutsch",
-    "verhandlungssicher", "muttersprache",
+    "german",
+    "deutsch",
+    "deutschkenntnisse",
+    "fließend deutsch",
+    "verhandlungssicher",
+    "muttersprache",
 ]
 
 SWISS_LOCATION_KEYWORDS = [
-    "switzerland", "swiss", "schweiz", "suisse", "svizzera", "zurich",
-    "zürich", "zuerich", "geneva", "basel", "bern", "lausanne",
+    "switzerland",
+    "swiss",
+    "schweiz",
+    "suisse",
+    "svizzera",
+    "zurich",
+    "zürich",
+    "zuerich",
+    "geneva",
+    "basel",
+    "bern",
+    "lausanne",
 ]
 
 STRICT_WORK_AUTH_PATTERNS = [
@@ -375,7 +420,12 @@ NON_SKILL_CANDIDATES = {
 
 def _normalize_skill_candidate(value: str) -> str | None:
     cleaned = re.sub(r"\s+", " ", value).strip(" \t\n\r.,;:()[]{}")
-    cleaned = re.sub(r"^(?:tools?|frameworks?|platforms?|languages?)\s+(?:such as|like)\s+", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(
+        r"^(?:tools?|frameworks?|platforms?|languages?)\s+(?:such as|like)\s+",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
     cleaned = cleaned.strip(" \t\n\r.,;:()[]{}")
     if not cleaned:
         return None
@@ -395,7 +445,11 @@ def _normalize_skill_candidate(value: str) -> str | None:
         return None
     if len(cleaned) > 60 or len(cleaned) < 2:
         return None
-    if re.search(r"\b(?:experience|familiarity|knowledge|ability|skills?|systems?)\s*$", cleaned, flags=re.IGNORECASE):
+    if re.search(
+        r"\b(?:experience|familiarity|knowledge|ability|skills?|systems?)\s*$",
+        cleaned,
+        flags=re.IGNORECASE,
+    ):
         return None
     if lowered in SKILL_NAME_ALIASES:
         return SKILL_NAME_ALIASES[lowered]
@@ -436,7 +490,9 @@ def _extract_skills_from_text(text: str | None) -> list[str]:
     return _dedupe_preserve_order(_extract_pattern_skills(text) + _extract_listed_skills(text))
 
 
-def _extract_section(raw_jd: str, start_keywords: tuple[str, ...], stop_keywords: tuple[str, ...]) -> str:
+def _extract_section(
+    raw_jd: str, start_keywords: tuple[str, ...], stop_keywords: tuple[str, ...]
+) -> str:
     lines = raw_jd.splitlines()
     section: list[str] = []
     in_section = False
@@ -492,7 +548,10 @@ def _extract_work_authorization(job) -> dict | None:
     text = f"{job.title or ''}\n{job.company or ''}\n{job.location or ''}\n{job.raw_jd or ''}"
     sentences = _sentences(text)
     for sentence in sentences:
-        if any(re.search(pattern, sentence, flags=re.IGNORECASE | re.DOTALL) for pattern in STRICT_WORK_AUTH_PATTERNS):
+        if any(
+            re.search(pattern, sentence, flags=re.IGNORECASE | re.DOTALL)
+            for pattern in STRICT_WORK_AUTH_PATTERNS
+        ):
             return {
                 "status": "restricted",
                 "label": "Swiss/EU/EFTA eligibility restriction",
@@ -501,7 +560,10 @@ def _extract_work_authorization(job) -> dict | None:
             }
 
     for sentence in sentences:
-        if any(re.search(pattern, sentence, flags=re.IGNORECASE | re.DOTALL) for pattern in VISA_SPONSORSHIP_WARNING_PATTERNS):
+        if any(
+            re.search(pattern, sentence, flags=re.IGNORECASE | re.DOTALL)
+            for pattern in VISA_SPONSORSHIP_WARNING_PATTERNS
+        ):
             return {
                 "status": "warning",
                 "label": "Visa sponsorship warning",
@@ -534,27 +596,41 @@ def _enrich_parsed_skills(parsed_json: dict, job) -> dict:
 
     nice_section_skills = _extract_skills_from_text(nice_text)
     must_section_skills = _extract_skills_from_text(must_text)
-    not_only_skills = set(_extract_skills_from_text(not_text)) - set(must_section_skills) - set(nice_section_skills)
+    not_only_skills = (
+        set(_extract_skills_from_text(not_text))
+        - set(must_section_skills)
+        - set(nice_section_skills)
+    )
     not_only_keys = {skill.casefold() for skill in not_only_skills}
 
-    current_must = parsed_json.get("must_have_skills") if isinstance(parsed_json.get("must_have_skills"), list) else []
+    current_must = (
+        parsed_json.get("must_have_skills")
+        if isinstance(parsed_json.get("must_have_skills"), list)
+        else []
+    )
     current_must = [skill for skill in current_must if str(skill).casefold() not in not_only_keys]
-    current_nice = parsed_json.get("nice_to_have_skills") if isinstance(parsed_json.get("nice_to_have_skills"), list) else []
+    current_nice = (
+        parsed_json.get("nice_to_have_skills")
+        if isinstance(parsed_json.get("nice_to_have_skills"), list)
+        else []
+    )
     current_nice = [skill for skill in current_nice if str(skill).casefold() not in not_only_keys]
     inferred_skills = [
-        skill for skill in _extract_skills_from_text(full_text)
-        if skill not in not_only_skills
+        skill for skill in _extract_skills_from_text(full_text) if skill not in not_only_skills
     ]
 
     must_seed = _dedupe_preserve_order(list(current_must) + must_section_skills)
     must_seed_keys = {skill.casefold() for skill in must_seed}
     nice_seed = _dedupe_preserve_order(
-        [skill for skill in list(current_nice) + nice_section_skills if str(skill).casefold() not in must_seed_keys]
+        [
+            skill
+            for skill in list(current_nice) + nice_section_skills
+            if str(skill).casefold() not in must_seed_keys
+        ]
     )
     nice_seed_keys = {skill.casefold() for skill in nice_seed}
     enriched_must = _dedupe_preserve_order(
-        must_seed
-        + [skill for skill in inferred_skills if skill.casefold() not in nice_seed_keys]
+        must_seed + [skill for skill in inferred_skills if skill.casefold() not in nice_seed_keys]
     )
     enriched_must_keys = {skill.casefold() for skill in enriched_must}
     enriched_nice = _dedupe_preserve_order(
@@ -823,7 +899,9 @@ def _jd_extract_messages(job) -> list[dict]:
 
 def _needs_reasoning_parse_retry(parsed_json: dict, job) -> bool:
     raw_jd = job.raw_jd or ""
-    skill_count = len(parsed_json.get("must_have_skills") or []) + len(parsed_json.get("nice_to_have_skills") or [])
+    skill_count = len(parsed_json.get("must_have_skills") or []) + len(
+        parsed_json.get("nice_to_have_skills") or []
+    )
     responsibilities_count = len(parsed_json.get("responsibilities") or [])
     has_requirement_signal = any(
         signal in raw_jd.lower()
@@ -837,7 +915,11 @@ def _needs_reasoning_parse_retry(parsed_json: dict, job) -> bool:
             "your mission",
         )
     )
-    return len(raw_jd) > 1200 and has_requirement_signal and (skill_count < 4 or responsibilities_count == 0)
+    return (
+        len(raw_jd) > 1200
+        and has_requirement_signal
+        and (skill_count < 4 or responsibilities_count == 0)
+    )
 
 
 async def parse_job_posting(
@@ -879,7 +961,9 @@ async def parse_job_posting(
                     )
                     if retry_content:
                         retry_json = _enrich_parsed_skills(json.loads(retry_content), job)
-                        if len(retry_json.get("skills") or []) > len(parsed_json.get("skills") or []):
+                        if len(retry_json.get("skills") or []) > len(
+                            parsed_json.get("skills") or []
+                        ):
                             parsed_json = retry_json
                 except Exception:
                     logger.exception("Reasoning model JD parse retry failed, keeping fast parse")
@@ -922,7 +1006,9 @@ def _dach_score(
 
     job_in_dach = any(c in loc_text or c in jd_lower for c in DACH_CITIES)
     job_in_dach = job_in_dach or any(c in jd_lower for c in DACH_COUNTRIES)
-    profile_in_dach = any(c in profile_loc_text or c in profile_lower for c in DACH_CITIES + DACH_COUNTRIES)
+    profile_in_dach = any(
+        c in profile_loc_text or c in profile_lower for c in DACH_CITIES + DACH_COUNTRIES
+    )
 
     if job_in_dach and profile_in_dach:
         score += 0.6
@@ -982,7 +1068,10 @@ def _calculate_score(job, profile, evidence_chunks):
     evidence_strength = _evidence_coverage(evidence_chunks, must_have)
 
     dach_feasibility = _dach_score(
-        job.location, profile.location, jd_text, profile_text,
+        job.location,
+        profile.location,
+        jd_text,
+        profile_text,
     )
 
     compensation_fit = 0.5
@@ -1074,6 +1163,7 @@ async def compute_match(
     job = await get_job(db, job_id)
     if not job:
         from app.core.errors import AppError
+
         raise AppError("job_not_found", "Job posting not found")
 
     if not job.parsed_json:
@@ -1090,9 +1180,7 @@ async def compute_match(
     )
     evidence_chunks = list(result.scalars().all())
 
-    overall_score, recommendation, breakdown, gaps = _calculate_score(
-        job, profile, evidence_chunks
-    )
+    overall_score, recommendation, breakdown, gaps = _calculate_score(job, profile, evidence_chunks)
 
     from app.modules.llm_gateway.gateway import LLMGateway
 
@@ -1129,7 +1217,10 @@ async def compute_match(
 
     if not explanation:
         explanation = _generate_explanation_template(
-            overall_score, recommendation, breakdown, gaps,
+            overall_score,
+            recommendation,
+            breakdown,
+            gaps,
         )
 
     report = MatchReport(

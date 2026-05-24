@@ -2,10 +2,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
 from app.db.models import LLMRun
+from app.db.session import get_db
 from app.modules.llm_gateway.schemas import LLMRunResponse
-from app.modules.llm_gateway.gateway import LLMGateway, get_gateway
 
 router = APIRouter(prefix="/api/llm-runs", tags=["llm-gateway"])
 

@@ -30,5 +30,7 @@ def on_worker_ready(**kwargs):
         v = {"branch": "unknown", "commit": "unknown"}
     logger.info(
         "Celery worker ready | branch=%s commit=%s provider=%s",
-        v.get("branch"), v.get("commit"), settings.llm_provider,
+        v.get("branch"),
+        v.get("commit"),
+        settings.llm_provider,
     )

@@ -5,10 +5,9 @@ Revises: 0001_initial_schema
 Create Date: 2026-05-23
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
-
 
 revision = "0002_job_import_metadata"
 down_revision = "0001_initial_schema"
@@ -31,7 +30,9 @@ def upgrade() -> None:
     op.create_table(
         "job_skills",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
+        sa.Column(
+            "tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False
+        ),
         sa.Column(
             "job_id",
             postgresql.UUID(as_uuid=True),
