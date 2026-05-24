@@ -156,8 +156,8 @@ async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depend
 
     if not email_sent:
         return {
-            "message": "If that email is registered, a reset link has been sent.",
-            "reset_link": reset_link,
+            "message": "Email could not be sent. Please try again later or contact support.",
+            "detail": "SMTP/API error – check server logs.",
         }
 
     return {"message": "If that email is registered, a reset link has been sent."}
