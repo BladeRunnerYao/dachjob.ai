@@ -18,15 +18,23 @@ SKILL_PATTERNS = [
     ("JavaScript", [r"\bjavascript\b"]),
     ("Node.js", [r"\bnode(?:\.js)?\b"]),
     ("React", [r"\breact\b"]),
+    ("Vue.js", [r"\bvue(?:\.js)?\b"]),
+    ("SASS", [r"\bsass\b", r"\bscss\b"]),
     ("FastAPI", [r"\bfastapi\b"]),
-    ("Go", [r"\bgolang\b", r"\bgo programming\b", r"\bgo language\b"]),
+    ("Go", [r"\bgolang\b", r"\bgo programming\b", r"\bgo language\b", r"\bpython or go\b", r"\bgo for testing\b"]),
     ("Java", [r"\bjava\b"]),
+    ("Spring Boot", [r"\bspring boot\b"]),
+    ("PHP", [r"\bphp\b"]),
+    ("C#", [r"(?<!\w)c#(?!\w)", r"\bc sharp\b"]),
+    ("C++", [r"(?<!\w)c\+\+(?!\w)"]),
     ("SQL", [r"\bsql\b"]),
     ("PostgreSQL", [r"\bpostgres(?:ql)?\b"]),
+    ("MySQL", [r"\bmysql\b"]),
     ("MongoDB", [r"\bmongodb\b"]),
     ("Redis", [r"\bredis\b"]),
     ("Production databases", [r"production (?:database|databases|dbs)", r"databases in production"]),
     ("Database performance", [r"database performance", r"performance, scaling, and reliability"]),
+    ("GraphQL", [r"\bgraphql\b"]),
     ("Docker", [r"\bdocker\b"]),
     ("Containerization", [r"\bcontaineri[sz]ed\b", r"\bcontaineri[sz]ation\b", r"container-based deployments?"]),
     ("Kubernetes", [r"\bkubernetes\b", r"\bk8s\b"]),
@@ -43,13 +51,41 @@ SKILL_PATTERNS = [
     ("Built environment", [r"built environment"]),
     ("Cloud storage", [r"\bstorage\b"]),
     ("Networking", [r"\bnetworking\b", r"network architecture"]),
+    ("Network architecture", [r"network architecture"]),
+    ("Wireless networking", [r"wireless networking", r"wireless performance"]),
+    ("4G/LTE", [r"\b4g/lte\b", r"\blte\b"]),
+    ("5G", [r"\b5g\b"]),
+    ("Wi-Fi", [r"\bwi-?fi\b"]),
+    ("Mobile Edge Computing", [r"mobile edge computing", r"\bmec\b"]),
+    ("TCP/IP", [r"\btcp/ip\b"]),
+    ("UDP", [r"\budp\b"]),
+    ("WebRTC", [r"\bwebrtc\b"]),
+    ("gRPC", [r"\bgrpc\b"]),
+    ("MQTT", [r"\bmqtt\b"]),
+    ("ROS2/DDS", [r"\bros2/dds\b", r"\bros2\b", r"\bdds\b"]),
+    ("RF engineering", [r"\brf engineering\b", r"\brf\b"]),
+    ("Antenna design", [r"antenna design"]),
+    ("Link budget analysis", [r"link budget analysis"]),
     ("IAM", [r"\biam\b", r"identity and access management"]),
+    ("Authentication", [r"\bauthentication\b"]),
+    ("Encryption", [r"\bencryption\b"]),
+    ("Secure message passing", [r"secure message-passing", r"secure message passing"]),
     ("TLS", [r"\btls\b", r"\bssl\b"]),
     ("Firewall rules", [r"firewall rules?", r"\bfirewalls?\b"]),
     ("RBAC", [r"\brbac\b", r"role-based access control"]),
     ("Job queues", [r"job queues?", r"\bqueues?\b"]),
     ("Distributed workloads", [r"distributed workloads?"]),
+    ("Distributed systems", [r"distributed systems?"]),
+    ("Large-scale distributed systems", [r"large-scale distributed systems?"]),
+    ("Search engines", [r"search engines?"]),
+    ("Elasticsearch", [r"\belasticsearch\b"]),
+    ("OpenSearch", [r"\bopensearch\b"]),
+    ("Apache Solr", [r"apache solr", r"\bsolr\b"]),
+    ("Apache Lucene", [r"apache lucene", r"\blucene\b"]),
     ("Event-driven architecture", [r"event-driven"]),
+    ("Event-based analytics", [r"event-based analytics"]),
+    ("A/B testing", [r"\ba/b (?:testing|experiments?)\b"]),
+    ("Hypothesis building", [r"hypothesis building"]),
     ("Metrics", [r"\bmetrics\b"]),
     ("CI/CD pipelines", [r"\bci/cd\b", r"continuous integration", r"continuous deployment"]),
     ("GitHub Actions", [r"github actions"]),
@@ -66,7 +102,7 @@ SKILL_PATTERNS = [
     ("On-call", [r"on-call", r"on call"]),
     ("Incident response", [r"incident response", r"severity processes?"]),
     ("Reliability engineering", [r"\breliability\b", r"ensure uptime", r"stable releases?"]),
-    ("Observability", [r"\bobservability\b"]),
+    ("Observability", [r"\bobservability\b", r"\bobservable systems?\b"]),
     ("Monitoring", [r"\bmonitoring\b"]),
     ("Vulnerability scanning", [r"vulnerability scanning"]),
     ("Penetration testing", [r"penetration testing", r"\bpentest(?:ing)?\b"]),
@@ -74,6 +110,8 @@ SKILL_PATTERNS = [
     ("Infrastructure engineering", [r"infrastructure engineering"]),
     ("Platform engineering", [r"platform engineering"]),
     ("Backend engineering", [r"backend engineering", r"backend codebase"]),
+    ("Full-stack engineering", [r"full stack", r"full-stack"]),
+    ("Frontend frameworks", [r"frontend application frameworks?", r"component-based frontend"]),
     ("Data-oriented codebases", [r"data-oriented codebases?"]),
     ("Terraform", [r"\bterraform\b"]),
     ("Infrastructure as Code", [r"infrastructure-as-code", r"infrastructure as code", r"\biac\b"]),
@@ -84,15 +122,115 @@ SKILL_PATTERNS = [
     ("Airflow", [r"\bairflow\b"]),
     ("Dagster", [r"\bdagster\b"]),
     ("MLflow", [r"\bmlflow\b"]),
+    ("Machine Learning", [r"\bmachine learning\b", r"\bml\b"]),
+    ("Deep Learning", [r"\bdeep learning\b"]),
+    ("GenAI", [r"\bgenai\b", r"generative ai"]),
+    ("LLMs", [r"\bllms?\b", r"large language models?"]),
+    ("RAG", [r"\brag\b", r"retrieval augmented generation"]),
+    ("Multi-agent systems", [r"multi-agent systems?", r"multi agent systems?"]),
+    ("Text2SQL", [r"\btext2sql\b", r"text-to-sql"]),
+    ("Fine-tuning", [r"\bfine-tun(?:e|ing)\b", r"\bfinetun(?:e|ing)\b"]),
+    ("LangChain", [r"\blangchain\b"]),
+    ("DSPy", [r"\bdspy\b"]),
+    ("Hugging Face", [r"hugging ?face"]),
+    ("AI/ML models", [r"\bai/ml models?\b", r"\bai models?\b", r"\bml models?\b"]),
+    ("Model evaluation", [r"\bmodel evaluation\b", r"\bevaluating models?\b"]),
     ("PyTorch", [r"\bpytorch\b"]),
     ("TensorFlow", [r"\btensorflow\b"]),
     ("scikit-learn", [r"scikit-learn", r"\bsklearn\b"]),
+    ("NumPy", [r"\bnumpy\b"]),
     ("pandas", [r"\bpandas\b"]),
     ("Apache Spark", [r"apache spark", r"\bspark\b"]),
     ("Databricks", [r"\bdatabricks\b"]),
+    ("Data engineering", [r"\bdata engineering\b"]),
+    ("Analytics engineering", [r"\banalytics engineering\b"]),
+    ("Linux", [r"\blinux(?:-based)?\b"]),
+    ("Robotics", [r"\brobotics\b", r"\brobotic\b"]),
+    ("Autonomous vehicles", [r"autonomous vehicles?"]),
+    ("Drones", [r"\bdrones?\b"]),
+    ("Teleoperation", [r"\bteleoperation\b"]),
+    ("Remote supervision", [r"remote supervision"]),
+    ("Middleware integration", [r"middleware integration"]),
+    ("Cloud-to-edge architecture", [r"cloud-to-edge architectures?"]),
+    ("E-commerce", [r"\be-?commerce\b"]),
+    ("Stakeholder management", [r"manage stakeholders?", r"stakeholder management"]),
+    ("Communication", [r"communication skills?", r"written and verbal communication"]),
+    ("Collaboration", [r"collaboration skills?", r"cross-functional"]),
+    ("Mentoring", [r"\bmentor(?:ing)?\b"]),
+    ("Hiring", [r"\btechnical hiring\b", r"\binterviewing candidates\b", r"\bhiring plans?\b"]),
 ]
 
 SKILL_KEYWORDS = [name for name, _patterns in SKILL_PATTERNS]
+
+MUST_HAVE_SECTION_STARTS = (
+    "must have",
+    "must-have",
+    "requirements",
+    "your toolkit",
+    "who we are looking for",
+    "what we look for",
+    "what you must have",
+    "what you'll need",
+    "what you will need",
+    "what should you bring along",
+    "what you bring along",
+    "qualifications",
+    "your profile",
+    "anforderungen",
+    "profil",
+    "was du mitbringst",
+)
+
+NICE_TO_HAVE_SECTION_STARTS = (
+    "nice to have",
+    "nice-to-have",
+    "preferred",
+    "bonus",
+    "bonus points",
+    "get some bonus points",
+    "extras that give you an edge",
+    "plus",
+    "wunschenswert",
+    "wünschenswert",
+)
+
+RESPONSIBILITY_SECTION_STARTS = (
+    "responsibilities",
+    "tasks",
+    "the impact you will have",
+    "what you will do",
+    "what you'll do",
+    "what you'll be doing",
+    "what you’ll be doing",
+    "what awaits you",
+    "your mission",
+    "your responsibilities",
+    "your tasks",
+    "aufgaben",
+)
+
+REQUIREMENT_SECTION_STOPS = (
+    "nice to have",
+    "nice-to-have",
+    "preferred",
+    "bonus",
+    "extras that give you an edge",
+    "benefits",
+    "what we offer",
+    "what do we offer",
+    "how we'll make",
+    "how we’ll make",
+    "how to apply",
+    "start date",
+    "type of employment",
+    "working hours",
+    "about ",
+    "show more",
+    "seniority level",
+    "employment type",
+    "job function",
+    "industries",
+)
 
 SENIORITY_KEYWORDS = {
     "senior": "Senior",
@@ -173,6 +311,129 @@ def _extract_pattern_skills(text: str | None) -> list[str]:
         if any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns):
             found.append(name)
     return found
+
+
+SKILL_SPLIT_RE = re.compile(r"\s*(?:,|;|\bor\b|\band\b)\s*", flags=re.IGNORECASE)
+SKILL_LIST_TRIGGER_RE = re.compile(
+    r"(?:such as|including|include|includes|like|for example|e\.g\.|frameworks? like|tools? such as)\s+([^.\n]+)",
+    flags=re.IGNORECASE,
+)
+
+SKILL_NAME_ALIASES = {
+    "huggingface": "Hugging Face",
+    "node": "Node.js",
+    "nodejs": "Node.js",
+    "vue": "Vue.js",
+    "postgres": "PostgreSQL",
+    "postgresql": "PostgreSQL",
+    "k8s": "Kubernetes",
+    "ci/cd": "CI/CD pipelines",
+    "mec": "Mobile Edge Computing",
+    "ros2": "ROS2/DDS",
+    "dds": "ROS2/DDS",
+    "grpc": "gRPC",
+    "webrtc": "WebRTC",
+    "mqtt": "MQTT",
+    "tcp/ip": "TCP/IP",
+    "wifi": "Wi-Fi",
+    "wi-fi": "Wi-Fi",
+    "node.js": "Node.js",
+    "langchain": "LangChain",
+    "dspy": "DSPy",
+    "sklearn": "scikit-learn",
+    "scikit-learn": "scikit-learn",
+    "numpy": "NumPy",
+    "pandas": "pandas",
+    "pytorch": "PyTorch",
+    "tensorflow": "TensorFlow",
+    "rag": "RAG",
+    "llm": "LLMs",
+    "llms": "LLMs",
+    "text2sql": "Text2SQL",
+    "genai": "GenAI",
+}
+
+NON_SKILL_CANDIDATES = {
+    "etc",
+    "similar",
+    "similar systems",
+    "and more",
+    "more",
+    "all levels",
+    "the form below",
+    "benchmark",
+    "engineering",
+    "index ventures",
+    "ivp",
+    "it architects",
+    "christmas bonus",
+    "vacation pay",
+    "profit sharing",
+    "6 weeks annual leave",
+}
+
+
+def _normalize_skill_candidate(value: str) -> str | None:
+    cleaned = re.sub(r"\s+", " ", value).strip(" \t\n\r.,;:()[]{}")
+    cleaned = re.sub(r"^(?:tools?|frameworks?|platforms?|languages?)\s+(?:such as|like)\s+", "", cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.strip(" \t\n\r.,;:()[]{}")
+    if not cleaned:
+        return None
+    lowered = cleaned.casefold()
+    if re.search(r"https?://|www\.", lowered):
+        return None
+    if lowered in NON_SKILL_CANDIDATES:
+        return None
+    words = re.findall(r"[A-Za-z0-9+#./-]+", cleaned)
+    if len(words) > 4:
+        return None
+    if re.search(
+        r"\b(?:please|visit|role|candidate|candidates|team|company|office|"
+        r"opportunity|parents-to-be|to work|we work|we|you|your|our|this)\b",
+        lowered,
+    ):
+        return None
+    if len(cleaned) > 60 or len(cleaned) < 2:
+        return None
+    if re.search(r"\b(?:experience|familiarity|knowledge|ability|skills?|systems?)\s*$", cleaned, flags=re.IGNORECASE):
+        return None
+    if lowered in SKILL_NAME_ALIASES:
+        return SKILL_NAME_ALIASES[lowered]
+    if cleaned[0].islower():
+        return None
+    if re.fullmatch(r"[A-Z][A-Za-z0-9+#./-]{1,20}", cleaned):
+        return cleaned
+    if re.fullmatch(r"[A-Z]{2,}(?:/[A-Z0-9]+)?", cleaned):
+        return cleaned
+    if re.search(r"[A-Z][a-z]+(?:\.[A-Za-z]+)?|[A-Z]{2,}|[0-9]|[+#/.-]", cleaned):
+        return cleaned
+    return None
+
+
+def _split_skill_segment(segment: str) -> list[str]:
+    segment = re.sub(r"\betc\.?.*$", "", segment, flags=re.IGNORECASE)
+    segment = re.sub(r"\bsimilar\b.*$", "", segment, flags=re.IGNORECASE)
+    parts = SKILL_SPLIT_RE.split(segment)
+    candidates: list[str] = []
+    for part in parts:
+        candidate = _normalize_skill_candidate(part)
+        if candidate:
+            candidates.append(candidate)
+    return candidates
+
+
+def _extract_listed_skills(text: str | None) -> list[str]:
+    if not text:
+        return []
+    candidates: list[str] = []
+    for line in text.splitlines():
+        for match in SKILL_LIST_TRIGGER_RE.finditer(line):
+            candidates.extend(_split_skill_segment(match.group(1)))
+    return _dedupe_preserve_order(candidates)
+
+
+def _extract_skills_from_text(text: str | None) -> list[str]:
+    return _dedupe_preserve_order(_extract_pattern_skills(text) + _extract_listed_skills(text))
 
 
 def _extract_section(raw_jd: str, start_keywords: tuple[str, ...], stop_keywords: tuple[str, ...]) -> str:
@@ -257,13 +518,13 @@ def _enrich_parsed_skills(parsed_json: dict, job) -> dict:
     full_text = f"{title}\n{raw_jd}"
     nice_text = _extract_section(
         raw_jd,
-        ("nice to have", "nice-to-have", "preferred", "bonus", "plus", "wünschenswert"),
-        ("benefits", "what we offer", "about ", "show more", "seniority level"),
+        NICE_TO_HAVE_SECTION_STARTS,
+        ("benefits", "what we offer", "how to apply", "about ", "show more", "seniority level"),
     )
     must_text = _extract_section(
         raw_jd,
-        ("must have", "requirements", "who we are looking for", "what we look for"),
-        ("nice to have", "benefits", "what this role is not", "show more", "seniority level"),
+        MUST_HAVE_SECTION_STARTS,
+        REQUIREMENT_SECTION_STOPS + ("what this role is not",),
     )
     not_text = _extract_section(
         raw_jd,
@@ -271,9 +532,9 @@ def _enrich_parsed_skills(parsed_json: dict, job) -> dict:
         ("requirements", "benefits", "must have", "nice to have"),
     )
 
-    nice_skills = set(_extract_pattern_skills(nice_text))
-    must_section_skills = set(_extract_pattern_skills(must_text))
-    not_only_skills = set(_extract_pattern_skills(not_text)) - must_section_skills - nice_skills
+    nice_section_skills = _extract_skills_from_text(nice_text)
+    must_section_skills = _extract_skills_from_text(must_text)
+    not_only_skills = set(_extract_skills_from_text(not_text)) - set(must_section_skills) - set(nice_section_skills)
     not_only_keys = {skill.casefold() for skill in not_only_skills}
 
     current_must = parsed_json.get("must_have_skills") if isinstance(parsed_json.get("must_have_skills"), list) else []
@@ -281,15 +542,23 @@ def _enrich_parsed_skills(parsed_json: dict, job) -> dict:
     current_nice = parsed_json.get("nice_to_have_skills") if isinstance(parsed_json.get("nice_to_have_skills"), list) else []
     current_nice = [skill for skill in current_nice if str(skill).casefold() not in not_only_keys]
     inferred_skills = [
-        skill for skill in _extract_pattern_skills(full_text)
+        skill for skill in _extract_skills_from_text(full_text)
         if skill not in not_only_skills
     ]
 
-    enriched_nice = _dedupe_preserve_order(list(current_nice) + list(nice_skills))
-    enriched_nice_keys = {skill.casefold() for skill in enriched_nice}
+    must_seed = _dedupe_preserve_order(list(current_must) + must_section_skills)
+    must_seed_keys = {skill.casefold() for skill in must_seed}
+    nice_seed = _dedupe_preserve_order(
+        [skill for skill in list(current_nice) + nice_section_skills if str(skill).casefold() not in must_seed_keys]
+    )
+    nice_seed_keys = {skill.casefold() for skill in nice_seed}
     enriched_must = _dedupe_preserve_order(
-        list(current_must)
-        + [skill for skill in inferred_skills if skill.casefold() not in enriched_nice_keys]
+        must_seed
+        + [skill for skill in inferred_skills if skill.casefold() not in nice_seed_keys]
+    )
+    enriched_must_keys = {skill.casefold() for skill in enriched_must}
+    enriched_nice = _dedupe_preserve_order(
+        [skill for skill in nice_seed if skill.casefold() not in enriched_must_keys]
     )
 
     parsed_json["must_have_skills"] = enriched_must
@@ -321,12 +590,12 @@ def _deterministic_parse(job):
     jd_lower = job.raw_jd.lower() if job.raw_jd else ""
     title_lower = job.title.lower() if job.title else ""
 
-    must_have = _extract_pattern_skills(f"{job.title or ''}\n{job.raw_jd or ''}")
-    nice_to_have = _extract_pattern_skills(
+    must_have = _extract_skills_from_text(f"{job.title or ''}\n{job.raw_jd or ''}")
+    nice_to_have = _extract_skills_from_text(
         _extract_section(
             job.raw_jd or "",
-            ("nice to have", "nice-to-have", "preferred", "bonus", "plus", "wünschenswert"),
-            ("benefits", "what we offer", "about ", "show more", "seniority level"),
+            NICE_TO_HAVE_SECTION_STARTS,
+            ("benefits", "what we offer", "how to apply", "about ", "show more", "seniority level"),
         )
     )
     nice_keys = {skill.casefold() for skill in nice_to_have}
@@ -397,22 +666,27 @@ def _deterministic_parse(job):
 
 
 def _extract_responsibilities(raw_jd: str) -> list[str]:
-    start_keywords = (
-        "responsibilities",
-        "tasks",
-        "the impact you will have",
-        "what you will do",
-        "what you'll do",
-        "your tasks",
-        "aufgaben",
-    )
+    start_keywords = RESPONSIBILITY_SECTION_STARTS
     stop_keywords = (
         "what this role is not",
         "requirements",
         "must have",
+        "what you must have",
+        "what should you bring along",
+        "what you bring along",
+        "your toolkit",
         "who we are looking for",
         "nice to have",
+        "nice-to-have",
+        "extras that give you an edge",
         "benefits",
+        "what do we offer",
+        "how we'll make",
+        "how we’ll make",
+        "how to apply",
+        "start date",
+        "type of employment",
+        "working hours",
         "seniority level",
         "employment type",
         "job function",
@@ -425,7 +699,12 @@ def _extract_responsibilities(raw_jd: str) -> list[str]:
         "requirements",
         "benefits",
         "nice to have",
+        "nice-to-have",
         "must have",
+        "what awaits you",
+        "your mission",
+        "your toolkit",
+        "what should you bring along",
     }
 
     items: list[str] = []
@@ -505,6 +784,61 @@ async def format_raw_jd(
     return None
 
 
+def _jd_extract_messages(job) -> list[dict]:
+    return [
+        {
+            "role": "system",
+            "content": "You are a job parser. Extract structured information from the job posting below. Return valid JSON only.",
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Title: {job.title}\n"
+                f"Company: {job.company}\n"
+                f"Location: {job.location or 'N/A'}\n"
+                f"Description:\n{job.raw_jd}\n\n"
+                "Extract JSON with these fields:\n"
+                "title, company, location, work_model (remote/hybrid/onsite), "
+                "language_requirements (list), must_have_skills (list), "
+                "nice_to_have_skills (list), responsibilities (list), "
+                "salary_range (string or null), seniority (string or null), "
+                "work_authorization (object or null with status, label, detail, evidence), "
+                "dach_signals (object with location/country/language/work_authorization keys)\n\n"
+                "Skill extraction rules:\n"
+                "- Extract as many explicit atomic skills/capabilities as the posting contains, not only broad summary sentences.\n"
+                "- Include programming languages, frameworks, databases, protocols, cloud services, infrastructure practices, security controls, testing/release practices, domain capabilities, collaboration requirements, and operational responsibilities.\n"
+                "- Split combined requirements into separate items. Example: 'GCP infrastructure (Cloud Run, networking, IAM, TLS, firewall rules)' becomes "
+                "['GCP', 'Cloud Run', 'Networking', 'IAM', 'TLS', 'Firewall rules'].\n"
+                "- Treat capabilities like RBAC, job queues, CI/CD pipelines, GitHub Actions, E2E tests, QA, rollbacks, on-call, incident response, observability, monitoring, vulnerability scanning, penetration testing, and infrastructure hardening as skills when present.\n"
+                "- Put skills from sections like 'Requirements', 'Your toolkit', 'What you must have', or equivalent in must_have_skills.\n"
+                "- Put skills from sections like 'Nice to have', 'Preferred', 'Bonus', 'Extras that give you an edge', or equivalent in nice_to_have_skills.\n"
+                "- Do not include skills that are mentioned only in a negated section such as 'What this role is NOT'.\n"
+                "- Put explicit 'must have' requirements in must_have_skills and optional/preferred items in nice_to_have_skills.\n"
+                "- For Swiss jobs, flag explicit citizenship, work permit, EU/EFTA, right-to-work, or visa sponsorship restrictions in work_authorization with the exact evidence sentence."
+            ),
+        },
+    ]
+
+
+def _needs_reasoning_parse_retry(parsed_json: dict, job) -> bool:
+    raw_jd = job.raw_jd or ""
+    skill_count = len(parsed_json.get("must_have_skills") or []) + len(parsed_json.get("nice_to_have_skills") or [])
+    responsibilities_count = len(parsed_json.get("responsibilities") or [])
+    has_requirement_signal = any(
+        signal in raw_jd.lower()
+        for signal in (
+            "requirements",
+            "your toolkit",
+            "what you must have",
+            "must have",
+            "qualifications",
+            "responsibilities",
+            "your mission",
+        )
+    )
+    return len(raw_jd) > 1200 and has_requirement_signal and (skill_count < 4 or responsibilities_count == 0)
+
+
 async def parse_job_posting(
     db: AsyncSession,
     tenant: TenantContext,
@@ -519,47 +853,34 @@ async def parse_job_posting(
 
     logger = logging.getLogger(__name__)
     gateway = LLMGateway()
+    messages = _jd_extract_messages(job)
     try:
         content = await gateway.run_text(
             tenant_id=tenant.id,
             task="jd_extract",
-            prompt_version="1.0",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a job parser. Extract structured information from the job posting below. Return valid JSON only.",
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"Title: {job.title}\n"
-                        f"Company: {job.company}\n"
-                        f"Location: {job.location or 'N/A'}\n"
-                        f"Description:\n{job.raw_jd}\n\n"
-                        "Extract JSON with these fields:\n"
-                        "title, company, location, work_model (remote/hybrid/onsite), "
-                        "language_requirements (list), must_have_skills (list), "
-                        "nice_to_have_skills (list), responsibilities (list), "
-                        "salary_range (string or null), seniority (string or null), "
-                        "work_authorization (object or null with status, label, detail, evidence), "
-                        "dach_signals (object with location/country/language/work_authorization keys)\n\n"
-                        "Skill extraction rules:\n"
-                        "- Extract atomic skills/capabilities, not only broad summary sentences.\n"
-                        "- Include technologies, cloud services, infrastructure practices, security controls, testing/release practices, and operational responsibilities.\n"
-                        "- Split combined requirements into separate items. Example: 'GCP infrastructure (Cloud Run, networking, IAM, TLS, firewall rules)' becomes "
-                        "['GCP', 'Cloud Run', 'Networking', 'IAM', 'TLS', 'Firewall rules'].\n"
-                        "- Treat capabilities like RBAC, job queues, CI/CD pipelines, GitHub Actions, E2E tests, QA, rollbacks, on-call, incident response, observability, monitoring, vulnerability scanning, penetration testing, and infrastructure hardening as skills when present.\n"
-                        "- Do not include skills that are mentioned only in a negated section such as 'What this role is NOT'.\n"
-                        "- Put explicit 'must have' requirements in must_have_skills and optional/preferred items in nice_to_have_skills.\n"
-                        "- For Swiss jobs, flag explicit citizenship, work permit, EU/EFTA, right-to-work, or visa sponsorship restrictions in work_authorization with the exact evidence sentence."
-                    ),
-                },
-            ],
+            prompt_version="1.1",
+            messages=messages,
             response_format={"type": "json_object"},
         )
         if content:
             parsed_json = json.loads(content)
             parsed_json = _enrich_parsed_skills(parsed_json, job)
+            if _needs_reasoning_parse_retry(parsed_json, job):
+                try:
+                    retry_content = await gateway.run_text(
+                        tenant_id=tenant.id,
+                        task="jd_extract",
+                        prompt_version="1.1-reasoning-retry",
+                        messages=messages,
+                        reasoning=True,
+                        response_format={"type": "json_object"},
+                    )
+                    if retry_content:
+                        retry_json = _enrich_parsed_skills(json.loads(retry_content), job)
+                        if len(retry_json.get("skills") or []) > len(parsed_json.get("skills") or []):
+                            parsed_json = retry_json
+                except Exception:
+                    logger.exception("Reasoning model JD parse retry failed, keeping fast parse")
             job.parsed_json = parsed_json
             job.status = "parsed"
             await sync_job_skills(db, job, parsed_json, source=gateway.last_provider)

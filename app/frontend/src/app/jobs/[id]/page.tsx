@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { CheckCircle2, ListChecks } from 'lucide-react';
+import { CheckCircle2, ListChecks, Plus } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { JobDescriptionView } from '@/components/jobs/job-description-view';
@@ -53,6 +53,58 @@ function responsibilityTheme(text: string) {
   const lower = text.toLowerCase();
   return responsibilityThemes.find((theme) => theme.patterns.some((pattern) => lower.includes(pattern)))
     || { label: 'Ownership', tone: 'border-slate-300 bg-white text-slate-700' };
+}
+
+function SkillGroup({
+  title,
+  skills,
+  profile,
+  ownedSkills,
+  onToggle,
+  missingTone,
+  emptyText,
+}: {
+  title: string;
+  skills: string[];
+  profile: CandidateProfile | null;
+  ownedSkills: Set<string>;
+  onToggle: (skill: string) => void;
+  missingTone: string;
+  emptyText: string;
+}) {
+  const matchedCount = profile ? skills.filter((skill) => isSkillInProfile(skill, profile)).length : 0;
+
+  return (
+    <div className="min-h-40 rounded-lg border border-slate-200 bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-slate-900">{title}</h4>
+        {profile && <Badge>{matchedCount}/{skills.length} in resume</Badge>}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {skills.map((skill) => {
+          const matched = isSkillInProfile(skill, profile);
+          const owned = ownedSkills.has(skill);
+          return (
+            <button
+              key={skill}
+              type="button"
+              onClick={() => !matched && onToggle(skill)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors ${
+                matched || owned
+                  ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
+                  : `${missingTone} cursor-pointer`
+              }`}
+              title={matched ? 'Found in your resume' : owned ? 'Manually confirmed' : 'Not found in resume - click to confirm'}
+            >
+              {matched || owned ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+              {skill}
+            </button>
+          );
+        })}
+        {skills.length === 0 && <p className="text-sm text-slate-500">{emptyText}</p>}
+      </div>
+    </div>
+  );
 }
 
 export default function JobDetailPage() {
@@ -196,67 +248,32 @@ export default function JobDetailPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold">Skills</h3>
-                    {profile && <Badge>{skills.filter((s) => isSkillInProfile(s, profile)).length}/{skills.length} in resume</Badge>}
+                    <Badge>{skills.length + niceSkills.length} total</Badge>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {skills.map((s: string) => {
-                      const matched = isSkillInProfile(s, profile);
-                      const owned = ownedSkills.has(s);
-                      return (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => !matched && toggleSkill(s)}
-                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                            matched || owned
-                              ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                              : 'bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100 cursor-pointer'
-                          }`}
-                          title={matched ? 'Found in your resume' : owned ? 'Manually confirmed' : 'Not found in resume — click to confirm'}
-                        >
-                          {matched || owned ? '✓' : '+'} {s}
-                        </button>
-                      );
-                    })}
-                    {skills.length === 0 && <p className="text-sm text-slate-500">No skills parsed yet.</p>}
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <SkillGroup
+                      title="Hard Requirements"
+                      skills={skills}
+                      profile={profile}
+                      ownedSkills={ownedSkills}
+                      onToggle={toggleSkill}
+                      missingTone="border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                      emptyText="No hard requirements parsed yet."
+                    />
+                    <SkillGroup
+                      title="Nice to Have"
+                      skills={niceSkills}
+                      profile={profile}
+                      ownedSkills={ownedSkills}
+                      onToggle={toggleSkill}
+                      missingTone="border-slate-300 bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      emptyText="No nice-to-have skills parsed yet."
+                    />
                   </div>
                 </CardContent>
               </Card>
-              {niceSkills.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-semibold">Nice to Have</h3>
-                      {profile && <Badge>{niceSkills.filter((s) => isSkillInProfile(s, profile)).length}/{niceSkills.length} in resume</Badge>}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {niceSkills.map((s: string) => {
-                        const matched = isSkillInProfile(s, profile);
-                        const owned = ownedSkills.has(s);
-                        return (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => !matched && toggleSkill(s)}
-                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                              matched || owned
-                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                                : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200 cursor-pointer'
-                            }`}
-                            title={matched ? 'Found in your resume' : owned ? 'Manually confirmed' : 'Not found in resume — click to confirm'}
-                          >
-                            {matched || owned ? '✓' : '+'} {s}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between gap-3">
