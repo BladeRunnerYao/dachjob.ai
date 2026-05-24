@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.tenant import TenantContext
+from app.core.auth import TenantContext
 from app.db.models import CandidateProfile, EvidenceChunk, MatchReport, ResumeArtifact
 from app.modules.jobs.repository import get_job
 from app.modules.llm_gateway.gateway import LLMGateway
@@ -151,7 +151,7 @@ class _ResumeOutput(BaseModel):
 async def generate_resume(
     db: AsyncSession, tenant: TenantContext, job_id: uuid.UUID
 ) -> ResumeArtifact:
-    job = await get_job(db, job_id)
+    job = await get_job(db, job_id, tenant.id)
     if not job:
         raise ValueError(f"Job {job_id} not found")
 

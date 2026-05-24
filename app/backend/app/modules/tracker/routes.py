@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.tenant import TenantContext, get_tenant_context
+from app.core.auth import TenantContext
+from app.core.tenant import get_tenant_context
 from app.db.models import MatchReport, ResumeArtifact
 from app.db.session import get_db
 from app.modules.profiles.repository import get_profile_by_tenant
@@ -56,7 +57,7 @@ async def autofill_endpoint(
     tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    app = await get_application(db, application_id)
+    app = await get_application(db, application_id, tenant.id)
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
@@ -68,7 +69,7 @@ async def autofill_endpoint(
     if app.job_id:
         result = await db.execute(
             select(MatchReport)
-            .where(MatchReport.job_id == app.job_id)
+            .where(MatchReport.job_id == app.job_id, MatchReport.tenant_id == tenant.id)
             .order_by(MatchReport.created_at.desc())
             .limit(1)
         )
@@ -77,7 +78,10 @@ async def autofill_endpoint(
     resume_link = None
     if app.resume_artifact_id:
         result = await db.execute(
-            select(ResumeArtifact).where(ResumeArtifact.id == app.resume_artifact_id)
+            select(ResumeArtifact).where(
+                ResumeArtifact.id == app.resume_artifact_id,
+                ResumeArtifact.tenant_id == tenant.id,
+            )
         )
         artifact = result.scalar_one_or_none()
         if artifact:
@@ -94,9 +98,10 @@ async def autofill_endpoint(
 @router.get("/{application_id}", response_model=ApplicationResponse)
 async def get_application_endpoint(
     application_id: UUID,
+    tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    app = await get_application(db, application_id)
+    app = await get_application(db, application_id, tenant.id)
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
     return app
@@ -106,6 +111,7 @@ async def get_application_endpoint(
 async def update_application_endpoint(
     application_id: UUID,
     body: ApplicationUpdate,
+    tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
     if body.status is not None and body.status not in VALID_STATUSES:
@@ -113,7 +119,9 @@ async def update_application_endpoint(
             status_code=422,
             detail=f"Invalid status: {body.status}. Must be one of {VALID_STATUSES}",
         )
-    result = await update_application(db, application_id, body.model_dump(exclude_unset=True))
+    result = await update_application(
+        db, application_id, body.model_dump(exclude_unset=True), tenant.id
+    )
     if not result:
         raise HTTPException(status_code=404, detail="Application not found")
     return result

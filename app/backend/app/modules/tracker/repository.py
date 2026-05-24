@@ -23,12 +23,17 @@ async def list_applications(db: AsyncSession, tenant_id: UUID) -> list[Applicati
     return applications
 
 
-async def get_application(db: AsyncSession, application_id: UUID) -> Application | None:
-    result = await db.execute(
+async def get_application(
+    db: AsyncSession, application_id: UUID, tenant_id: UUID | None = None
+) -> Application | None:
+    stmt = (
         select(Application, JobPosting.title, JobPosting.company)
         .join(JobPosting, Application.job_id == JobPosting.id, isouter=True)
         .where(Application.id == application_id)
     )
+    if tenant_id is not None:
+        stmt = stmt.where(Application.tenant_id == tenant_id)
+    result = await db.execute(stmt)
     row = result.one_or_none()
     if row is None:
         return None
@@ -59,9 +64,12 @@ async def create_application(
 
 
 async def update_application(
-    db: AsyncSession, application_id: UUID, updates: dict
+    db: AsyncSession, application_id: UUID, updates: dict, tenant_id: UUID | None = None
 ) -> Application | None:
-    result = await db.execute(select(Application).where(Application.id == application_id))
+    stmt = select(Application).where(Application.id == application_id)
+    if tenant_id is not None:
+        stmt = stmt.where(Application.tenant_id == tenant_id)
+    result = await db.execute(stmt)
     app = result.scalar_one_or_none()
     if not app:
         return None

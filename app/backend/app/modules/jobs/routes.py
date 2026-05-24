@@ -3,8 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import TenantContext
 from app.core.errors import AppError
-from app.core.tenant import TenantContext, get_tenant_context
+from app.core.tenant import get_tenant_context
 from app.db.session import get_db
 from app.modules.jobs.importer import import_job_urls
 from app.modules.jobs.repository import create_job, get_job, list_jobs_by_tenant
@@ -63,6 +64,10 @@ async def import_jobs_endpoint(
 @router.get("/{job_id}", response_model=JobResponse)
 async def get_job_endpoint(
     job_id: UUID,
+    tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    return await get_job(db, job_id)
+    job = await get_job(db, job_id, tenant.id)
+    if not job:
+        raise AppError("job_not_found", "Job posting not found", status_code=404)
+    return job
