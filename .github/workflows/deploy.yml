@@ -64,8 +64,52 @@ env:
   GCS_BUCKET: dachjob-dev-artifacts
 
 jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: app/backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+      - name: Run unit tests
+        run: pytest tests/ --ignore=tests/test_provider_smoke.py -v
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Fetch API keys and run provider smoke
+        run: |
+          set +x
+          export GEMINI_API_KEY="$(gcloud secrets versions access latest --secret=dachjob-dev-gemini-api-key --project="${PROJECT_ID}")"
+          export DEEPSEEK_API_KEY="$(gcloud secrets versions access latest --secret=dachjob-dev-deepseek-api-key --project="${PROJECT_ID}" 2>/dev/null || true)"
+          export OPENROUTER_API_KEY="$(gcloud secrets versions access latest --secret=dachjob-dev-openrouter-api-key --project="${PROJECT_ID}" 2>/dev/null || true)"
+          pytest tests/test_provider_smoke.py -v
+
   prepare:
     name: Prepare deployment
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
