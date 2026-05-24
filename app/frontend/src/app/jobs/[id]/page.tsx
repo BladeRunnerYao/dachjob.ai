@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { CheckCircle2, Plus } from 'lucide-react';
+import { CheckCircle2, Plus, Download } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { JobDescriptionView } from '@/components/jobs/job-description-view';
@@ -81,6 +81,7 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [matching, setMatching] = useState(false);
   const [generatingResume, setGeneratingResume] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [ownedSkills, setOwnedSkills] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<Tab>('raw');
@@ -154,9 +155,13 @@ export default function JobDetailPage() {
 
   const generateResume = async () => {
     setGeneratingResume(true);
+    setResumeError(null);
     try {
       const artifact = await api.createResumeArtifact(id);
       setResume(artifact);
+      setTab('cv');
+    } catch (err) {
+      setResumeError(err instanceof Error ? err.message : 'Failed to generate CV');
     } finally {
       setGeneratingResume(false);
     }
@@ -271,6 +276,11 @@ export default function JobDetailPage() {
                         </span>
                       )}
                     </div>
+                    {resumeError && (
+                      <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
+                        {resumeError}
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -401,15 +411,33 @@ export default function JobDetailPage() {
                 <p className="text-sm font-medium text-slate-900">Tailored Resume</p>
                 <p className="text-xs text-slate-500">Tailored to match skills confirmed in your Parsed Requirements tab</p>
               </div>
-              <button
-                onClick={generateResume}
-                disabled={generatingResume}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {generatingResume ? 'Generating...' : 'Generate CV'}
-              </button>
+              <div className="flex items-center gap-2">
+                {resume?.pdf_url && (
+                  <a
+                    href={resume.pdf_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 inline-flex items-center gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    PDF
+                  </a>
+                )}
+                <button
+                  onClick={generateResume}
+                  disabled={generatingResume}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {generatingResume ? 'Generating...' : resume ? 'Regenerate CV' : 'Generate CV'}
+                </button>
+              </div>
             </CardContent>
           </Card>
+          {resumeError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+              <p className="text-sm text-red-700">{resumeError}</p>
+            </div>
+          )}
           {resume?.html_url && resume.html_url !== '#' && (
             <div className="rounded-lg border border-slate-200 overflow-hidden">
               <iframe
@@ -419,7 +447,7 @@ export default function JobDetailPage() {
               />
             </div>
           )}
-          {(!resume?.html_url || resume.html_url === '#') && (
+          {(!resume?.html_url || resume.html_url === '#') && !resumeError && (
             <div className="flex items-center justify-center h-48 rounded-lg border border-dashed border-slate-300">
               <p className="text-sm text-slate-400">Click &quot;Generate CV&quot; to preview your tailored resume</p>
             </div>
