@@ -21,8 +21,8 @@ class Settings(BaseSettings):
 
     gemini_project_id: str = ""
     gemini_location: str = "global"
-    gemini_model_fast: str = "google/gemini-2.5-flash"
-    gemini_model_reasoning: str = "google/gemini-2.5-flash"
+    gemini_model_fast: str = "google/gemini-3.1-flash-lite"
+    gemini_model_reasoning: str = "google/gemini-3.1-flash-lite"
 
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
