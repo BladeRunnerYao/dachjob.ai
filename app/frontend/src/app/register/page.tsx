@@ -1,8 +1,25 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+
+function getPasswordErrors(password: string): string[] {
+  const errors: string[] = [];
+  if (password.length > 0 && password.length < 8) {
+    errors.push('At least 8 characters');
+  }
+  if (password.length > 0 && !/[a-zA-Z]/.test(password)) {
+    errors.push('At least one letter');
+  }
+  if (password.length > 0 && !/[0-9]/.test(password)) {
+    errors.push('At least one number');
+  }
+  if (password.length > 0 && !/[^a-zA-Z0-9]/.test(password)) {
+    errors.push('At least one special character');
+  }
+  return errors;
+}
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -12,9 +29,18 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const passwordErrors = useMemo(() => getPasswordErrors(password), [password]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+
+    const errors = getPasswordErrors(password);
+    if (errors.length > 0) {
+      setError(errors.join('. ') + '.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       await register(email, password, name);
@@ -48,7 +74,6 @@ export default function RegisterPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="Your name"
             />
           </div>
 
@@ -60,7 +85,6 @@ export default function RegisterPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="you@example.com"
             />
           </div>
 
@@ -69,12 +93,21 @@ export default function RegisterPage() {
             <input
               type="password"
               required
-              minLength={6}
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="At least 6 characters"
             />
+            <p className="mt-1 text-xs text-slate-400">
+              Must be at least 8 characters with letters, numbers, and a special character.
+            </p>
+            {passwordErrors.length > 0 && (
+              <ul className="mt-1 list-inside list-disc text-xs text-amber-600">
+                {passwordErrors.map((err) => (
+                  <li key={err}>{err}</li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <button
