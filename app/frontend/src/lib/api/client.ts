@@ -306,8 +306,6 @@ export class ApiClient {
     }>(`/api/jobs/${jobId}/resume`, {});
     return this.toResumeArtifact(artifact);
   }
-    return this.toResumeArtifact(artifact);
-  }
 
   async getResumeArtifact(jobId: string): Promise<ResumeArtifact> {
     const cached = await this.getLatestResumeArtifact(jobId);
