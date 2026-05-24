@@ -1,45 +1,40 @@
-import smtplib
-import traceback
-from email.mime.text import MIMEText
+import logging
+import sys
+
+import resend
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter("%(levelname)s:\t%(name)s:\t%(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 
 def send_reset_email(to_email: str, reset_link: str) -> bool:
     settings = get_settings()
-    if not settings.smtp_host:
-        print(f"[email] SMTP not configured – reset link for {to_email}: {reset_link}")
+    if not settings.resend_api_key:
+        logger.warning("Resend API key not configured – cannot send email to %s", to_email)
         return False
 
-    body = f"""Hello,
-
-A password reset was requested for your dachjob.ai account.
-Click the link below to reset your password:
-
-{reset_link}
-
-This link expires in {settings.password_reset_token_minutes} minutes.
-
-If you did not request this, please ignore this email.
-"""
-    msg = MIMEText(body)
-    msg["Subject"] = "dachjob.ai – Password Reset"
-    msg["From"] = settings.smtp_from_email
-    msg["To"] = to_email
-
-    print(f"[email] Connecting to {settings.smtp_host}:{settings.smtp_port} as {settings.smtp_username}, from={settings.smtp_from_email}, to={to_email}")
-
     try:
-        server = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30)
-        server.set_debuglevel(1)
-        if settings.smtp_use_tls:
-            server.starttls()
-        if settings.smtp_username and settings.smtp_password:
-            server.login(settings.smtp_username, settings.smtp_password)
-        server.send_message(msg)
-        server.quit()
-        print(f"[email] Reset email sent to {to_email}")
+        resend.api_key = settings.resend_api_key
+        params: resend.Emails.SendParams = {
+            "from": settings.resend_from_email,
+            "to": [to_email],
+            "subject": "dachjob.ai – Password Reset",
+            "html": f"""<p>Hello,</p>
+<p>A password reset was requested for your dachjob.ai account.</p>
+<p>Click the link below to reset your password:</p>
+<p><a href="{reset_link}">{reset_link}</a></p>
+<p>This link expires in {settings.password_reset_token_minutes} minutes.</p>
+<p>If you did not request this, please ignore this email.</p>""",
+        }
+        resend.Emails.send(params)
+        logger.info("Reset email sent to %s", to_email)
         return True
     except Exception:
-        print(f"[email] Failed to send reset email to {to_email}:\n{traceback.format_exc()}")
+        logger.exception("Failed to send reset email to %s", to_email)
         return False
