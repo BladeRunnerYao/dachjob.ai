@@ -9,15 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler
 from app.db.session import engine
-from app.modules.tenants.routes import router as tenants_router
-from app.modules.profiles.routes import router as profiles_router
-from app.modules.jobs.routes import router as jobs_router
-from app.modules.matching.routes import router as matching_router
-from app.modules.resumes.routes import router as resumes_router
-from app.modules.resumes.routes import artifact_router as resume_artifact_router
-from app.modules.llm_gateway.routes import router as llm_gateway_router
-from app.modules.tracker.routes import router as tracker_router
 from app.modules.auth.routes import router as auth_router
+from app.modules.jobs.routes import router as jobs_router
+from app.modules.llm_gateway.routes import router as llm_gateway_router
+from app.modules.matching.routes import router as matching_router
+from app.modules.profiles.routes import router as profiles_router
+from app.modules.resumes.routes import artifact_router as resume_artifact_router
+from app.modules.resumes.routes import router as resumes_router
+from app.modules.tenants.routes import router as tenants_router
+from app.modules.tracker.routes import router as tracker_router
 
 logger = logging.getLogger("uvicorn")
 
@@ -32,6 +32,7 @@ def _load_version() -> dict:
     except Exception:
         return {"branch": "unknown", "commit": "unknown"}
 
+
 VERSION = _load_version()
 
 
@@ -39,9 +40,11 @@ VERSION = _load_version()
 async def lifespan(app: FastAPI):
     logger.info(
         "dachjob.ai API starting | branch=%s commit=%s provider=%s",
-        VERSION.get("branch"), VERSION.get("commit"), settings.llm_provider,
+        VERSION.get("branch"),
+        VERSION.get("commit"),
+        settings.llm_provider,
     )
-    async with engine.begin() as conn:
+    async with engine.begin() as _conn:
         pass
     yield
     await engine.dispose()

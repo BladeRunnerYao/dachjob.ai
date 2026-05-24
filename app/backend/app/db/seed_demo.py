@@ -2,27 +2,24 @@ import asyncio
 import uuid
 
 from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import async_session_factory
 from app.core.security import hash_password
 from app.db.models import (
-    Tenant,
-    User,
-    Membership,
     CandidateProfile,
     EvidenceChunk,
     JobPosting,
     MatchReport,
+    Membership,
     ResumeArtifact,
+    Tenant,
+    User,
 )
+from app.db.session import async_session_factory
 
 
 async def seed_demo():
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(Tenant).where(Tenant.slug == "dachjob-local")
-        )
+        result = await session.execute(select(Tenant).where(Tenant.slug == "dachjob-local"))
         tenant = result.scalar_one_or_none()
         if not tenant:
             tenant = Tenant(
@@ -33,9 +30,7 @@ async def seed_demo():
             session.add(tenant)
             await session.flush()
 
-        result = await session.execute(
-            select(User).where(User.email == "demo@dachjob.ai")
-        )
+        result = await session.execute(select(User).where(User.email == "demo@dachjob.ai"))
         user = result.scalar_one_or_none()
         if not user:
             user = User(
@@ -66,9 +61,7 @@ async def seed_demo():
             )
 
         result = await session.execute(
-            select(CandidateProfile).where(
-                CandidateProfile.tenant_id == tenant.id
-            )
+            select(CandidateProfile).where(CandidateProfile.tenant_id == tenant.id)
         )
         profile = result.scalar_one_or_none()
         if not profile:
@@ -114,7 +107,11 @@ English (Fluent), German (B2), Mandarin (Native)
                     source_type="cv",
                     source_label="Experience: TechCorp Berlin",
                     content="Designed and deployed a multi-model LLM serving platform using FastAPI, Ray Serve, and Kubernetes, reducing inference latency by 40%.",
-                    metadata_json={"section": "experience", "dates": "2021–Present", "tags": ["llm", "kubernetes", "fastapi"]},
+                    metadata_json={
+                        "section": "experience",
+                        "dates": "2021–Present",
+                        "tags": ["llm", "kubernetes", "fastapi"],
+                    },
                 ),
                 EvidenceChunk(
                     id=uuid.uuid4(),
@@ -123,7 +120,11 @@ English (Fluent), German (B2), Mandarin (Native)
                     source_type="cv",
                     source_label="Experience: TechCorp Berlin",
                     content="Built an automated ML pipeline orchestration system with Airflow and MLflow, handling 200+ daily training runs.",
-                    metadata_json={"section": "experience", "dates": "2021–Present", "tags": ["mlops", "airflow", "mlflow"]},
+                    metadata_json={
+                        "section": "experience",
+                        "dates": "2021–Present",
+                        "tags": ["mlops", "airflow", "mlflow"],
+                    },
                 ),
                 EvidenceChunk(
                     id=uuid.uuid4(),
@@ -132,7 +133,11 @@ English (Fluent), German (B2), Mandarin (Native)
                     source_type="cv",
                     source_label="Experience: TechCorp Berlin",
                     content="Implemented real-time model monitoring and observability using Prometheus, Grafana, and custom alerting rules.",
-                    metadata_json={"section": "experience", "dates": "2021–Present", "tags": ["monitoring", "prometheus", "grafana"]},
+                    metadata_json={
+                        "section": "experience",
+                        "dates": "2021–Present",
+                        "tags": ["monitoring", "prometheus", "grafana"],
+                    },
                 ),
                 EvidenceChunk(
                     id=uuid.uuid4(),
@@ -141,7 +146,11 @@ English (Fluent), German (B2), Mandarin (Native)
                     source_type="cv",
                     source_label="Experience: DataFlow Munich",
                     content="Developed a feature store using Redis and PostgreSQL, serving 500+ features to production ML models.",
-                    metadata_json={"section": "experience", "dates": "2018–2021", "tags": ["feature-store", "redis", "postgresql"]},
+                    metadata_json={
+                        "section": "experience",
+                        "dates": "2018–2021",
+                        "tags": ["feature-store", "redis", "postgresql"],
+                    },
                 ),
                 EvidenceChunk(
                     id=uuid.uuid4(),
@@ -150,16 +159,22 @@ English (Fluent), German (B2), Mandarin (Native)
                     source_type="cv",
                     source_label="Experience: DataFlow Munich",
                     content="Containerized ML workloads with Docker and Kubernetes, achieving 99.95% uptime for critical inference services.",
-                    metadata_json={"section": "experience", "dates": "2018–2021", "tags": ["docker", "kubernetes", "mlops"]},
+                    metadata_json={
+                        "section": "experience",
+                        "dates": "2018–2021",
+                        "tags": ["docker", "kubernetes", "mlops"],
+                    },
                 ),
             ]
             session.add_all(chunks)
 
         legacy_result = await session.execute(
-            select(JobPosting).where(
+            select(JobPosting)
+            .where(
                 JobPosting.tenant_id == tenant.id,
                 JobPosting.url.like("https://example.com/jobs/%"),
-            ).order_by(JobPosting.created_at)
+            )
+            .order_by(JobPosting.created_at)
         )
         legacy_jobs = list(legacy_result.scalars().all())
 
@@ -322,13 +337,9 @@ Senior cloud platform engineering role for Swiss-market AI transformation projec
                 )
 
             if job:
-                await session.execute(
-                    delete(ResumeArtifact).where(ResumeArtifact.job_id == job.id)
-                )
+                await session.execute(delete(ResumeArtifact).where(ResumeArtifact.job_id == job.id))
                 await session.flush()
-                await session.execute(
-                    delete(MatchReport).where(MatchReport.job_id == job.id)
-                )
+                await session.execute(delete(MatchReport).where(MatchReport.job_id == job.id))
 
         await session.commit()
         print("Demo data seeded successfully.")

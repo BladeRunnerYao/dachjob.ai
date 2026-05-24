@@ -37,9 +37,7 @@ async def _attach_skills(db: AsyncSession, jobs: list[JobPosting]) -> list[JobPo
     return jobs
 
 
-async def list_jobs_by_tenant(
-    db: AsyncSession, tenant_id: UUID
-) -> list[JobPosting]:
+async def list_jobs_by_tenant(db: AsyncSession, tenant_id: UUID) -> list[JobPosting]:
     result = await db.execute(
         select(JobPosting)
         .where(JobPosting.tenant_id == tenant_id)
@@ -52,9 +50,7 @@ async def list_jobs_by_tenant(
 
 
 async def get_job(db: AsyncSession, job_id: UUID) -> JobPosting | None:
-    result = await db.execute(
-        select(JobPosting).where(JobPosting.id == job_id)
-    )
+    result = await db.execute(select(JobPosting).where(JobPosting.id == job_id))
     job = result.scalar_one_or_none()
     if not job:
         return None

@@ -11,7 +11,6 @@ so operators know which keys need attention.
 
 import asyncio
 import os
-import sys
 import warnings
 from dataclasses import dataclass
 
@@ -37,7 +36,9 @@ def _gather_providers() -> list[ProviderConfig]:
             ProviderConfig(
                 name="gemini",
                 api_key=gemini_key,
-                base_url=os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/"),
+                base_url=os.getenv(
+                    "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/"
+                ),
                 model=os.getenv("GEMINI_MODEL_FAST", "gemini-3.1-flash-lite"),
             )
         )
@@ -112,7 +113,6 @@ class TestProviderSmoke:
         print(f"\n  Healthy:   {[r[0] for r in healthy] if healthy else 'none'}")
         print(f"  Unhealthy: {[r[0] for r in unhealthy] if unhealthy else 'none'}")
 
-        assert healthy, (
-            f"All {len(providers)} provider(s) failed. "
-            + " ".join(f"{r[0]}={r[2]}" for r in results)
+        assert healthy, f"All {len(providers)} provider(s) failed. " + " ".join(
+            f"{r[0]}={r[2]}" for r in results
         )

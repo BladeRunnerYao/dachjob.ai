@@ -5,9 +5,8 @@ Revises: 0002_job_import_metadata
 Create Date: 2026-05-23
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0003_add_user_auth_fields"
 down_revision = "0002_job_import_metadata"

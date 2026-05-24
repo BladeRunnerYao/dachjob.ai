@@ -1,17 +1,24 @@
 from uuid import UUID
 
 from app.modules.llm_gateway.schemas import (
-    ParsedJobPosting,
-    FitExplanation,
     EvidenceSelection,
+    FitExplanation,
     GeneratedResume,
+    ParsedJobPosting,
     ScreeningAnswerSet,
 )
 
 
 class FakeLLMGateway:
-    async def run_json(self, tenant_id: UUID, task: str, prompt_version: str,
-                       messages: list[dict], output_schema, **kwargs):
+    async def run_json(
+        self,
+        tenant_id: UUID,
+        task: str,
+        prompt_version: str,
+        messages: list[dict],
+        output_schema,
+        **kwargs,
+    ):
         if task == "jd_extract":
             return ParsedJobPosting(
                 title="Software Engineer",
@@ -30,8 +37,17 @@ class FakeLLMGateway:
             return FitExplanation(
                 overall_score=82.5,
                 recommendation="apply",
-                breakdown={"skills_match": 85.0, "experience": 80.0, "language_fit": 90.0, "location": 75.0},
-                top_reasons=["Strong Python experience", "Relevant industry background", "Fluent German"],
+                breakdown={
+                    "skills_match": 85.0,
+                    "experience": 80.0,
+                    "language_fit": 90.0,
+                    "location": 75.0,
+                },
+                top_reasons=[
+                    "Strong Python experience",
+                    "Relevant industry background",
+                    "Fluent German",
+                ],
                 gaps=["No Kubernetes experience"],
                 explanation="The candidate is a strong match with solid Python experience and fluent German.",
             )
@@ -44,11 +60,21 @@ class FakeLLMGateway:
         elif task == "resume_generate":
             return GeneratedResume(
                 html_content="<html><body><h1>John Doe</h1><p>Senior Engineer</p></body></html>",
-                provenance=[{"bullet": "Senior Engineer at Acme (2019-2024)", "source_chunk_ids": ["chunk-1"]}],
+                provenance=[
+                    {
+                        "bullet": "Senior Engineer at Acme (2019-2024)",
+                        "source_chunk_ids": ["chunk-1"],
+                    }
+                ],
             )
         elif task == "screening_answer":
             return ScreeningAnswerSet(
-                answers=[{"question": "Why do you want this job?", "answer": "I have relevant experience."}],
+                answers=[
+                    {
+                        "question": "Why do you want this job?",
+                        "answer": "I have relevant experience.",
+                    }
+                ],
             )
         else:
             raise ValueError(f"Unknown task: {task}")

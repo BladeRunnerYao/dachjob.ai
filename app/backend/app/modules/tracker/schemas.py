@@ -1,12 +1,20 @@
-from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
+
 from pydantic import BaseModel
 
 VALID_STATUSES = [
-    "Evaluated", "Applied", "Responded", "Interview",
-    "Offer", "Rejected", "Discarded", "SKIP",
+    "Evaluated",
+    "Applied",
+    "Responded",
+    "Interview",
+    "Offer",
+    "Rejected",
+    "Discarded",
+    "SKIP",
 ]
+
 
 class ApplicationResponse(BaseModel):
     id: UUID
@@ -24,16 +32,19 @@ class ApplicationResponse(BaseModel):
     updated_at: datetime
     model_config = {"from_attributes": True}
 
+
 class ApplicationCreate(BaseModel):
     job_id: UUID
     status: str = "Evaluated"
     notes: str | None = None
+
 
 class ApplicationUpdate(BaseModel):
     status: str | None = None
     score: Decimal | None = None
     notes: str | None = None
     next_action_at: datetime | None = None
+
 
 class AutofillPayload(BaseModel):
     first_name: str

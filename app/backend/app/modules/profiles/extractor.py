@@ -1,6 +1,6 @@
 import html
-import re
 import io
+import re
 from uuid import UUID
 
 import httpx
@@ -32,11 +32,38 @@ def _extract_h1(html_text: str) -> str | None:
 
 
 _CITIES = [
-    "Stuttgart", "Berlin", "Munich", "München", "Hamburg", "Cologne", "Köln",
-    "Frankfurt", "Düsseldorf", "Leipzig", "Dresden", "Nuremberg", "Nürnberg",
-    "Hannover", "Bremen", "Bonn", "Mannheim", "Karlsruhe", "Augsburg",
-    "Wiesbaden", "Münster", "Aachen", "Braunschweig", "Kiel", "Potsdam",
-    "Zurich", "Zürich", "Vienna", "Wien", "Amsterdam", "Paris", "London",
+    "Stuttgart",
+    "Berlin",
+    "Munich",
+    "München",
+    "Hamburg",
+    "Cologne",
+    "Köln",
+    "Frankfurt",
+    "Düsseldorf",
+    "Leipzig",
+    "Dresden",
+    "Nuremberg",
+    "Nürnberg",
+    "Hannover",
+    "Bremen",
+    "Bonn",
+    "Mannheim",
+    "Karlsruhe",
+    "Augsburg",
+    "Wiesbaden",
+    "Münster",
+    "Aachen",
+    "Braunschweig",
+    "Kiel",
+    "Potsdam",
+    "Zurich",
+    "Zürich",
+    "Vienna",
+    "Wien",
+    "Amsterdam",
+    "Paris",
+    "London",
 ]
 
 
@@ -58,7 +85,8 @@ def _extract_location(text: str) -> str | None:
         for country in _COUNTRIES:
             pair = re.search(
                 rf"{re.escape(city)}\s*,\s*{re.escape(country)}",
-                text, re.IGNORECASE,
+                text,
+                re.IGNORECASE,
             )
             if pair:
                 return pair.group(0)
@@ -155,7 +183,10 @@ async def convert_to_cv_markdown(
         model_tier="quality",
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Raw text to extract from ({source_label}):\n\n{raw_text}"},
+            {
+                "role": "user",
+                "content": f"Raw text to extract from ({source_label}):\n\n{raw_text}",
+            },
         ],
     )
 

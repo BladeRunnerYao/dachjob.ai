@@ -3,12 +3,11 @@ import uuid
 from typing import Any
 
 from pydantic import BaseModel
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tenant import TenantContext
-from app.db.models import CandidateProfile, EvidenceChunk, JobPosting, MatchReport, ResumeArtifact
+from app.db.models import CandidateProfile, EvidenceChunk, MatchReport, ResumeArtifact
 from app.modules.jobs.repository import get_job
 from app.modules.llm_gateway.gateway import LLMGateway
 from app.modules.storage.service import StorageService
@@ -55,12 +54,14 @@ def chunk_cv_md(raw_cv_md: str, profile_id: uuid.UUID, tenant_id: uuid.UUID) -> 
     section_names = [m.group(1).strip() for m in section_pattern.finditer(raw_cv_md)]
 
     if not section_starts:
-        chunks.append({
-            "source_type": "profile",
-            "source_label": "Full CV",
-            "content": raw_cv_md.strip(),
-            "metadata_json": {"section": "full", "tags": ["cv"]},
-        })
+        chunks.append(
+            {
+                "source_type": "profile",
+                "source_label": "Full CV",
+                "content": raw_cv_md.strip(),
+                "metadata_json": {"section": "full", "tags": ["cv"]},
+            }
+        )
         return chunks
 
     boundaries = [raw_cv_md.index(m.group()) for m in section_pattern.finditer(raw_cv_md)]
@@ -76,24 +77,32 @@ def chunk_cv_md(raw_cv_md: str, profile_id: uuid.UUID, tenant_id: uuid.UUID) -> 
         sub_names = [m.group(1).strip() for m in sub_pattern.finditer(section_text)]
 
         if not sub_starts:
-            chunks.append({
-                "source_type": "profile",
-                "source_label": name,
-                "content": section_text,
-                "metadata_json": {"section": name, "tags": [name.lower()]},
-            })
+            chunks.append(
+                {
+                    "source_type": "profile",
+                    "source_label": name,
+                    "content": section_text,
+                    "metadata_json": {"section": name, "tags": [name.lower()]},
+                }
+            )
         else:
             sub_boundaries = sub_starts + [len(section_text)]
             for j, sub_name in enumerate(sub_names):
                 sub_start = sub_boundaries[j]
                 sub_end = sub_boundaries[j + 1]
                 sub_content = section_text[sub_start:sub_end].strip()
-                chunks.append({
-                    "source_type": "profile",
-                    "source_label": f"{name} / {sub_name}",
-                    "content": sub_content,
-                    "metadata_json": {"section": name, "sub_section": sub_name, "tags": [name.lower(), sub_name.lower()]},
-                })
+                chunks.append(
+                    {
+                        "source_type": "profile",
+                        "source_label": f"{name} / {sub_name}",
+                        "content": sub_content,
+                        "metadata_json": {
+                            "section": name,
+                            "sub_section": sub_name,
+                            "tags": [name.lower(), sub_name.lower()],
+                        },
+                    }
+                )
 
     return chunks
 
@@ -199,10 +208,13 @@ async def generate_resume(
     storage.upload(object_key, html.encode("utf-8"), content_type="text/html; charset=utf-8")
 
     match_result = await db.execute(
-        select(MatchReport).where(
+        select(MatchReport)
+        .where(
             MatchReport.job_id == job_id,
             MatchReport.tenant_id == tenant.id,
-        ).order_by(MatchReport.created_at.desc()).limit(1)
+        )
+        .order_by(MatchReport.created_at.desc())
+        .limit(1)
     )
     match_report = match_result.scalar_one_or_none()
 
@@ -224,15 +236,13 @@ def _build_llm_prompt(
     evidence_chunks: list[EvidenceChunk],
     parsed_job: dict,
 ) -> list[dict]:
-    evidence_text = "\n\n".join(
-        f"[{c.source_label}]\n{c.content}" for c in evidence_chunks
-    )
+    evidence_text = "\n\n".join(f"[{c.source_label}]\n{c.content}" for c in evidence_chunks)
     system_prompt = (
         "You are a DACH-format resume writer for the German/Swiss/Austrian job market. "
         "Generate a professional resume HTML that is clean, printable, and uses inline CSS. "
         "Follow this structure: Name and contact header, Professional Summary, "
         "Berufserfahrung (Professional Experience), Skills/Qualifikationen, Education/Ausbildung. "
-        "Respond with valid JSON matching the schema: {\"html\": \"<html>...</html>\"}."
+        'Respond with valid JSON matching the schema: {"html": "<html>...</html>"}.'
     )
     user_prompt = (
         f"Job requirements:\n{parsed_job}\n\n"
@@ -250,7 +260,11 @@ def _generate_html_resume(
     evidence_chunks: list[EvidenceChunk],
     parsed_job: dict,
 ) -> tuple[str, list[dict]]:
-    job_title = parsed_job.get("title", profile.headline) if isinstance(parsed_job, dict) else profile.headline
+    job_title = (
+        parsed_job.get("title", profile.headline)
+        if isinstance(parsed_job, dict)
+        else profile.headline
+    )
     company = parsed_job.get("company", "") if isinstance(parsed_job, dict) else ""
 
     summary_parts: list[str] = []
@@ -266,9 +280,19 @@ def _generate_html_resume(
             summary_parts.append(c.content)
         elif "skill" in label or "qualifikation" in section or "kompetenz" in section:
             skills.append(c.content)
-        elif "education" in label or "ausbildung" in section or "bildung" in section or "studium" in section:
+        elif (
+            "education" in label
+            or "ausbildung" in section
+            or "bildung" in section
+            or "studium" in section
+        ):
             education_items.append(c.content)
-        elif "experience" in label or "erfahrung" in section or "berufserfahrung" in section or "career" in label:
+        elif (
+            "experience" in label
+            or "erfahrung" in section
+            or "berufserfahrung" in section
+            or "career" in label
+        ):
             experience_items.append(c.content)
         else:
             if not summary_parts:
@@ -300,8 +324,8 @@ def _generate_html_resume(
 <body>
 <div class="page">
   <h1>{profile.full_name}</h1>
-  <div class="headline">{job_title}{f' &mdash; {company}' if company else ''}</div>
-  <div class="contact">{profile.location or ''}{' | ' if profile.location else ''}{profile.timezone or ''}</div>
+  <div class="headline">{job_title}{f" &mdash; {company}" if company else ""}</div>
+  <div class="contact">{profile.location or ""}{" | " if profile.location else ""}{profile.timezone or ""}</div>
 
   <div class="section">
     <h2>Professional Summary</h2>
@@ -313,15 +337,21 @@ def _generate_html_resume(
     <ul>{exp_html}</ul>
   </div>
 
-  {f'<div class="section"><h2>Qualifikationen &amp; Skills</h2><ul>{skills_html}</ul></div>' if skills_html else ''}
+  {f'<div class="section"><h2>Qualifikationen &amp; Skills</h2><ul>{skills_html}</ul></div>' if skills_html else ""}
 
   <div class="section">
     <h2>Ausbildung</h2>
-    <ul>{edu_html if edu_html else '<li>Details available upon request</li>'}</ul>
+    <ul>{edu_html if edu_html else "<li>Details available upon request</li>"}</ul>
   </div>
 </div>
 </body>
 </html>"""
 
-    provenance = [{"source": c.source_label, "section": (c.metadata_json or {}).get("section", "") if c.metadata_json else ""} for c in evidence_chunks]
+    provenance = [
+        {
+            "source": c.source_label,
+            "section": (c.metadata_json or {}).get("section", "") if c.metadata_json else "",
+        }
+        for c in evidence_chunks
+    ]
     return html, provenance
