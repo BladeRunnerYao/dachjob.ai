@@ -17,6 +17,7 @@ def test_public_route_whitelist_is_exact():
     assert is_public_route("/api/auth/forgot-password", "POST")
     assert is_public_route("/api/auth/reset-password", "POST")
     assert is_public_route(f"/api/resumes/{artifact_id}/html", "GET")
+    assert is_public_route(f"/api/resumes/{artifact_id}/pdf", "GET")
 
     assert not is_public_route("/api/jobs", "GET")
     assert not is_public_route("/api/auth/login", "GET")
@@ -45,6 +46,7 @@ def test_all_business_routes_have_auth_dependency():
         ("POST", "/api/auth/reset-password"),
         ("POST", "/api/auth/google"),
         ("GET", "/api/resumes/{artifact_id}/html"),
+        ("GET", "/api/resumes/{artifact_id}/pdf"),
     }
     auth_dependencies = {"get_tenant_context", "get_current_user"}
 
