@@ -897,11 +897,7 @@ def _needs_reasoning_parse_retry(parsed_json: dict, job) -> bool:
             "your mission",
         )
     )
-    return (
-        len(raw_jd) > 1200
-        and has_requirement_signal
-        and skill_count < 4
-    )
+    return len(raw_jd) > 1200 and has_requirement_signal and skill_count < 4
 
 
 async def parse_job_posting(
