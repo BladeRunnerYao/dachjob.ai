@@ -19,6 +19,7 @@ class TenantContext(BaseModel):
     id: UUID | None = None
     slug: str
     name: str = ""
+    user_id: UUID | None = None
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -141,7 +142,10 @@ async def validate_bearer_token(
     await cache.set_json(
         "auth:jwt",
         token_hash,
-        value={"tenant_id": str(tenant.id), "slug": tenant.slug, "name": tenant.name},
+        value={
+            "tenant_id": str(tenant.id), "slug": tenant.slug,
+            "name": tenant.name, "user_id": str(user.id),
+        },
     )
     return user, tenant
 
@@ -211,7 +215,7 @@ async def validate_auth(
 
     if credentials:
         _user, tenant = await validate_bearer_token(credentials, db)
-        return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)
+        return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name, user_id=_user.id)
 
     if x_api_key:
         return await validate_api_key(x_api_key, db)
