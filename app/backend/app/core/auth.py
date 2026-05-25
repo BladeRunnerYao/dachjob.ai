@@ -143,8 +143,10 @@ async def validate_bearer_token(
         "auth:jwt",
         token_hash,
         value={
-            "tenant_id": str(tenant.id), "slug": tenant.slug,
-            "name": tenant.name, "user_id": str(user.id),
+            "tenant_id": str(tenant.id),
+            "slug": tenant.slug,
+            "name": tenant.name,
+            "user_id": str(user.id),
         },
     )
     return user, tenant

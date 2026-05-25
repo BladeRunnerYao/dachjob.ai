@@ -110,7 +110,13 @@ async def import_profile_from_url(
     headline = metadata.get("headline") or _parse_name_and_headline(cv_md)[1] or "Unknown"
     location = metadata.get("location")
     profile = await upsert_profile(
-        db, tenant.id, tenant.user_id, name, headline, cv_md, location=location,
+        db,
+        tenant.id,
+        tenant.user_id,
+        name,
+        headline,
+        cv_md,
+        location=location,
     )
     profile.profile_json = {"source_url": body.url}
 
@@ -141,8 +147,12 @@ async def import_profile_from_pdf(
 
     name, headline = _parse_name_and_headline(cv_md)
     profile = await upsert_profile(
-        db, tenant.id, tenant.user_id,
-        name or "Unknown", headline or "Unknown", cv_md,
+        db,
+        tenant.id,
+        tenant.user_id,
+        name or "Unknown",
+        headline or "Unknown",
+        cv_md,
     )
     profile.profile_json = {"source_pdf": file.filename}
 
@@ -169,7 +179,13 @@ async def upload_cv(
     headline = headline or (existing.headline if existing else "Unknown")
     location = existing.location if existing else None
     profile = await upsert_profile(
-        db, tenant.id, tenant.user_id, name, headline, body.raw_cv_md, location=location,
+        db,
+        tenant.id,
+        tenant.user_id,
+        name,
+        headline,
+        body.raw_cv_md,
+        location=location,
     )
 
     await delete_evidence_by_profile(db, profile.id)
