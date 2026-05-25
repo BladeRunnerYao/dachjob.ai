@@ -1,4 +1,4 @@
-import type { JobPosting, CandidateProfile, Application, LLMRun, MatchReport, ResumeArtifact, JobImportResponse, PaginatedLLMRuns } from './types';
+import type { BackgroundTask, BackgroundTaskListResponse, JobPosting, CandidateProfile, Application, LLMRun, MatchReport, ResumeArtifact, JobImportResponse, PaginatedLLMRuns, VersionResponse } from './types';
 
 function getApiBase() {
   if (typeof window === 'undefined') {
@@ -15,6 +15,8 @@ function getPublicApiBase() {
 
 export class ApiClient {
   private RESUME_GENERATE_TIMEOUT_MS = 120_000;
+
+  workerEnabled = false;
 
   private getAuthHeaders(): Record<string, string> {
     if (typeof window === 'undefined') return {};
@@ -45,6 +47,12 @@ export class ApiClient {
         window.location.href = '/login';
         throw new Error('Unauthorized');
       }
+
+      const isBackgroundTask = res.status === 202;
+      if (isBackgroundTask) {
+        return res.json() as T;
+      }
+
       if (!res.ok) {
         let message = `API error: ${res.status}`;
         try {
@@ -71,6 +79,61 @@ export class ApiClient {
       if (e instanceof Error) throw e;
       throw new Error('API unreachable');
     }
+  }
+
+  async initWorkerMode(): Promise<void> {
+    try {
+      const version = await this.fetch<VersionResponse>('/api/version');
+      this.workerEnabled = version.worker_enabled;
+    } catch {
+      this.workerEnabled = false;
+    }
+  }
+
+  private isBackgroundTaskResponse(data: unknown): data is BackgroundTask {
+    return (
+      typeof data === 'object' &&
+      data !== null &&
+      'kind' in data &&
+      'status' in data &&
+      'id' in data
+    );
+  }
+
+  private checkTaskResult(task: BackgroundTask): void {
+    if (task.status === 'failed') {
+      const msg = task.error && typeof task.error === 'object'
+        ? (task.error as Record<string, unknown>).message || 'Task failed'
+        : 'Task failed';
+      throw new Error(String(msg));
+    }
+    if (task.status === 'cancelled') {
+      throw new Error('Task was cancelled');
+    }
+  }
+
+  async pollTask(taskId: string, onUpdate?: (task: BackgroundTask) => void): Promise<BackgroundTask> {
+    const terminal = new Set(['succeeded', 'failed', 'cancelled']);
+    while (true) {
+      const task = await this.fetch<BackgroundTask>(`/api/tasks/${taskId}`);
+      if (onUpdate) onUpdate(task);
+      if (terminal.has(task.status)) return task;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+
+  async getTask(taskId: string): Promise<BackgroundTask> {
+    return this.fetch<BackgroundTask>(`/api/tasks/${taskId}`);
+  }
+
+  async listTasks(params?: { status?: string; kind?: string; limit?: number; offset?: number }): Promise<BackgroundTaskListResponse> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set('status', params.status);
+    if (params?.kind) q.set('kind', params.kind);
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    const query = q.toString();
+    return this.fetch<BackgroundTaskListResponse>(`/api/tasks${query ? '?' + query : ''}`);
   }
 
   async requestBlob(path: string): Promise<Blob> {
@@ -108,18 +171,19 @@ export class ApiClient {
   }
 
   async createResumeArtifact(jobId: string): Promise<ResumeArtifact> {
-    const artifact = await this.request<{
-      id: string;
-      job_id: string;
-      html_object_key: string;
-      pdf_object_key?: string | null;
-      provenance_json?: unknown[];
-    }>(`/api/jobs/${jobId}/resume`, {
+    const result = await this.request<ResumeArtifact | BackgroundTask>(`/api/jobs/${jobId}/resume`, {
       method: 'POST',
       body: JSON.stringify({}),
-      timeoutMs: this.RESUME_GENERATE_TIMEOUT_MS,
+      timeoutMs: this.workerEnabled ? undefined : this.RESUME_GENERATE_TIMEOUT_MS,
     });
-    return this.toResumeArtifact(artifact);
+    if (this.isBackgroundTaskResponse(result)) {
+      const task = await this.pollTask(result.id);
+      this.checkTaskResult(task);
+      const latest = await this.getLatestResumeArtifact(jobId);
+      if (!latest) throw new Error('Resume generation completed but no artifact found');
+      return latest;
+    }
+    return this.toResumeArtifact(result as ResumeArtifact & { html_object_key: string; pdf_object_key?: string | null; provenance_json?: unknown[] });
   }
 
   async patch<T>(path: string, body: unknown): Promise<T> {
@@ -164,7 +228,18 @@ export class ApiClient {
     if (urls.length === 0) {
       throw new Error('No valid job URLs found');
     }
-    return this.post<JobImportResponse>('/api/jobs/import', { urls });
+    const result = await this.post<JobImportResponse | BackgroundTask>('/api/jobs/import', { urls });
+    if (this.isBackgroundTaskResponse(result)) {
+      const task = await this.pollTask(result.id);
+      this.checkTaskResult(task);
+      const jobs = await this.getJobs();
+      const taskResult = task.result as { imported_job_ids?: string[]; errors?: Array<{url: string; error: string}> } | undefined;
+      return {
+        imported: jobs,
+        errors: taskResult?.errors || [],
+      };
+    }
+    return result;
   }
 
   async getApplications(): Promise<Application[]> {
@@ -248,16 +323,15 @@ export class ApiClient {
   }
 
   async createMatchReport(jobId: string): Promise<MatchReport> {
-    const report = await this.post<{
-      id: string;
-      job_id: string;
-      overall_score: number;
-      recommendation: string;
-      breakdown_json: Record<string, number>;
-      gaps_json?: { gaps?: string[] } | null;
-      explanation?: string | null;
-    }>(`/api/jobs/${jobId}/match`, {});
-    return this.toMatchReport(report);
+    const result = await this.post<MatchReport | BackgroundTask>(`/api/jobs/${jobId}/match`, {});
+    if (this.isBackgroundTaskResponse(result)) {
+      const task = await this.pollTask(result.id);
+      this.checkTaskResult(task);
+      const latest = await this.getLatestMatchReport(jobId);
+      if (!latest) throw new Error('Match completed but no report found');
+      return latest;
+    }
+    return this.toMatchReport(result as MatchReport & { breakdown_json: Record<string, number>; gaps_json?: { gaps?: string[] } | null });
   }
 
   async getMatchReport(jobId: string): Promise<MatchReport> {

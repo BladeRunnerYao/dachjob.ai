@@ -9,11 +9,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.auth import is_rate_limit_exempt_route
 from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler
+from app.core.logging import configure_logging
 from app.core.rate_limit import RateLimitMiddleware
 from app.core.redis_client import cache, close_redis, init_app_redis
+from app.core.request_logging import RequestLoggingMiddleware
 from app.db.session import engine
 from app.modules.auth.api_keys import router as api_keys_router
 from app.modules.auth.routes import router as auth_router
+from app.modules.background_tasks.routes import router as background_tasks_router
 from app.modules.jobs.routes import router as jobs_router
 from app.modules.llm_gateway.routes import router as llm_gateway_router
 from app.modules.matching.routes import router as matching_router
@@ -23,7 +26,8 @@ from app.modules.resumes.routes import router as resumes_router
 from app.modules.tenants.routes import router as tenants_router
 from app.modules.tracker.routes import router as tracker_router
 
-logger = logging.getLogger("uvicorn")
+configure_logging()
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -51,11 +55,14 @@ def _build_cors_origins() -> list[str]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(
-        "dachjob.ai API starting | branch=%s commit=%s provider=%s redis=%s",
+        "api_startup | branch=%s commit=%s provider=%s "
+        "redis_enabled=%s worker_enabled=%s worker_fallback_to_sync=%s",
         VERSION.get("branch"),
         VERSION.get("commit"),
         settings.llm_provider,
         settings.redis_enabled,
+        settings.worker_enabled,
+        settings.worker_fallback_to_sync,
     )
     async with engine.begin() as _conn:
         pass
@@ -70,6 +77,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.add_middleware(RequestLoggingMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -99,6 +108,7 @@ app.include_router(llm_gateway_router)
 app.include_router(tracker_router)
 app.include_router(auth_router)
 app.include_router(api_keys_router)
+app.include_router(background_tasks_router)
 
 
 @app.get("/api/health")
@@ -135,4 +145,6 @@ async def version():
         "llm_provider": settings.llm_provider,
         "llm_model_fast": model_fast,
         "llm_model_reasoning": model_reasoning,
+        "worker_enabled": settings.worker_enabled,
+        "worker_fallback_to_sync": settings.worker_fallback_to_sync,
     }

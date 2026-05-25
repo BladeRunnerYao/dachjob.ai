@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import TenantContext
 from app.core.config import get_settings
+from app.core.email import send_reset_email
 from app.core.security import (
     create_access_token,
     create_reset_token,
@@ -23,6 +25,7 @@ from app.modules.auth.schemas import (
     ResetPasswordRequest,
     UserResponse,
 )
+from app.modules.background_tasks.execution import run_or_enqueue
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -150,6 +153,26 @@ async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depend
     reset_token = create_reset_token(user.id, user.email)
     settings = get_settings()
     reset_link = f"{settings.cors_origins.split(',')[0]}/reset-password?token={reset_token}"
+
+    if settings.worker_enabled:
+        tenant = TenantContext(slug=settings.default_tenant_slug, name="")
+        await run_or_enqueue(
+            db,
+            tenant=tenant,
+            kind="send_email",
+            payload={
+                "to_email": user.email,
+                "reset_link": reset_link,
+                "user_id": str(user.id),
+            },
+            celery_task=__import__(
+                "app.workers.tasks", fromlist=["send_email_task"]
+            ).send_email_task,
+            sync_runner=lambda: send_reset_email(user.email, reset_link),
+            result_serializer=lambda r: {"delivered": r},
+        )
+    else:
+        send_reset_email(user.email, reset_link)
 
     return {
         "message": "Use the link below to reset your password.",
