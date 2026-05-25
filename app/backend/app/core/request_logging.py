@@ -29,7 +29,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         logger.info(
             "request_start | method=%s path=%s request_id=%s",
-            method, path, request_id,
+            method,
+            path,
+            request_id,
             extra={"request_id": request_id},
         )
 
@@ -40,15 +42,22 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
             logger.info(
                 "request_end | method=%s path=%s status=%d duration_ms=%d request_id=%s",
-                method, path, response.status_code, duration_ms, request_id,
+                method,
+                path,
+                response.status_code,
+                duration_ms,
+                request_id,
                 extra={"request_id": request_id, "status_code": response.status_code},
             )
             return response
-        except Exception as exc:
+        except Exception:
             duration_ms = int((time.monotonic() - start) * 1000)
             logger.exception(
                 "request_unhandled_error | method=%s path=%s duration_ms=%d request_id=%s",
-                method, path, duration_ms, request_id,
+                method,
+                path,
+                duration_ms,
+                request_id,
                 extra={"request_id": request_id},
             )
             raise

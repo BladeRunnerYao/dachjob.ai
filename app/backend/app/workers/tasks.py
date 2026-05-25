@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from uuid import UUID
 
@@ -38,15 +37,19 @@ async def _run_inner(background_task_id: str, async_fn, *, result_serializer=Non
         await update_task_status(db, task.id, status="succeeded", result_json=serialized)
         logger.info(
             "task_succeeded | background_task_id=%s kind=%s",
-            background_task_id, task.kind,
+            background_task_id,
+            task.kind,
         )
     except Exception as exc:
         logger.exception(
             "task_failed | background_task_id=%s kind=%s error=%s",
-            background_task_id, task.kind, str(exc)[:200],
+            background_task_id,
+            task.kind,
+            str(exc)[:200],
         )
         await update_task_status(
-            db, task.id,
+            db,
+            task.id,
             status="failed",
             error_json={
                 "message": str(exc)[:500],
@@ -55,7 +58,13 @@ async def _run_inner(background_task_id: str, async_fn, *, result_serializer=Non
         )
 
 
-@celery_app.task(bind=True, autoretry_for=(httpx.HTTPError,), retry_backoff=True, retry_jitter=True, max_retries=3)
+@celery_app.task(
+    bind=True,
+    autoretry_for=(httpx.HTTPError,),
+    retry_backoff=True,
+    retry_jitter=True,
+    max_retries=3,
+)
 def import_jobs_task(self, background_task_id: str):
     async def _run(db, task):
         payload = task.payload_json or {}
@@ -74,7 +83,9 @@ def import_jobs_task(self, background_task_id: str):
     run_async(_run_inner(background_task_id, _run, result_serializer=lambda r: r))
 
 
-@celery_app.task(bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_jitter=True, max_retries=2)
+@celery_app.task(
+    bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_jitter=True, max_retries=2
+)
 def parse_job_task(self, background_task_id: str):
     async def _run(db, task):
         payload = task.payload_json or {}
@@ -92,7 +103,9 @@ def parse_job_task(self, background_task_id: str):
     run_async(_run_inner(background_task_id, _run, result_serializer=lambda r: r))
 
 
-@celery_app.task(bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_jitter=True, max_retries=2)
+@celery_app.task(
+    bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_jitter=True, max_retries=2
+)
 def compute_match_task(self, background_task_id: str):
     async def _run(db, task):
         payload = task.payload_json or {}
@@ -112,7 +125,9 @@ def compute_match_task(self, background_task_id: str):
     run_async(_run_inner(background_task_id, _run, result_serializer=lambda r: r))
 
 
-@celery_app.task(bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_jitter=True, max_retries=2)
+@celery_app.task(
+    bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_jitter=True, max_retries=2
+)
 def generate_resume_task(self, background_task_id: str):
     async def _run(db, task):
         payload = task.payload_json or {}
@@ -132,7 +147,9 @@ def generate_resume_task(self, background_task_id: str):
     run_async(_run_inner(background_task_id, _run, result_serializer=lambda r: r))
 
 
-@celery_app.task(bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_jitter=True, max_retries=3)
+@celery_app.task(
+    bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_jitter=True, max_retries=3
+)
 def send_email_task(self, background_task_id: str):
     async def _run(db, task):
         from app.core.email import send_reset_email

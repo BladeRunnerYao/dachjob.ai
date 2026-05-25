@@ -9,14 +9,12 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.logging import ErrorArchiveHandler, JsonFormatter, configure_logging
-from app.core.request_logging import RequestLoggingMiddleware, get_request_id
-from app.db.models import BackgroundTask
+from app.core.logging import ErrorArchiveHandler, JsonFormatter
+from app.core.request_logging import get_request_id
 from app.modules.background_tasks.execution import run_or_enqueue
 from app.modules.background_tasks.repository import (
     cancel_task,
     create_task,
-    get_task,
     list_tasks,
     update_task_status,
 )
@@ -41,7 +39,6 @@ def test_version_route_reports_worker_mode():
 @pytest.mark.asyncio
 async def test_create_background_task():
     mock_db = AsyncMock(spec=AsyncSession)
-    task_id = uuid.uuid4()
     tenant_id = uuid.uuid4()
     user_id = uuid.uuid4()
 
@@ -66,14 +63,13 @@ async def test_create_background_task():
 async def test_background_task_status_transitions():
     mock_db = AsyncMock(spec=AsyncSession)
     task_id = uuid.uuid4()
-    tenant_id = uuid.uuid4()
 
     with patch("app.modules.background_tasks.repository.select") as mock_select:
         mock_result = AsyncMock()
         mock_result.scalar_one_or_none.return_value = None
         mock_select.return_value.where.return_value = mock_result
 
-        task = await update_task_status(mock_db, task_id, status="running")
+        await update_task_status(mock_db, task_id, status="running")
         assert mock_db.execute.called
 
 
@@ -145,6 +141,7 @@ def test_error_archive_handler_writes_jsonl():
             logger_name = "test.logger"
 
             import logging
+
             record = logging.LogRecord(
                 name=logger_name,
                 level=logging.ERROR,
@@ -218,6 +215,7 @@ def test_json_formatter():
 
 def test_request_id_contextvar():
     from app.core.request_logging import request_id_var
+
     request_id_var.set("test-id")
     assert get_request_id() == "test-id"
 
@@ -249,7 +247,7 @@ async def test_list_tasks():
     mock_count.scalar.return_value = 0
 
     async def execute_side_effect(*args, **kwargs):
-        if hasattr(args[0], 'count') or (hasattr(args[0], 'order_by') and False):
+        if hasattr(args[0], "count") or (hasattr(args[0], "order_by") and False):
             return mock_count
         return mock_result
 
