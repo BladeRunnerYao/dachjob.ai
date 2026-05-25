@@ -34,13 +34,12 @@ async def create_task(
 
 
 async def get_task(
-    db: AsyncSession, task_id: uuid.UUID, tenant_id: uuid.UUID
+    db: AsyncSession, task_id: uuid.UUID, tenant_id: uuid.UUID | None = None
 ) -> BackgroundTask | None:
-    result = await db.execute(
-        select(BackgroundTask).where(
-            BackgroundTask.id == task_id, BackgroundTask.tenant_id == tenant_id
-        )
-    )
+    stmt = select(BackgroundTask).where(BackgroundTask.id == task_id)
+    if tenant_id is not None:
+        stmt = stmt.where(BackgroundTask.tenant_id == tenant_id)
+    result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
 
