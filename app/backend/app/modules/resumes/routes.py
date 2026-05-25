@@ -9,7 +9,7 @@ from app.core.auth import TenantContext
 from app.core.tenant import get_tenant_context
 from app.db.models import ResumeArtifact
 from app.db.session import get_db
-from app.modules.profiles.repository import get_profile_by_tenant
+from app.modules.profiles.repository import get_profile_by_user
 from app.modules.resumes.schemas import EvidenceResponse, ResumeResponse
 from app.modules.resumes.service import generate_resume, list_evidence
 from app.modules.storage.service import StorageService
@@ -24,7 +24,7 @@ async def get_evidence(
     tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    profile = await get_profile_by_tenant(db, tenant.id)
+    profile = await get_profile_by_user(db, tenant.user_id)
     if not profile:
         return []
     return await list_evidence(db, tenant.id, profile.id)

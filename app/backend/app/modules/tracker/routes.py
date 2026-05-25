@@ -8,7 +8,7 @@ from app.core.auth import TenantContext
 from app.core.tenant import get_tenant_context
 from app.db.models import MatchReport, ResumeArtifact
 from app.db.session import get_db
-from app.modules.profiles.repository import get_profile_by_tenant
+from app.modules.profiles.repository import get_profile_by_user
 from app.modules.tracker.autofill import generate_autofill_payload
 from app.modules.tracker.repository import (
     create_application,
@@ -62,8 +62,8 @@ async def autofill_endpoint(
         raise HTTPException(status_code=404, detail="Application not found")
 
     profile = None
-    if tenant.id:
-        profile = await get_profile_by_tenant(db, tenant.id)
+    if tenant.id and tenant.user_id:
+        profile = await get_profile_by_user(db, tenant.user_id)
 
     match_report = None
     if app.job_id:

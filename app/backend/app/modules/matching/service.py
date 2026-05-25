@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import TenantContext
 from app.db.models import EvidenceChunk, MatchReport
 from app.modules.jobs.repository import get_job, sync_job_skills
-from app.modules.profiles.repository import get_profile_by_tenant
+from app.modules.profiles.repository import get_profile_by_user
 
 SKILL_PATTERNS = [
     ("Python", [r"\bpython\b"]),
@@ -1147,9 +1147,9 @@ async def compute_match(
     if not job.parsed_json:
         await parse_job_posting(db, tenant, job)
 
-    profile = await get_profile_by_tenant(db, tenant.id)
+    profile = await get_profile_by_user(db, tenant.user_id)
     if not profile:
-        raise AppError("profile_not_found", "Candidate profile not found for tenant")
+        raise AppError("profile_not_found", "Candidate profile not found")
 
     result = await db.execute(
         select(EvidenceChunk)

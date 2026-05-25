@@ -51,6 +51,7 @@ class CandidateProfile(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     full_name = Column(Text, nullable=False)
     headline = Column(Text, nullable=False)
     location = Column(Text, nullable=True)
