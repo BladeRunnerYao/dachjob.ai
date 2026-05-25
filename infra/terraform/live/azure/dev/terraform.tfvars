@@ -1,4 +1,4 @@
-name_prefix = "dachjob-az"
+name_prefix = "dj-az2"
 location          = "francecentral"
 
 postgres_administrator_password = "ARrAy3MuDgSgBTFNurVi5ipZ"

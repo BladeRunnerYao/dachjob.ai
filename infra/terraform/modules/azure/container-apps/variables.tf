@@ -26,6 +26,10 @@ variable "acr_name" {
   type = string
 }
 
+variable "subscription_id" {
+  type = string
+}
+
 variable "api_image" {
   type = string
 }

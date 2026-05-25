@@ -20,14 +20,6 @@ variable "administrator_password" {
   sensitive = true
 }
 
-variable "subnet_id" {
-  type = string
-}
-
-variable "private_dns_zone_id" {
-  type = string
-}
-
 variable "postgres_version" {
   type    = string
   default = "16"

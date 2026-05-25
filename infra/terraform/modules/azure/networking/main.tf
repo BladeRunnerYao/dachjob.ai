@@ -50,7 +50,7 @@ resource "azurerm_subnet" "redis" {
 }
 
 resource "azurerm_private_dns_zone" "postgres" {
-  name                = "privatelink.postgres.database.azure.com"
+  name                = "${var.name_prefix}.postgres.database.azure.com"
   resource_group_name = azurerm_resource_group.this.name
   tags                = var.tags
 }

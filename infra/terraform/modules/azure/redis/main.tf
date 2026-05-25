@@ -6,6 +6,12 @@ resource "azurerm_redis_cache" "this" {
   family              = var.family
   sku_name            = var.sku_name
   tags                = var.tags
+
+  lifecycle {
+    ignore_changes = [
+      redis_configuration,
+    ]
+  }
 }
 
 resource "azurerm_redis_firewall_rule" "allow_azure" {

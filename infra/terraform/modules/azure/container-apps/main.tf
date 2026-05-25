@@ -6,12 +6,10 @@ resource "azurerm_user_assigned_identity" "this" {
 }
 
 resource "azurerm_role_assignment" "acr_pull" {
-  scope                = "/subscriptions/${data.azurerm_subscription.current.id}/resourceGroups/${var.resource_group_name}/providers/Microsoft.ContainerRegistry/registries/${var.acr_name}"
+  scope                = "/subscriptions/${var.subscription_id}/resourceGroups/${var.resource_group_name}/providers/Microsoft.ContainerRegistry/registries/${var.acr_name}"
   role_definition_name = "AcrPull"
   principal_id         = azurerm_user_assigned_identity.this.principal_id
 }
-
-data "azurerm_subscription" "current" {}
 
 resource "azurerm_container_app_environment" "this" {
   name                       = "${var.name_prefix}-cae"
