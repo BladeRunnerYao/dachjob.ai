@@ -158,14 +158,16 @@ export class ApiClient {
     return this.request<T>(path, { method: 'POST', body: JSON.stringify(body) });
   }
 
-  async createResumeArtifact(jobId: string): Promise<ResumeArtifact | BackgroundTask> {
+  async createResumeArtifact(jobId: string): Promise<ResumeArtifact> {
     const result = await this.request<ResumeArtifact | BackgroundTask>(`/api/jobs/${jobId}/resume`, {
       method: 'POST',
       body: JSON.stringify({}),
       timeoutMs: this.workerEnabled ? undefined : this.RESUME_GENERATE_TIMEOUT_MS,
     });
     if (this.isBackgroundTaskResponse(result)) {
-      return this.pollTask(result.id);
+      await this.pollTask(result.id);
+      const latest = await this.getLatestResumeArtifact(jobId);
+      return latest || this.getMockResume(jobId);
     }
     return this.toResumeArtifact(result as ResumeArtifact & { html_object_key: string; pdf_object_key?: string | null; provenance_json?: unknown[] });
   }
@@ -202,7 +204,7 @@ export class ApiClient {
     });
   }
 
-  async importJobs(urlText: string): Promise<JobImportResponse | BackgroundTask> {
+  async importJobs(urlText: string): Promise<JobImportResponse> {
     const urls = Array.from(new Set(
       urlText
         .split(/[\s,]+/)
@@ -214,7 +216,13 @@ export class ApiClient {
     }
     const result = await this.post<JobImportResponse | BackgroundTask>('/api/jobs/import', { urls });
     if (this.isBackgroundTaskResponse(result)) {
-      return this.pollTask(result.id);
+      const task = await this.pollTask(result.id);
+      const jobs = await this.getJobs();
+      const taskResult = task.result as { imported_job_ids?: string[]; errors?: Array<{url: string; error: string}> } | undefined;
+      return {
+        imported: jobs,
+        errors: taskResult?.errors || [],
+      };
     }
     return result;
   }
@@ -299,10 +307,12 @@ export class ApiClient {
     }
   }
 
-  async createMatchReport(jobId: string): Promise<MatchReport | BackgroundTask> {
+  async createMatchReport(jobId: string): Promise<MatchReport> {
     const result = await this.post<MatchReport | BackgroundTask>(`/api/jobs/${jobId}/match`, {});
     if (this.isBackgroundTaskResponse(result)) {
-      return this.pollTask(result.id);
+      await this.pollTask(result.id);
+      const latest = await this.getLatestMatchReport(jobId);
+      return latest || this.getMockMatchReport(jobId);
     }
     return this.toMatchReport(result as MatchReport & { breakdown_json: Record<string, number>; gaps_json?: { gaps?: string[] } | null });
   }
