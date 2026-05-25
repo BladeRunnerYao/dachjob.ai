@@ -910,10 +910,12 @@ async def parse_job_posting(
         await sync_job_skills(db, job, job.parsed_json, source="cached_parser")
         logging.getLogger(__name__).info(
             "parse_cache_hit | job_id=%s tenant_id=%s",
-            job.id, tenant.id,
+            job.id,
+            tenant.id,
         )
         try:
             from app.db.models import LLMRun
+
             run = LLMRun(
                 id=uuid.uuid4(),
                 tenant_id=tenant.id,
