@@ -9,7 +9,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "0006"
-down_revision = "0005_add_user_id_to_candidate_profiles"
+down_revision = "0005"
 branch_labels = None
 depends_on = None
 
