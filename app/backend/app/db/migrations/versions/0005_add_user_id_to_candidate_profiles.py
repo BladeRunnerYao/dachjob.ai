@@ -37,7 +37,7 @@ def upgrade() -> None:
 
     for p in profiles:
         members = conn.execute(
-            text("SELECT user_id FROM memberships WHERE tenant_id = :tid ORDER BY created_at"),
+            text("SELECT user_id FROM memberships WHERE tenant_id = :tid"),
             {"tid": p.tenant_id},
         ).fetchall()
 
