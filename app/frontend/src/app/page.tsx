@@ -4,11 +4,12 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { api } from '@/lib/api/client';
 
 export default async function DashboardPage() {
-  const [jobs, apps, runs] = await Promise.all([
+  const [jobs, apps, paginated] = await Promise.all([
     api.getJobs(),
     api.getApplications(),
-    api.getLLMRuns(),
+    api.getLLMRuns({ limit: 200 }),
   ]);
+  const runs = paginated.items;
 
   const applyCount = jobs.filter(j => j.recommendation === 'apply').length;
   const maybeCount = jobs.filter(j => j.recommendation === 'maybe').length;
