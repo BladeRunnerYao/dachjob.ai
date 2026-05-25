@@ -17,6 +17,11 @@ from app.modules.matching.service import compute_match, parse_job_posting
 router = APIRouter(prefix="/api/jobs/{job_id}", tags=["matching"])
 
 
+async def _invalidate_job_caches(tenant_id: UUID, job_id: UUID):
+    await cache.delete("jobs:list", str(tenant_id))
+    await cache.delete("job:detail", str(job_id))
+
+
 @router.post("/parse", response_model=ParseResponse)
 async def parse_job(
     job_id: UUID,
@@ -27,7 +32,7 @@ async def parse_job(
     if not job:
         raise AppError("job_not_found", "Job posting not found", status_code=404)
     result = await parse_job_posting(db, tenant, job, force=True)
-    await cache.delete("jobs:list", str(tenant.id))
+    await _invalidate_job_caches(tenant.id, job_id)
     return ParseResponse(
         job_id=job.id, status=result["status"], parsed_json=result.get("parsed_json")
     )
@@ -40,7 +45,7 @@ async def match_job(
     tenant: TenantContext = Depends(get_tenant_context),
 ):
     report = await compute_match(db, tenant, job_id)
-    await cache.delete("jobs:list", str(tenant.id))
+    await _invalidate_job_caches(tenant.id, job_id)
     return report
 
 
