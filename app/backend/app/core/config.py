@@ -75,6 +75,15 @@ class Settings(BaseSettings):
 
     password_reset_token_minutes: int = 60
 
+    worker_enabled: bool = False
+    worker_fallback_to_sync: bool = True
+    worker_enqueue_timeout_seconds: float = 2.0
+
+    log_level: str = "INFO"
+    log_json: bool = True
+    error_log_to_file: bool = True
+    error_log_dir: str = "/tmp/dachjob-error-logs"
+
     model_config = {"env_file": ".env", "extra": "allow"}
 
 

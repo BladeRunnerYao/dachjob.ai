@@ -908,6 +908,28 @@ async def parse_job_posting(
 ) -> dict:
     if job.parsed_json and not force:
         await sync_job_skills(db, job, job.parsed_json, source="cached_parser")
+        logging.getLogger(__name__).info(
+            "parse_cache_hit | job_id=%s tenant_id=%s",
+            job.id,
+            tenant.id,
+        )
+        try:
+            from app.db.models import LLMRun
+
+            run = LLMRun(
+                id=uuid.uuid4(),
+                tenant_id=tenant.id,
+                task="jd_extract",
+                provider="cache",
+                model="cache",
+                prompt_version="1.1",
+                latency_ms=0,
+                status="cache_hit",
+            )
+            db.add(run)
+            await db.flush()
+        except Exception:
+            pass
         return {"status": job.status or "parsed", "parsed_json": job.parsed_json}
 
     from app.modules.llm_gateway.gateway import LLMGateway

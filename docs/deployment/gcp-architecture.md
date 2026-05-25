@@ -96,7 +96,7 @@ Options for the worker:
 |-----------|----------|--------|
 | **FastAPI Backend** | Cloud Run | Request-driven; scales to zero |
 | **Next.js Frontend** | Cloud Run | Static + SSR; scales to zero |
-| **Celery Worker** | GKE Autopilot (smallest config) or Compute Engine e2-micro | Needs persistent process |
+| **Celery Worker** | GKE Autopilot (smallest config) or Compute Engine e2-micro | Needs persistent process. Optional — see Worker Mode below. |
 | **PostgreSQL** | Cloud SQL | Managed; backups; pgvector support |
 | **Redis** | Memorystore | Managed; Celery broker |
 | **Object Storage** | Cloud Storage (GCS) | S3-compatible; cheap |
@@ -105,6 +105,18 @@ Options for the worker:
 | **Monitoring** | Cloud Monitoring + Cloud Logging | Built-in; dashboards + alerting |
 | **DNS** | Cloud DNS | Custom domain + TLS (if needed) |
 | **Identity** | IAM Service Accounts | Secure workload identity per component |
+
+## Worker Mode
+
+The application supports two runtime modes:
+
+- **`WORKER_ENABLED=false`** (default): No worker pod needed. API executes long-running workflows synchronously. Suitable for low-cost deploy, local dev, small traffic, and demo mode. Redis remains active for API caching and rate limiting.
+
+- **`WORKER_ENABLED=true`**: Worker pods required. API enqueues workflows to Celery via Redis. Suitable for batch imports, LLM-heavy workflows, resume/PDF generation, and avoiding Cloud Run request timeout pressure.
+
+Worker-disabled deploys scale the GKE worker deployment to zero but keep the cluster. Full GKE cluster teardown requires an explicit separate step.
+
+All logging is structured (JSON) and error/critical logs are archived to `ERROR_LOG_DIR` as JSONL files.
 
 ### Infrastructure as Code (Terraform)
 

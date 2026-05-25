@@ -29,6 +29,8 @@ def get_engine():
         async_url,
         pool_size=5,
         max_overflow=10,
+        pool_recycle=300,
+        pool_pre_ping=True,
         echo=False,
     )
 

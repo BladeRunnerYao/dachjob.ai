@@ -78,3 +78,21 @@ See [.github/workflows/deploy.yml](/.github/workflows/deploy.yml) for the GitHub
 The pipeline supports:
 - **Automatic**: Push to `main` or `deploy/*` branches triggers build + deploy
 - **Manual** via `workflow_dispatch`: Select branch, target (all/api/frontend/worker/terraform), and optionally run Terraform
+
+## Worker Mode
+
+The worker can be enabled or disabled at deploy time via `worker_mode` workflow dispatch input.
+
+- `worker_mode=disabled`: No worker pod deployed. API runs workflows synchronously.
+  - Existing GKE cluster is kept but the worker deployment is scaled to zero.
+- `worker_mode=enabled`: Worker pods deployed. API enqueues long-running workflows to Celery.
+
+### GKE Cluster Teardown
+
+Worker-disabled deploys scale the worker deployment to zero but do **not** destroy the GKE cluster.
+
+If cost remains too high even with zero worker pods:
+1. Implement a separate `enable_worker_infrastructure` variable in Terraform
+2. Guard all `module.gke` outputs with `try(...)`
+3. Update GitHub Actions so `worker_mode=enabled` requires GKE infrastructure
+4. Run a separate reviewed Terraform plan before destroying the cluster
