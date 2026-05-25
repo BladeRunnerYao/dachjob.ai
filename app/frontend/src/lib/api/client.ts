@@ -1,4 +1,4 @@
-import type { JobPosting, CandidateProfile, Application, LLMRun, MatchReport, ResumeArtifact, JobImportResponse } from './types';
+import type { JobPosting, CandidateProfile, Application, LLMRun, MatchReport, ResumeArtifact, JobImportResponse, PaginatedLLMRuns } from './types';
 
 function getApiBase() {
   if (typeof window === 'undefined') {
@@ -301,11 +301,18 @@ export class ApiClient {
     return cached || this.getMockResume(jobId);
   }
 
-  async getLLMRuns(): Promise<LLMRun[]> {
+  async getLLMRuns(params?: { task?: string; status?: string; limit?: number; offset?: number }): Promise<PaginatedLLMRuns> {
     try {
-      return await this.fetch<LLMRun[]>('/api/llm-runs');
+      const q = new URLSearchParams();
+      if (params?.task) q.set('task', params.task);
+      if (params?.status) q.set('status', params.status);
+      if (params?.limit) q.set('limit', String(params.limit));
+      if (params?.offset) q.set('offset', String(params.offset));
+      const query = q.toString();
+      return await this.fetch<PaginatedLLMRuns>(`/api/llm-runs${query ? '?' + query : ''}`);
     } catch {
-      return this.getMockLLMRuns();
+      const items = this.getMockLLMRuns();
+      return { items, total: items.length };
     }
   }
 
