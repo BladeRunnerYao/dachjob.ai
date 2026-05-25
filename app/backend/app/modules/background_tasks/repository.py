@@ -16,6 +16,7 @@ async def create_task(
     payload: dict | None = None,
     idempotency_key: str | None = None,
 ) -> BackgroundTask:
+    now = datetime.now(timezone.utc)
     task = BackgroundTask(
         id=uuid.uuid4(),
         tenant_id=tenant_id,
@@ -24,6 +25,8 @@ async def create_task(
         status="queued",
         payload_json=payload or {},
         idempotency_key=idempotency_key,
+        created_at=now,
+        updated_at=now,
     )
     db.add(task)
     await db.flush()
