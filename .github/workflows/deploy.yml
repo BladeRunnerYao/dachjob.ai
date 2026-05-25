@@ -32,6 +32,19 @@ on:
         required: false
         type: boolean
         default: true
+      worker_mode:
+        description: Worker mode for this deploy
+        required: true
+        type: choice
+        default: disabled
+        options:
+          - disabled
+          - enabled
+      scale_down_worker_when_disabled:
+        description: Scale existing GKE worker deployment to zero when worker mode is disabled
+        required: false
+        type: boolean
+        default: true
 
 concurrency:
   group: deploy-gcp-dev
@@ -127,6 +140,8 @@ jobs:
       run_terraform: ${{ steps.inputs.outputs.run_terraform }}
       terraform_apply: ${{ steps.inputs.outputs.terraform_apply }}
       run_migrations: ${{ steps.inputs.outputs.run_migrations }}
+      worker_enabled: ${{ steps.inputs.outputs.worker_enabled }}
+      scale_down_worker: ${{ steps.inputs.outputs.scale_down_worker }}
     steps:
       - name: Resolve inputs
         id: inputs
@@ -138,15 +153,27 @@ jobs:
           target="${{ github.event.inputs.target || 'all' }}"
           terraform_apply="${{ github.event.inputs.terraform_apply || 'false' }}"
           run_migrations="${{ github.event.inputs.run_migrations || 'true' }}"
+          worker_mode="${{ github.event.inputs.worker_mode || 'disabled' }}"
+          scale_down_worker="${{ github.event.inputs.scale_down_worker_when_disabled || 'true' }}"
 
           echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
           echo "target=${target}" >> "${GITHUB_OUTPUT}"
           echo "terraform_apply=${terraform_apply}" >> "${GITHUB_OUTPUT}"
           echo "run_migrations=${run_migrations}" >> "${GITHUB_OUTPUT}"
+          echo "worker_enabled=${worker_mode}" >> "${GITHUB_OUTPUT}"
+          echo "scale_down_worker=${scale_down_worker}" >> "${GITHUB_OUTPUT}"
 
           [[ "${target}" == "all" || "${target}" == "api" ]] && echo "deploy_api=true" >> "${GITHUB_OUTPUT}" || echo "deploy_api=false" >> "${GITHUB_OUTPUT}"
           [[ "${target}" == "all" || "${target}" == "frontend" ]] && echo "deploy_frontend=true" >> "${GITHUB_OUTPUT}" || echo "deploy_frontend=false" >> "${GITHUB_OUTPUT}"
-          [[ "${target}" == "all" || "${target}" == "worker" ]] && echo "deploy_worker=true" >> "${GITHUB_OUTPUT}" || echo "deploy_worker=false" >> "${GITHUB_OUTPUT}"
+          if [[ "${worker_mode}" == "disabled" && "${target}" == "worker" ]]; then
+            echo "Error: target=worker requires worker_mode=enabled" >&2
+            exit 1
+          fi
+          if [[ "${worker_mode}" == "enabled" && ("${target}" == "all" || "${target}" == "worker") ]]; then
+            echo "deploy_worker=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "deploy_worker=false" >> "${GITHUB_OUTPUT}"
+          fi
           [[ "${target}" == "all" || "${target}" == "terraform" ]] && echo "run_terraform=true" >> "${GITHUB_OUTPUT}" || echo "run_terraform=false" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout selected branch
@@ -407,7 +434,7 @@ jobs:
             --add-cloudsql-instances="${CLOUD_SQL_CONNECTION_NAME}" \
             --vpc-connector="${VPC_CONNECTOR}" \
             --vpc-egress=private-ranges-only \
-            --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},REDIS_HOST=${REDIS_HOST},REDIS_PORT=${REDIS_PORT},REDIS_ENABLED=${REDIS_ENABLED},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=vertex_ai,VERTEX_AI_PROJECT_ID=${PROJECT_ID},VERTEX_AI_LOCATION=global,CORS_ORIGINS=${FRONTEND_URL}" \
+            --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},REDIS_HOST=${REDIS_HOST},REDIS_PORT=${REDIS_PORT},REDIS_ENABLED=${REDIS_ENABLED},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=vertex_ai,VERTEX_AI_PROJECT_ID=${PROJECT_ID},VERTEX_AI_LOCATION=global,CORS_ORIGINS=${FRONTEND_URL},WORKER_ENABLED=${{ needs.prepare.outputs.worker_enabled == 'enabled' && 'true' || 'false' }},WORKER_FALLBACK_TO_SYNC=true,LOG_LEVEL=INFO,LOG_JSON=true,ERROR_LOG_TO_FILE=true,ERROR_LOG_DIR=/tmp/dachjob-error-logs" \
             --update-secrets="DATABASE_PASSWORD=dachjob-dev-db-password:latest,JWT_SECRET=dachjob-dev-jwt-secret-key:latest,SECRET_KEY=dachjob-dev-jwt-secret-key:latest,GEMINI_API_KEY=dachjob-dev-gemini-api-key:latest,RESEND_API_KEY=dachjob-dev-smtp-password:latest,S3_ACCESS_KEY_ID=dachjob-dev-s3-access-key:latest,S3_SECRET_ACCESS_KEY=dachjob-dev-s3-secret-key:latest"
 
       - name: Deploy migration job
@@ -505,6 +532,40 @@ jobs:
           done
           exit 1
 
+  scale-down-worker:
+    name: Scale down worker to zero
+    needs:
+      - prepare
+      - terraform
+      - deploy-api
+    if: ${{ always() && needs.prepare.outputs.worker_enabled == 'disabled' && needs.prepare.outputs.scale_down_worker == 'true' && needs.prepare.outputs.deploy_worker != 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v3
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER_NAME }}
+          location: ${{ env.REGION }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Scale down worker deployment
+        run: |
+          kubectl delete hpa celery-worker --namespace="${GKE_NAMESPACE}" --ignore-not-found
+          kubectl scale deployment/celery-worker --namespace="${GKE_NAMESPACE}" --replicas=0
+          kubectl get deploy,hpa,pods --namespace="${GKE_NAMESPACE}" -o wide
+
   deploy-worker:
     name: Deploy worker to GKE
     needs:
@@ -585,6 +646,7 @@ jobs:
       - deploy-api
       - deploy-frontend
       - deploy-worker
+      - scale-down-worker
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
@@ -600,6 +662,6 @@ jobs:
           echo "| Terraform | ${{ needs.terraform.result }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| API | ${{ needs.deploy-api.result }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Frontend | ${{ needs.deploy-frontend.result }} |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| Worker | ${{ needs.deploy-worker.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Worker | ${{ needs.deploy-worker.result || needs.scale-down-worker.result || 'skipped' }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| API URL | ${{ needs.deploy-api.outputs.url || env.API_BASE_URL }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Frontend URL | ${{ needs.deploy-frontend.outputs.url || env.FRONTEND_URL }} |" >> "${GITHUB_STEP_SUMMARY}"

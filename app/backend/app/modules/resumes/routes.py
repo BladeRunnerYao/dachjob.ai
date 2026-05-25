@@ -6,9 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext
+from app.core.config import get_settings
 from app.core.tenant import get_tenant_context
 from app.db.models import ResumeArtifact
 from app.db.session import get_db
+from app.modules.background_tasks.execution import run_or_enqueue
+from app.modules.background_tasks.schemas import BackgroundTaskResponse
 from app.modules.profiles.repository import get_profile_by_user
 from app.modules.resumes.schemas import EvidenceResponse, ResumeResponse
 from app.modules.resumes.service import generate_resume, list_evidence
@@ -30,13 +33,37 @@ async def get_evidence(
     return await list_evidence(db, tenant.id, profile.id)
 
 
-@router.post("/resume", response_model=ResumeResponse, status_code=201)
+@router.post("/resume", status_code=201)
 async def create_resume(
     job_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
-    artifact = await generate_resume(db, tenant, job_id)
+    settings = get_settings()
+    if settings.worker_enabled:
+        mode, result = await run_or_enqueue(
+            db,
+            tenant=tenant,
+            kind="resume_generate",
+            payload={
+                "tenant_id": str(tenant.id),
+                "tenant_slug": tenant.slug,
+                "user_id": str(tenant.user_id) if tenant.user_id else None,
+                "job_id": str(job_id),
+            },
+            celery_task=__import__("app.workers.tasks", fromlist=["generate_resume_task"]).generate_resume_task,
+            sync_runner=lambda: generate_resume(db, tenant, job_id),
+            result_serializer=lambda r: {
+                "resume_artifact_id": str(r.id),
+                "html_object_key": r.html_object_key,
+                "pdf_object_key": r.pdf_object_key,
+            },
+        )
+        if mode == "queued":
+            return result
+        artifact = result
+    else:
+        artifact = await generate_resume(db, tenant, job_id)
     return artifact
 
 
