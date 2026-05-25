@@ -57,5 +57,31 @@ Only add `--no-cache` when explicitly requested.
 The local image and container names are:
 
 - API: `dachjob-backend-api`
-- Worker: `dachjob-backend-worker`
+- Worker: `dachjob-backend-worker` (behind `--profile worker`)
 - Frontend: `dachjob-frontend`
+
+## Worker Mode
+
+The application supports two runtime modes controlled by `WORKER_ENABLED`:
+
+- **`WORKER_ENABLED=false`** (default): No worker dependency. API routes execute workflows synchronously.
+  - Run with: `docker compose up`
+  - Redis is still used for caching and rate limiting.
+
+- **`WORKER_ENABLED=true`**: API routes enqueue long-running workflows to Celery. The worker executes them asynchronously.
+  - Run with: `docker compose --profile worker --profile redis up`
+  - Requires Redis and worker containers.
+
+### Local Docker Setup
+
+Default local command runs API/frontend/postgres/redis/minio without worker:
+
+```bash
+docker compose -f infra/docker/docker-compose.yml up
+```
+
+To run with worker:
+
+```bash
+docker compose -f infra/docker/docker-compose.yml --profile worker --profile redis up
+```
