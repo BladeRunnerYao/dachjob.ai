@@ -47,7 +47,7 @@ def upgrade() -> None:
         profile_row = conn.execute(
             text(
                 "SELECT id, full_name, headline, location, timezone, "
-                "raw_cv_md, profile_json, created_at, updated_at "
+                "raw_cv_md, created_at, updated_at "
                 "FROM candidate_profiles WHERE id = :pid"
             ),
             {"pid": p.id},
@@ -72,17 +72,17 @@ def upgrade() -> None:
                     text("""
                         INSERT INTO candidate_profiles
                           (id, tenant_id, user_id, full_name, headline,
-                           location, timezone, raw_cv_md, profile_json,
+                           location, timezone, raw_cv_md,
                            created_at, updated_at)
                         VALUES (:id, :tid, :uid, :fn, :hl,
-                                :loc, :tz, :md, :pj,
+                                :loc, :tz, :md,
                                 :ca, :ua)
                     """),
                     {
                         "id": new_id, "tid": p.tenant_id, "uid": uid,
                         "fn": profile_row.full_name, "hl": profile_row.headline,
                         "loc": profile_row.location, "tz": profile_row.timezone,
-                        "md": profile_row.raw_cv_md, "pj": profile_row.profile_json,
+                        "md": profile_row.raw_cv_md,
                         "ca": profile_row.created_at, "ua": profile_row.updated_at,
                     },
                 )
