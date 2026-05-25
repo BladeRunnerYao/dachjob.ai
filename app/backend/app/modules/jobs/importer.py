@@ -758,7 +758,6 @@ async def import_job_urls(
             job.salary_text = scraped.salary_text
             job.scraped_json = scraped.scraped_json
             job.status = "imported"
-            job.parsed_json = None
             await db.flush()
         else:
             job = await create_job(
@@ -780,10 +779,10 @@ async def import_job_urls(
             job.status = "imported"
             await db.flush()
 
-        try:
-            await parse_job_posting(db, tenant, job, force=True)
-        except Exception:
-            pass
+            try:
+                await parse_job_posting(db, tenant, job, force=True)
+            except Exception:
+                pass
 
         imported.append(job)
 
