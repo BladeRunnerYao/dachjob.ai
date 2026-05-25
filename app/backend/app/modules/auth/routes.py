@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import TenantContext
 from app.core.config import get_settings
 from app.core.security import (
     create_access_token,
@@ -11,6 +12,7 @@ from app.core.security import (
     validate_password,
     verify_password,
 )
+from app.core.tenant import get_tenant_context
 from app.db.models import Membership, Tenant, User
 from app.db.session import get_db
 from app.modules.auth.dependencies import get_current_user
@@ -265,3 +267,20 @@ async def google_login(
         name=user.name,
         tenant_id=tenant.id,
     )
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    tenant: TenantContext = Depends(get_tenant_context),
+):
+    result = await db.execute(select(User).where(User.id == user_id).limit(1))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await db.execute(Membership.__table__.delete().where(Membership.user_id == user.id))
+    await db.delete(user)
+    await db.flush()
+    return {"deleted": str(user.id), "email": user.email, "name": user.name}
