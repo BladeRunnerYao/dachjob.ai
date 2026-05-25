@@ -280,9 +280,7 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    await db.execute(
-        CandidateProfile.__table__.delete().where(CandidateProfile.user_id == user.id)
-    )
+    await db.execute(CandidateProfile.__table__.delete().where(CandidateProfile.user_id == user.id))
     await db.execute(Membership.__table__.delete().where(Membership.user_id == user.id))
     await db.delete(user)
     await db.flush()
