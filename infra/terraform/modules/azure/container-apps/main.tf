@@ -6,21 +6,19 @@ resource "azurerm_user_assigned_identity" "this" {
 }
 
 resource "azurerm_role_assignment" "acr_pull" {
-  scope                = data.azurerm_container_registry.this.id
+  scope                = "/subscriptions/${data.azurerm_subscription.current.id}/resourceGroups/${var.resource_group_name}/providers/Microsoft.ContainerRegistry/registries/${var.acr_name}"
   role_definition_name = "AcrPull"
   principal_id         = azurerm_user_assigned_identity.this.principal_id
 }
 
-data "azurerm_container_registry" "this" {
-  name                = var.acr_name
-  resource_group_name = var.resource_group_name
-}
+data "azurerm_subscription" "current" {}
 
 resource "azurerm_container_app_environment" "this" {
   name                       = "${var.name_prefix}-cae"
   resource_group_name        = var.resource_group_name
   location                   = var.location
   log_analytics_workspace_id = var.log_analytics_workspace_id
+  infrastructure_subnet_id   = var.container_apps_subnet_id
   tags                       = var.tags
 }
 

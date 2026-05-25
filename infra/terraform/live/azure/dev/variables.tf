@@ -10,11 +10,7 @@ variable "location" {
   default     = "westeurope"
 }
 
-variable "postgres_location" {
-  description = "Azure region for PostgreSQL (some free subscriptions restrict westeurope)"
-  type        = string
-  default     = "westeurope"
-}
+
 
 variable "postgres_administrator_password" {
   description = "Password for PostgreSQL administrator"

@@ -8,5 +8,10 @@ resource "azurerm_redis_cache" "this" {
   tags                = var.tags
 }
 
-
-
+resource "azurerm_redis_firewall_rule" "allow_azure" {
+  name                = "${replace(var.name_prefix, "-", "_")}_allow_azure"
+  redis_cache_name    = azurerm_redis_cache.this.name
+  resource_group_name = var.resource_group_name
+  start_ip            = "0.0.0.0"
+  end_ip              = "0.0.0.0"
+}

@@ -1,6 +1,5 @@
-name_prefix = "dachjob-dev"
-location          = "westeurope"
-postgres_location = "francecentral"
+name_prefix = "dachjob-az"
+location          = "francecentral"
 
 postgres_administrator_password = "ARrAy3MuDgSgBTFNurVi5ipZ"
 
