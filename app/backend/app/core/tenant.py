@@ -33,8 +33,8 @@ async def get_tenant_context(
         tenant = result.scalar_one_or_none()
         if tenant:
             data = {"id": str(tenant.id), "slug": tenant.slug, "name": tenant.name}
-            await cache.set_json("tenant:slug", slug, data)
-            await cache.set_json("tenant:id", str(tenant.id), data)
+            await cache.set_json("tenant:slug", slug, value=data)
+            await cache.set_json("tenant:id", str(tenant.id), value=data)
             return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)
         return TenantContext(slug=slug, name=slug)
 
