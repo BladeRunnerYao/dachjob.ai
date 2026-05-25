@@ -78,7 +78,7 @@ async def _profile_response(db: AsyncSession, tenant_id: UUID):
         "created_at": profile.created_at.isoformat() if profile.created_at else None,
         "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
     }
-    await cache.set_json("profile", str(tenant_id), response)
+    await cache.set_json("profile", str(tenant_id), value=response)
     return response
 
 

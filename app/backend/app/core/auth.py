@@ -141,7 +141,7 @@ async def validate_bearer_token(
     await cache.set_json(
         "auth:jwt",
         token_hash,
-        {"tenant_id": str(tenant.id), "slug": tenant.slug, "name": tenant.name},
+        value={"tenant_id": str(tenant.id), "slug": tenant.slug, "name": tenant.name},
     )
     return user, tenant
 
@@ -194,7 +194,7 @@ async def validate_api_key(raw_key: str, db: AsyncSession) -> TenantContext:
             "auth:apikey",
             prefix,
             key_hash,
-            {"id": str(tenant.id), "slug": tenant.slug, "name": tenant.name},
+            value={"id": str(tenant.id), "slug": tenant.slug, "name": tenant.name},
         )
         return TenantContext(id=tenant.id, slug=tenant.slug, name=tenant.name)
 
