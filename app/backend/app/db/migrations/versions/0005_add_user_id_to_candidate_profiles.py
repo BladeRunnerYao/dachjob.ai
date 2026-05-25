@@ -9,9 +9,7 @@ Create Date: 2026-05-25
 
 from uuid import uuid4
 
-import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import text
 
 revision = "0005_add_user_id_to_candidate_profiles"
@@ -21,25 +19,39 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "candidate_profiles",
-        sa.Column("user_id", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=True),
+    op.execute(
+        "ALTER TABLE candidate_profiles ADD COLUMN IF NOT EXISTS "
+        "user_id UUID REFERENCES users(id)"
     )
-    op.create_index(op.f("ix_candidate_profiles_user_id"), "candidate_profiles", ["user_id"])
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_candidate_profiles_user_id "
+        "ON candidate_profiles (user_id)"
+    )
 
     conn = op.get_bind()
 
-    profiles = conn.execute(
-        text(
-            "SELECT id, tenant_id, full_name, headline, location, timezone, raw_cv_md, profile_json, created_at, updated_at FROM candidate_profiles"
-        )
+    unassigned = conn.execute(
+        text("SELECT id, tenant_id FROM candidate_profiles WHERE user_id IS NULL LIMIT 1")
     ).fetchall()
 
-    for p in profiles:
+    if not unassigned:
+        op.execute("ALTER TABLE candidate_profiles ALTER COLUMN user_id SET NOT NULL")
+        return
+
+    for p in unassigned:
         members = conn.execute(
             text("SELECT user_id FROM memberships WHERE tenant_id = :tid"),
             {"tid": p.tenant_id},
         ).fetchall()
+
+        profile_row = conn.execute(
+            text(
+                "SELECT id, full_name, headline, location, timezone, "
+                "raw_cv_md, profile_json, created_at, updated_at "
+                "FROM candidate_profiles WHERE id = :pid"
+            ),
+            {"pid": p.id},
+        ).fetchone()
 
         for i, m in enumerate(members):
             uid = m.user_id
@@ -58,27 +70,26 @@ def upgrade() -> None:
                 new_id = uuid4()
                 conn.execute(
                     text("""
-                        INSERT INTO candidate_profiles (id, tenant_id, user_id, full_name, headline, location, timezone, raw_cv_md, profile_json, created_at, updated_at)
-                        VALUES (:id, :tid, :uid, :fn, :hl, :loc, :tz, :md, :pj, :ca, :ua)
+                        INSERT INTO candidate_profiles
+                          (id, tenant_id, user_id, full_name, headline,
+                           location, timezone, raw_cv_md, profile_json,
+                           created_at, updated_at)
+                        VALUES (:id, :tid, :uid, :fn, :hl,
+                                :loc, :tz, :md, :pj,
+                                :ca, :ua)
                     """),
                     {
-                        "id": new_id,
-                        "tid": p.tenant_id,
-                        "uid": uid,
-                        "fn": p.full_name,
-                        "hl": p.headline,
-                        "loc": p.location,
-                        "tz": p.timezone,
-                        "md": p.raw_cv_md,
-                        "pj": p.profile_json,
-                        "ca": p.created_at,
-                        "ua": p.updated_at,
+                        "id": new_id, "tid": p.tenant_id, "uid": uid,
+                        "fn": profile_row.full_name, "hl": profile_row.headline,
+                        "loc": profile_row.location, "tz": profile_row.timezone,
+                        "md": profile_row.raw_cv_md, "pj": profile_row.profile_json,
+                        "ca": profile_row.created_at, "ua": profile_row.updated_at,
                     },
                 )
 
-    op.alter_column("candidate_profiles", "user_id", nullable=False)
+    op.execute("ALTER TABLE candidate_profiles ALTER COLUMN user_id SET NOT NULL")
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_candidate_profiles_user_id"), table_name="candidate_profiles")
-    op.drop_column("candidate_profiles", "user_id")
+    op.execute("DROP INDEX IF EXISTS ix_candidate_profiles_user_id")
+    op.execute("ALTER TABLE candidate_profiles DROP COLUMN IF EXISTS user_id")
