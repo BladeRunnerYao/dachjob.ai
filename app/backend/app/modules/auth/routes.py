@@ -13,7 +13,7 @@ from app.core.security import (
     verify_password,
 )
 from app.core.tenant import get_tenant_context
-from app.db.models import Membership, Tenant, User
+from app.db.models import CandidateProfile, Membership, Tenant, User
 from app.db.session import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import (
@@ -280,6 +280,9 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    await db.execute(
+        CandidateProfile.__table__.delete().where(CandidateProfile.user_id == user.id)
+    )
     await db.execute(Membership.__table__.delete().where(Membership.user_id == user.id))
     await db.delete(user)
     await db.flush()
