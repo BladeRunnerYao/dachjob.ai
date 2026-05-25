@@ -44,6 +44,7 @@ async def run_or_enqueue(
     )
 
     if settings.worker_enabled and celery_task is not None:
+        await db.commit()
         try:
             result = celery_task.apply_async(
                 args=[str(task.id)],
