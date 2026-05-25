@@ -18,17 +18,17 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute(
-        "CREATE INDEX CONCURRENTLY IF NOT EXISTS "
+        "CREATE INDEX IF NOT EXISTS "
         "ix_match_reports_job_id_tenant_id_created "
         "ON match_reports (job_id, tenant_id, created_at DESC)"
     )
     op.execute(
-        "CREATE INDEX CONCURRENTLY IF NOT EXISTS "
+        "CREATE INDEX IF NOT EXISTS "
         "ix_resume_artifacts_job_id_tenant_id_created "
         "ON resume_artifacts (job_id, tenant_id, created_at DESC)"
     )
     op.execute(
-        "CREATE INDEX CONCURRENTLY IF NOT EXISTS "
+        "CREATE INDEX IF NOT EXISTS "
         "ix_evidence_chunks_profile_id "
         "ON evidence_chunks (profile_id)"
     )
