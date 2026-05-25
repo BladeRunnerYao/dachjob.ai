@@ -77,7 +77,9 @@ async def match_job(
                 "user_id": str(tenant.user_id) if tenant.user_id else None,
                 "job_id": str(job_id),
             },
-            celery_task=__import__("app.workers.tasks", fromlist=["compute_match_task"]).compute_match_task,
+            celery_task=__import__(
+                "app.workers.tasks", fromlist=["compute_match_task"]
+            ).compute_match_task,
             sync_runner=lambda: compute_match(db, tenant, job_id),
             result_serializer=lambda r: {
                 "match_report_id": str(r.id),

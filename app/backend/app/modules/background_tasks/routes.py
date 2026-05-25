@@ -43,9 +43,13 @@ async def list_background_tasks(
     if tenant.id is None:
         raise AppError("tenant_not_found", "Tenant context is required", status_code=401)
     items, total = await list_tasks(
-        db, tenant.id,
-        status=status, kind=kind, user_id=tenant.user_id,
-        limit=limit, offset=offset,
+        db,
+        tenant.id,
+        status=status,
+        kind=kind,
+        user_id=tenant.user_id,
+        limit=limit,
+        offset=offset,
     )
     return BackgroundTaskListResponse(
         items=[_to_response(t) for t in items],

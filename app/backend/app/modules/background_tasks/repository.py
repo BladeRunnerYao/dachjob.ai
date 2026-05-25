@@ -52,8 +52,10 @@ async def list_tasks(
     offset: int = 0,
 ) -> tuple[list[BackgroundTask], int]:
     stmt = select(BackgroundTask).where(BackgroundTask.tenant_id == tenant_id)
-    count_stmt = select(func.count()).select_from(BackgroundTask).where(
-        BackgroundTask.tenant_id == tenant_id
+    count_stmt = (
+        select(func.count())
+        .select_from(BackgroundTask)
+        .where(BackgroundTask.tenant_id == tenant_id)
     )
     if status:
         stmt = stmt.where(BackgroundTask.status == status)
@@ -93,21 +95,20 @@ async def update_task_status(
         values["error_json"] = error_json
     if celery_task_id is not None:
         values["celery_task_id"] = celery_task_id
-    if status == "running" and not (await db.execute(
-        select(BackgroundTask.started_at).where(BackgroundTask.id == task_id)
-    )).scalar():
+    if (
+        status == "running"
+        and not (
+            await db.execute(select(BackgroundTask.started_at).where(BackgroundTask.id == task_id))
+        ).scalar()
+    ):
         values["started_at"] = datetime.now(timezone.utc)
     if status in ("succeeded", "failed", "cancelled"):
         values["finished_at"] = datetime.now(timezone.utc)
 
-    await db.execute(
-        update(BackgroundTask).where(BackgroundTask.id == task_id).values(**values)
-    )
+    await db.execute(update(BackgroundTask).where(BackgroundTask.id == task_id).values(**values))
     await db.flush()
 
-    result = await db.execute(
-        select(BackgroundTask).where(BackgroundTask.id == task_id)
-    )
+    result = await db.execute(select(BackgroundTask).where(BackgroundTask.id == task_id))
     return result.scalar_one_or_none()
 
 

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext
 from app.core.config import get_settings
-from app.modules.background_tasks.repository import create_task, get_task, update_task_status
+from app.modules.background_tasks.repository import create_task, update_task_status
 from app.modules.background_tasks.schemas import BackgroundTaskResponse
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,11 @@ async def run_or_enqueue(
 
     logger.info(
         "background_task_created | task_id=%s kind=%s tenant_id=%s user_id=%s worker_enabled=%s",
-        task.id, kind, tenant.id, tenant.user_id, settings.worker_enabled,
+        task.id,
+        kind,
+        tenant.id,
+        tenant.user_id,
+        settings.worker_enabled,
     )
 
     if settings.worker_enabled and celery_task is not None:
@@ -46,13 +50,16 @@ async def run_or_enqueue(
                 kwargs={},
             )
             await update_task_status(
-                db, task.id,
+                db,
+                task.id,
                 status="queued",
                 celery_task_id=result.id,
             )
             logger.info(
                 "celery_enqueue_success | background_task_id=%s celery_task_id=%s kind=%s",
-                task.id, result.id, kind,
+                task.id,
+                result.id,
+                kind,
             )
             task_response = BackgroundTaskResponse(
                 id=task.id,
@@ -69,17 +76,25 @@ async def run_or_enqueue(
         except Exception as exc:
             logger.error(
                 "celery_enqueue_failed | background_task_id=%s kind=%s error=%s",
-                task.id, kind, str(exc)[:200],
+                task.id,
+                kind,
+                str(exc)[:200],
             )
             if not settings.worker_fallback_to_sync:
-                await update_task_status(db, task.id, status="failed", error_json={
-                    "message": f"Failed to enqueue task: {str(exc)[:200]}",
-                })
+                await update_task_status(
+                    db,
+                    task.id,
+                    status="failed",
+                    error_json={
+                        "message": f"Failed to enqueue task: {str(exc)[:200]}",
+                    },
+                )
                 raise
 
             logger.warning(
                 "celery_fallback_to_sync | background_task_id=%s kind=%s",
-                task.id, kind,
+                task.id,
+                kind,
             )
 
     if sync_runner is None:
@@ -91,16 +106,24 @@ async def run_or_enqueue(
         await update_task_status(db, task.id, status="succeeded", result_json=serialized)
         logger.info(
             "sync_execution_succeeded | background_task_id=%s kind=%s",
-            task.id, kind,
+            task.id,
+            kind,
         )
         return ("sync", result)
     except Exception as exc:
-        await update_task_status(db, task.id, status="failed", error_json={
-            "message": str(exc)[:500],
-            "exception_type": type(exc).__name__,
-        })
+        await update_task_status(
+            db,
+            task.id,
+            status="failed",
+            error_json={
+                "message": str(exc)[:500],
+                "exception_type": type(exc).__name__,
+            },
+        )
         logger.error(
             "sync_execution_failed | background_task_id=%s kind=%s error=%s",
-            task.id, kind, str(exc)[:200],
+            task.id,
+            kind,
+            str(exc)[:200],
         )
         raise

@@ -5,8 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import TenantContext
 from app.core.config import get_settings
 from app.core.email import send_reset_email
-from app.core.errors import AppError
-from app.core.tenant import get_tenant_context
 from app.core.security import (
     create_access_token,
     create_reset_token,
@@ -167,7 +165,9 @@ async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depend
                 "reset_link": reset_link,
                 "user_id": str(user.id),
             },
-            celery_task=__import__("app.workers.tasks", fromlist=["send_email_task"]).send_email_task,
+            celery_task=__import__(
+                "app.workers.tasks", fromlist=["send_email_task"]
+            ).send_email_task,
             sync_runner=lambda: send_reset_email(user.email, reset_link),
             result_serializer=lambda r: {"delivered": r},
         )

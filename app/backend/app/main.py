@@ -55,7 +55,8 @@ def _build_cors_origins() -> list[str]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(
-        "api_startup | branch=%s commit=%s provider=%s redis_enabled=%s worker_enabled=%s worker_fallback_to_sync=%s",
+        "api_startup | branch=%s commit=%s provider=%s "
+        "redis_enabled=%s worker_enabled=%s worker_fallback_to_sync=%s",
         VERSION.get("branch"),
         VERSION.get("commit"),
         settings.llm_provider,

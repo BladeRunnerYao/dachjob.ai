@@ -11,7 +11,6 @@ from app.core.tenant import get_tenant_context
 from app.db.models import ResumeArtifact
 from app.db.session import get_db
 from app.modules.background_tasks.execution import run_or_enqueue
-from app.modules.background_tasks.schemas import BackgroundTaskResponse
 from app.modules.profiles.repository import get_profile_by_user
 from app.modules.resumes.schemas import EvidenceResponse, ResumeResponse
 from app.modules.resumes.service import generate_resume, list_evidence
@@ -51,7 +50,9 @@ async def create_resume(
                 "user_id": str(tenant.user_id) if tenant.user_id else None,
                 "job_id": str(job_id),
             },
-            celery_task=__import__("app.workers.tasks", fromlist=["generate_resume_task"]).generate_resume_task,
+            celery_task=__import__(
+                "app.workers.tasks", fromlist=["generate_resume_task"]
+            ).generate_resume_task,
             sync_runner=lambda: generate_resume(db, tenant, job_id),
             result_serializer=lambda r: {
                 "resume_artifact_id": str(r.id),

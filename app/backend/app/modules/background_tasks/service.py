@@ -19,12 +19,13 @@ async def create_background_task(
     kind: str,
     payload: dict | None = None,
 ) -> BackgroundTask:
-    task = await create_task(
-        db, tenant_id=tenant_id, user_id=user_id, kind=kind, payload=payload
-    )
+    task = await create_task(db, tenant_id=tenant_id, user_id=user_id, kind=kind, payload=payload)
     logger.info(
         "background_task_created | task_id=%s kind=%s tenant_id=%s user_id=%s",
-        task.id, kind, tenant_id, user_id,
+        task.id,
+        kind,
+        tenant_id,
+        user_id,
     )
     return task
 
@@ -35,6 +36,7 @@ def validate_worker_available() -> None:
         return
     try:
         from app.workers.celery_app import celery_app
+
         celery_app.control.ping(timeout=settings.worker_enqueue_timeout_seconds)
     except Exception as exc:
         if settings.worker_fallback_to_sync:

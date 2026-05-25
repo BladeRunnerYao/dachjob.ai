@@ -3,7 +3,6 @@ import logging
 import os
 import traceback
 from datetime import datetime, timezone
-from logging.handlers import RotatingFileHandler
 from typing import Any
 
 from app.core.config import get_settings
@@ -41,8 +40,16 @@ class ErrorArchiveHandler(logging.Handler):
                         traceback.format_exception(exc_type, exc_value, exc_tb)
                     )[:2000]
 
-            for key in ("request_id", "tenant_id", "user_id", "background_task_id",
-                        "celery_task_id", "operation", "job_id", "task_id"):
+            for key in (
+                "request_id",
+                "tenant_id",
+                "user_id",
+                "background_task_id",
+                "celery_task_id",
+                "operation",
+                "job_id",
+                "task_id",
+            ):
                 value = getattr(record, key, None)
                 if value is not None:
                     entry[key] = str(value)
@@ -51,8 +58,11 @@ class ErrorArchiveHandler(logging.Handler):
                 f.write(json.dumps(entry, default=str) + "\n")
         except Exception:
             import sys
-            print(f"ErrorArchiveHandler: failed to write error log: {sys.exc_info()[1]}",
-                  file=sys.stderr)
+
+            print(
+                f"ErrorArchiveHandler: failed to write error log: {sys.exc_info()[1]}",
+                file=sys.stderr,
+            )
 
 
 class JsonFormatter(logging.Formatter):
@@ -63,8 +73,16 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        for key in ("request_id", "tenant_id", "user_id", "background_task_id",
-                    "celery_task_id", "operation", "job_id", "task_id"):
+        for key in (
+            "request_id",
+            "tenant_id",
+            "user_id",
+            "background_task_id",
+            "celery_task_id",
+            "operation",
+            "job_id",
+            "task_id",
+        ):
             value = getattr(record, key, None)
             if value is not None:
                 entry[key] = str(value)
