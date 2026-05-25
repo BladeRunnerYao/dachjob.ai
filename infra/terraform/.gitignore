@@ -4,3 +4,5 @@ tfplan
 .terraform.lock.hcl
 .terraform/
 *.backup
+*.lock.hcl
+tfplan
