@@ -51,7 +51,8 @@ async def _run_inner(background_task_id: str, async_fn, *, result_serializer=Non
             )
             try:
                 await update_task_status(
-                    db, task.id,
+                    db,
+                    task.id,
                     status="failed",
                     error_json={
                         "message": str(exc)[:500],
