@@ -1,0 +1,14 @@
+name_prefix = "dachjob-dev"
+location    = "westeurope"
+
+postgres_administrator_password = "your-secure-password-here"
+
+api_image_tag      = "latest"
+frontend_image_tag = "latest"
+worker_image_tag   = "latest"
+
+tags = {
+  environment = "dev"
+  managed_by  = "terraform"
+  project     = "dachjob"
+}

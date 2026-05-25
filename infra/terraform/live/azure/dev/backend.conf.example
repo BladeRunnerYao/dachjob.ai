@@ -1,0 +1,4 @@
+resource_group_name  = "dachjob-dev-tfstate"
+storage_account_name = "dachjobdevtfstate"
+container_name       = "tfstate"
+key                  = "azure/dev/terraform.tfstate"

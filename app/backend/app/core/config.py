@@ -44,10 +44,22 @@ class Settings(BaseSettings):
     openrouter_model_quality: str = "deepseek/deepseek-v4-pro"
     openrouter_model_reasoning: str = "deepseek/deepseek-v4-pro"
 
+    storage_provider: str = ""
+    storage_bucket_name: str = "dachjob-artifacts"
+
     s3_endpoint_url: str = "http://localhost:9000"
     s3_access_key_id: str = "minioadmin"
     s3_secret_access_key: str = "minioadmin"
-    s3_bucket_name: str = "dachjob-artifacts"
+
+    azure_storage_connection_string: str = ""
+    azure_storage_container_name: str = ""
+
+    azure_openai_api_key: str = ""
+    azure_openai_endpoint: str = ""
+    azure_openai_api_version: str = "2024-10-21"
+    azure_openai_model_fast: str = "gpt-4o-mini"
+    azure_openai_model_quality: str = "gpt-4o"
+    azure_openai_model_reasoning: str = "o1-mini"
 
     llm_log_prompts: bool = False
 

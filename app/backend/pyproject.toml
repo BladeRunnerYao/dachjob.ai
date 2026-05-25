@@ -26,6 +26,7 @@ dependencies = [
     "resend>=1.0",
     "google-auth>=2.0",
     "google-cloud-storage>=2.0",
+    "azure-storage-blob>=12.0",
     "requests>=2.31",
     "weasyprint>=62.0",
 ]
