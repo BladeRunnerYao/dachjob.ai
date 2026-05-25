@@ -50,6 +50,7 @@ async def _run_inner(background_task_id: str, async_fn, *, result_serializer=Non
                 str(exc)[:200],
             )
             try:
+                await db.rollback()
                 await update_task_status(
                     db,
                     task.id,
@@ -61,7 +62,10 @@ async def _run_inner(background_task_id: str, async_fn, *, result_serializer=Non
                 )
                 await db.commit()
             except Exception:
-                await db.rollback()
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
 
 @celery_app.task(
