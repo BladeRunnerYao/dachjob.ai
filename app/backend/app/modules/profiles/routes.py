@@ -1,4 +1,5 @@
 import re
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -42,12 +43,13 @@ def _parse_name_and_headline(md: str) -> tuple[str | None, str | None]:
     return name, headline
 
 
-async def _profile_response(db: AsyncSession, user_id: UUID):
+async def _profile_response(db: AsyncSession, user_id: UUID, profile: Any | None = None):
     cached = await cache.get_json("profile", str(user_id))
     if cached is not None:
         return cached
 
-    profile = await get_profile_by_user(db, user_id)
+    if profile is None:
+        profile = await get_profile_by_user(db, user_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
     chunks = await list_evidence_by_profile(db, profile.id)
@@ -91,7 +93,7 @@ async def get_profile(
     profile = await get_profile_by_user(db, tenant.user_id)
     if not profile:
         return None
-    return await _profile_response(db, tenant.user_id)
+    return await _profile_response(db, tenant.user_id, profile=profile)
 
 
 @router.post("/import-url", response_model=ProfileResponse)

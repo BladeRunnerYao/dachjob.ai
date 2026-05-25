@@ -7,14 +7,23 @@ from app.db.models import JobPosting, JobSkill, MatchReport
 
 
 async def _attach_latest_match(db: AsyncSession, jobs: list[JobPosting]) -> list[JobPosting]:
+    if not jobs:
+        return jobs
+    job_ids = [job.id for job in jobs]
+    result = await db.execute(
+        select(MatchReport)
+        .where(MatchReport.job_id.in_(job_ids))
+        .order_by(MatchReport.job_id, MatchReport.created_at.desc())
+    )
+    reports = result.scalars().all()
+    latest: dict[UUID, MatchReport] = {}
+    seen: set[UUID] = set()
+    for report in reports:
+        if report.job_id not in seen:
+            seen.add(report.job_id)
+            latest[report.job_id] = report
     for job in jobs:
-        result = await db.execute(
-            select(MatchReport)
-            .where(MatchReport.job_id == job.id, MatchReport.tenant_id == job.tenant_id)
-            .order_by(MatchReport.created_at.desc())
-            .limit(1)
-        )
-        report = result.scalar_one_or_none()
+        report = latest.get(job.id)
         job.score = float(report.overall_score) if report else None
         job.recommendation = report.recommendation if report else None
     return jobs
