@@ -30,7 +30,9 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     profiles = conn.execute(
-        text("SELECT id, tenant_id, full_name, headline, location, timezone, raw_cv_md, profile_json, created_at, updated_at FROM candidate_profiles")
+        text(
+            "SELECT id, tenant_id, full_name, headline, location, timezone, raw_cv_md, profile_json, created_at, updated_at FROM candidate_profiles"
+        )
     ).fetchall()
 
     for p in profiles:
@@ -60,10 +62,17 @@ def upgrade() -> None:
                         VALUES (:id, :tid, :uid, :fn, :hl, :loc, :tz, :md, :pj, :ca, :ua)
                     """),
                     {
-                        "id": new_id, "tid": p.tenant_id, "uid": uid,
-                        "fn": p.full_name, "hl": p.headline, "loc": p.location,
-                        "tz": p.timezone, "md": p.raw_cv_md, "pj": p.profile_json,
-                        "ca": p.created_at, "ua": p.updated_at,
+                        "id": new_id,
+                        "tid": p.tenant_id,
+                        "uid": uid,
+                        "fn": p.full_name,
+                        "hl": p.headline,
+                        "loc": p.location,
+                        "tz": p.timezone,
+                        "md": p.raw_cv_md,
+                        "pj": p.profile_json,
+                        "ca": p.created_at,
+                        "ua": p.updated_at,
                     },
                 )
 
