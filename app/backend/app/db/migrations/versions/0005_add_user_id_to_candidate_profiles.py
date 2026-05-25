@@ -12,7 +12,7 @@ from uuid import uuid4
 from alembic import op
 from sqlalchemy.sql import text
 
-revision = "0005_add_user_id_to_candidate_profiles"
+revision = "0005"
 down_revision = "0004_add_api_keys"
 branch_labels = None
 depends_on = None
