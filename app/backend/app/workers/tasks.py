@@ -26,6 +26,7 @@ async def _load_task(db, background_task_id: str):
 
 async def _run_inner(background_task_id: str, async_fn, *, result_serializer=None):
     async with async_session_factory() as db:
+        task = None
         try:
             task = await _load_task(db, background_task_id)
             if task.status == "cancelled":
@@ -43,24 +44,26 @@ async def _run_inner(background_task_id: str, async_fn, *, result_serializer=Non
                 task.kind,
             )
         except Exception as exc:
+            bt_kind = task.kind if task is not None else "unknown"
             logger.exception(
                 "task_failed | background_task_id=%s kind=%s error=%s",
                 background_task_id,
-                task.kind,
+                bt_kind,
                 str(exc)[:200],
             )
             try:
                 await db.rollback()
-                await update_task_status(
-                    db,
-                    task.id,
-                    status="failed",
-                    error_json={
-                        "message": str(exc)[:500],
-                        "exception_type": type(exc).__name__,
-                    },
-                )
-                await db.commit()
+                if task is not None:
+                    await update_task_status(
+                        db,
+                        task.id,
+                        status="failed",
+                        error_json={
+                            "message": str(exc)[:500],
+                            "exception_type": type(exc).__name__,
+                        },
+                    )
+                    await db.commit()
             except Exception:
                 try:
                     await db.rollback()
