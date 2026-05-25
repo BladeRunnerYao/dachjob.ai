@@ -96,3 +96,8 @@ export interface JobImportResponse {
   imported: JobPosting[];
   errors: ImportError[];
 }
+
+export interface PaginatedLLMRuns {
+  items: LLMRun[];
+  total: number;
+}

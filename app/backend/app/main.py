@@ -10,6 +10,7 @@ from app.core.auth import is_rate_limit_exempt_route
 from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler
 from app.core.rate_limit import RateLimitMiddleware
+from app.core.redis_client import cache, close_redis, init_app_redis
 from app.db.session import engine
 from app.modules.auth.api_keys import router as api_keys_router
 from app.modules.auth.routes import router as auth_router
@@ -50,14 +51,17 @@ def _build_cors_origins() -> list[str]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(
-        "dachjob.ai API starting | branch=%s commit=%s provider=%s",
+        "dachjob.ai API starting | branch=%s commit=%s provider=%s redis=%s",
         VERSION.get("branch"),
         VERSION.get("commit"),
         settings.llm_provider,
+        settings.redis_enabled,
     )
     async with engine.begin() as _conn:
         pass
+    await init_app_redis()
     yield
+    await close_redis()
     await engine.dispose()
 
 
@@ -79,7 +83,7 @@ app.add_middleware(
     RateLimitMiddleware,
     max_requests=settings.rate_limit_requests,
     window_seconds=settings.rate_limit_window_seconds,
-    redis_url=settings.redis_url,
+    redis_url=settings.redis_url if settings.redis_enabled else None,
     exempt_routes=is_rate_limit_exempt_route,
 )
 
@@ -99,12 +103,13 @@ app.include_router(api_keys_router)
 
 @app.get("/api/health")
 async def health():
+    redis_health = await cache.health_check()
     return {
         "status": "ok",
         "service": "dachjob.ai-api",
         "checks": {
             "database": "ok",
-            "redis": "ok",
+            **redis_health,
             "object_storage": "ok",
         },
     }
