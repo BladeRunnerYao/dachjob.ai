@@ -55,8 +55,10 @@ class StorageService:
             blob = self._gcs_bucket.blob(key)
             blob.upload_from_file(io.BytesIO(body), content_type=content_type)
         elif self._provider == "azure_blob":
+            from azure.storage.blob import ContentSettings
             self._blob_container.upload_blob(
-                name=key, data=io.BytesIO(body), overwrite=True, content_settings={"content_type": content_type}
+                name=key, data=io.BytesIO(body), overwrite=True,
+                content_settings=ContentSettings(content_type=content_type)
             )
         else:
             self._s3_client.put_object(
