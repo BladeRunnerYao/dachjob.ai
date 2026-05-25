@@ -4,10 +4,13 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext
+from app.core.config import get_settings
 from app.core.errors import AppError
 from app.core.redis_client import cache
 from app.core.tenant import get_tenant_context
 from app.db.session import get_db
+from app.modules.background_tasks.execution import run_or_enqueue
+from app.modules.background_tasks.schemas import BackgroundTaskResponse
 from app.modules.jobs.importer import import_job_urls
 from app.modules.jobs.repository import create_job, get_job, list_jobs_by_tenant
 from app.modules.jobs.schemas import (
@@ -56,7 +59,7 @@ async def create_job_endpoint(
     return job
 
 
-@router.post("/import", response_model=JobImportResponse, status_code=201)
+@router.post("/import", status_code=201)
 async def import_jobs_endpoint(
     body: JobImportRequest,
     tenant: TenantContext = Depends(get_tenant_context),
@@ -69,7 +72,35 @@ async def import_jobs_endpoint(
         raise AppError("job_urls_required", "Provide at least one job URL")
     if len(urls) > 10:
         raise AppError("too_many_job_urls", "Import at most 10 job URLs at a time")
-    imported, errors = await import_job_urls(db, tenant, urls)
+
+    settings = get_settings()
+    if settings.worker_enabled:
+        mode, result = await run_or_enqueue(
+            db,
+            tenant=tenant,
+            kind="jobs_import",
+            payload={
+                "tenant_id": str(tenant.id),
+                "tenant_slug": tenant.slug,
+                "user_id": str(tenant.user_id) if tenant.user_id else None,
+                "urls": urls,
+            },
+            celery_task=__import__(
+                "app.workers.tasks", fromlist=["import_jobs_task"]
+            ).import_jobs_task,
+            sync_runner=lambda: import_job_urls(db, tenant, urls),
+            result_serializer=lambda r: {
+                "imported_job_ids": [str(j.id) for j in r[0]],
+                "errors": [{"url": e["url"], "error": e["error"]} for e in r[1]],
+            },
+        )
+        if mode == "queued":
+            await _invalidate_jobs_cache(tenant.id)
+            return BackgroundTaskResponse(**result.model_dump())
+        imported, errors = result
+    else:
+        imported, errors = await import_job_urls(db, tenant, urls)
+
     await _invalidate_jobs_cache(tenant.id)
     return JobImportResponse(
         imported=imported,

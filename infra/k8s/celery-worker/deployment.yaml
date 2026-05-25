@@ -40,7 +40,7 @@ spec:
           image: europe-west1-docker.pkg.dev/dachjob-ai-platform/dachjob-dev-worker/worker:latest
           command: ["sh", "-c"]
           args:
-            - exec celery -A app.workers.celery_app worker --loglevel=info --uid=app --gid=app 2>&1
+            - exec celery -A app.workers.celery_app worker --loglevel=info --queues=jobs,llm,email,celery --uid=app --gid=app 2>&1
           volumeMounts:
             - name: cloudsql
               mountPath: /cloudsql
@@ -88,6 +88,8 @@ spec:
               value: dachjob-ai-platform
             - name: LLM_PROVIDER
               value: vertex_ai
+            - name: WORKER_ENABLED
+              value: "true"
             - name: VERTEX_AI_PROJECT_ID
               value: dachjob-ai-platform
             - name: VERTEX_AI_LOCATION
