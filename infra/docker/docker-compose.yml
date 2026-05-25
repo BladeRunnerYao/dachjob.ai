@@ -101,6 +101,7 @@ services:
       - dachjob-net
 
   worker:
+    profiles: ["worker"]
     image: dachjob-backend-worker
     build:
       context: ../../
@@ -113,11 +114,14 @@ services:
       DATABASE_URL: postgresql+psycopg://dachjob:dachjob@postgres:5432/dachjob
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT_URL: http://minio:9000
-    command: celery -A app.workers.celery_app worker --loglevel=info
+      WORKER_ENABLED: "true"
+    command: celery -A app.workers.celery_app worker --loglevel=info --queues=jobs,llm,email,celery
     depends_on:
       postgres:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - dachjob-net

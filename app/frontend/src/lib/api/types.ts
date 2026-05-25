@@ -101,3 +101,27 @@ export interface PaginatedLLMRuns {
   items: LLMRun[];
   total: number;
 }
+
+export type BackgroundTaskStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'retrying' | 'cancelled';
+
+export interface BackgroundTask {
+  id: string;
+  kind: string;
+  status: BackgroundTaskStatus;
+  progress: number;
+  result?: unknown;
+  error?: { message?: string; exception_type?: string } | null;
+  created_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
+export interface BackgroundTaskListResponse {
+  items: BackgroundTask[];
+  total: number;
+}
+
+export interface VersionResponse {
+  worker_enabled: boolean;
+  worker_fallback_to_sync: boolean;
+}

@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Numeric,
+    String,
     Text,
     UniqueConstraint,
 )
@@ -178,6 +179,31 @@ class ApiKey(Base):
     expires_at = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BackgroundTask(Base):
+    __tablename__ = "background_tasks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
+    kind = Column(String(80), nullable=False, index=True)
+    status = Column(String(32), nullable=False, default="queued", index=True)
+    progress = Column(Integer, nullable=False, default=0)
+    celery_task_id = Column(String(255), nullable=True, index=True)
+    idempotency_key = Column(String(255), nullable=True, index=True)
+    payload_json = Column(JSONB, nullable=False, default=dict)
+    result_json = Column(JSONB, nullable=True)
+    error_json = Column(JSONB, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
 
 class LLMRun(Base):

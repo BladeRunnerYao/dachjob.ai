@@ -4,7 +4,7 @@ import resend
 
 from app.core.config import get_settings
 
-logger = logging.getLogger("uvicorn")
+logger = logging.getLogger(__name__)
 
 
 def send_reset_email(to_email: str, reset_link: str) -> bool:
