@@ -121,6 +121,7 @@ jobs:
     steps:
       - name: Resolve cloud and environment
         id: resolve
+        working-directory: .
         run: |
           cloud="${{ github.event.inputs.cloud || 'gcp' }}"
           environment="${{ github.event.inputs.environment || 'dev' }}"
