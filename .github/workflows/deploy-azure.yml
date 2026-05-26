@@ -73,6 +73,7 @@ env:
   AZURE_ACR_NAME: ${{ vars.AZURE_ACR_NAME || '' }}
   AZURE_API_URL: ${{ vars.AZURE_API_URL || '' }}
   AZURE_FRONTEND_URL: ${{ vars.AZURE_FRONTEND_URL || '' }}
+  AZURE_KEY_VAULT_NAME: ${{ vars.AZURE_KEY_VAULT_NAME || '' }}
   AZURE_TF_DIR: infra/terraform/live/azure/dev
 
 jobs:
@@ -196,19 +197,6 @@ jobs:
     outputs:
       api_url: ${{ steps.tf_outputs.outputs.api_url }}
       frontend_url: ${{ steps.tf_outputs.outputs.frontend_url }}
-    env:
-      TF_VAR_postgres_administrator_password: ${{ secrets.AZURE_POSTGRES_ADMINISTRATOR_PASSWORD || secrets.TF_VAR_POSTGRES_ADMINISTRATOR_PASSWORD || '' }}
-      TF_VAR_cors_origins: ${{ vars.AZURE_FRONTEND_URL || '' }}
-      TF_VAR_azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY || '' }}
-      TF_VAR_azure_openai_endpoint: ${{ vars.AZURE_OPENAI_ENDPOINT || secrets.AZURE_OPENAI_ENDPOINT || '' }}
-      TF_VAR_azure_openai_api_version: ${{ vars.AZURE_OPENAI_API_VERSION || '2024-10-21' }}
-      TF_VAR_azure_openai_model_fast: ${{ vars.AZURE_OPENAI_MODEL_FAST || 'gpt-4o-mini' }}
-      TF_VAR_azure_openai_model_quality: ${{ vars.AZURE_OPENAI_MODEL_QUALITY || 'gpt-4o' }}
-      TF_VAR_azure_openai_model_reasoning: ${{ vars.AZURE_OPENAI_MODEL_REASONING || 'o1-mini' }}
-      TF_VAR_jwt_secret: ${{ secrets.AZURE_JWT_SECRET || secrets.JWT_SECRET || '' }}
-      TF_VAR_secret_key: ${{ secrets.AZURE_SECRET_KEY || secrets.SECRET_KEY || '' }}
-      TF_VAR_resend_api_key: ${{ secrets.AZURE_RESEND_API_KEY || secrets.RESEND_API_KEY || '' }}
-      TF_VAR_resend_from_email: ${{ vars.AZURE_RESEND_FROM_EMAIL || vars.RESEND_FROM_EMAIL || 'onboarding@resend.dev' }}
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v6
@@ -222,6 +210,55 @@ jobs:
             -u "${{ vars.AZURE_CLIENT_ID }}" \
             -t "${{ vars.AZURE_TENANT_ID }}" \
             --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+
+      - name: Load Terraform secrets from Key Vault
+        run: |
+          : "${AZURE_KEY_VAULT_NAME:?AZURE_KEY_VAULT_NAME repository variable is required}"
+          set +x
+          fetch_secret() {
+            az keyvault secret show \
+              --vault-name "${AZURE_KEY_VAULT_NAME}" \
+              --name "$1" \
+              --query value \
+              -o tsv 2>/dev/null || true
+          }
+
+          postgres_password="$(fetch_secret postgres-administrator-password)"
+          azure_openai_api_key="$(fetch_secret azure-openai-api-key)"
+          jwt_secret="$(fetch_secret jwt-secret)"
+          secret_key="$(fetch_secret secret-key)"
+          resend_api_key="$(fetch_secret resend-api-key)"
+
+          [[ -n "${postgres_password}" ]] && echo "::add-mask::${postgres_password}"
+          [[ -n "${azure_openai_api_key}" ]] && echo "::add-mask::${azure_openai_api_key}"
+          [[ -n "${jwt_secret}" ]] && echo "::add-mask::${jwt_secret}"
+          [[ -n "${secret_key}" ]] && echo "::add-mask::${secret_key}"
+          [[ -n "${resend_api_key}" ]] && echo "::add-mask::${resend_api_key}"
+
+          {
+            echo "TF_VAR_postgres_administrator_password<<EOF"
+            echo "${postgres_password}"
+            echo "EOF"
+            echo "TF_VAR_azure_openai_api_key<<EOF"
+            echo "${azure_openai_api_key}"
+            echo "EOF"
+            echo "TF_VAR_jwt_secret<<EOF"
+            echo "${jwt_secret}"
+            echo "EOF"
+            echo "TF_VAR_secret_key<<EOF"
+            echo "${secret_key}"
+            echo "EOF"
+            echo "TF_VAR_resend_api_key<<EOF"
+            echo "${resend_api_key}"
+            echo "EOF"
+            echo "TF_VAR_cors_origins=${AZURE_FRONTEND_URL}"
+            echo "TF_VAR_azure_openai_endpoint=${{ vars.AZURE_OPENAI_ENDPOINT || '' }}"
+            echo "TF_VAR_azure_openai_api_version=${{ vars.AZURE_OPENAI_API_VERSION || '2024-10-21' }}"
+            echo "TF_VAR_azure_openai_model_fast=${{ vars.AZURE_OPENAI_MODEL_FAST || 'gpt-4o-mini' }}"
+            echo "TF_VAR_azure_openai_model_quality=${{ vars.AZURE_OPENAI_MODEL_QUALITY || 'gpt-4o' }}"
+            echo "TF_VAR_azure_openai_model_reasoning=${{ vars.AZURE_OPENAI_MODEL_REASONING || 'o1-mini' }}"
+            echo "TF_VAR_resend_from_email=${{ vars.AZURE_RESEND_FROM_EMAIL || vars.RESEND_FROM_EMAIL || 'onboarding@resend.dev' }}"
+          } >> "${GITHUB_ENV}"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
@@ -483,11 +520,22 @@ jobs:
 
       - name: Run Azure migrations
         if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
-        env:
-          AZURE_DATABASE_URL: ${{ secrets.AZURE_DATABASE_URL || '' }}
-          AZURE_REDIS_URL: ${{ secrets.AZURE_REDIS_URL || '' }}
-          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING || '' }}
         run: |
+          : "${AZURE_KEY_VAULT_NAME:?AZURE_KEY_VAULT_NAME repository variable is required}"
+          set +x
+          fetch_secret() {
+            az keyvault secret show \
+              --vault-name "${AZURE_KEY_VAULT_NAME}" \
+              --name "$1" \
+              --query value \
+              -o tsv 2>/dev/null || true
+          }
+          export AZURE_DATABASE_URL="$(fetch_secret database-url)"
+          export AZURE_REDIS_URL="$(fetch_secret redis-url)"
+          export AZURE_STORAGE_CONNECTION_STRING="$(fetch_secret azure-storage-connection-string)"
+          [[ -n "${AZURE_DATABASE_URL}" ]] && echo "::add-mask::${AZURE_DATABASE_URL}"
+          [[ -n "${AZURE_REDIS_URL}" ]] && echo "::add-mask::${AZURE_REDIS_URL}"
+          [[ -n "${AZURE_STORAGE_CONNECTION_STRING}" ]] && echo "::add-mask::${AZURE_STORAGE_CONNECTION_STRING}"
           bash infra/deploy/scripts/run-migrations-azure.sh "${{ needs.build-api.outputs.image }}"
 
       - name: Capture service URL

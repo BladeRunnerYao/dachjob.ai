@@ -40,6 +40,12 @@ variable "cors_origins" {
   default     = ""
 }
 
+variable "redis_enabled" {
+  description = "Enable Redis at API/worker runtime. Keep false until Azure Redis TLS startup is verified."
+  type        = bool
+  default     = false
+}
+
 variable "azure_openai_api_key" {
   description = "Azure OpenAI API key. Stored as a Container Apps secret and in Key Vault when provided."
   type        = string

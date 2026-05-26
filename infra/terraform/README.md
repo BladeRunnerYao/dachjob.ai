@@ -106,15 +106,31 @@ GCP Terraform reads these GitHub Variables/Secrets as `TF_VAR_*` values:
 - `GCP_BILLING_ACCOUNT_ID`
 - `GCP_NOTIFICATION_EMAIL`
 
-Azure Terraform reads these GitHub Variables/Secrets as `TF_VAR_*` values:
+Azure Terraform reads sensitive values from Azure Key Vault after GitHub Actions authenticates
+to Azure with OIDC. GitHub should only store non-sensitive Azure identifiers as repository
+variables:
 
-- Required secret: `AZURE_POSTGRES_ADMINISTRATOR_PASSWORD`
-- Recommended secrets: `AZURE_OPENAI_API_KEY`, `AZURE_JWT_SECRET`, `AZURE_SECRET_KEY`, `AZURE_RESEND_API_KEY`
-- Recommended variables: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_MODEL_FAST`, `AZURE_OPENAI_MODEL_QUALITY`, `AZURE_OPENAI_MODEL_REASONING`, `AZURE_FRONTEND_URL`
+- Required variables: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_KEY_VAULT_NAME`
+- Runtime variables: `AZURE_ACR_NAME`, `AZURE_CONTAINER_APP_ENV`, `AZURE_API_NAME`, `AZURE_FRONTEND_NAME`, `AZURE_WORKER_NAME`, `AZURE_MIGRATION_JOB_NAME`, `AZURE_API_URL`, `AZURE_FRONTEND_URL`
+- Optional Azure OpenAI variables: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_MODEL_FAST`, `AZURE_OPENAI_MODEL_QUALITY`, `AZURE_OPENAI_MODEL_REASONING`
 
-Azure API and worker Container Apps store database, Redis, storage, Azure OpenAI, auth, and email credentials as Container Apps secrets. The Azure Key Vault module also stores the supplied Terraform secrets so production hardening can later move the runtime to Key Vault references or managed identity without changing app settings names.
+Required Key Vault secrets:
 
-Azure migration jobs need `AZURE_DATABASE_URL` when the job does not already exist. `AZURE_REDIS_URL` and `AZURE_STORAGE_CONNECTION_STRING` are optional and are passed as Container Apps job secrets when configured.
+- `postgres-administrator-password`
+- `database-url`
+- `redis-url`
+- `azure-storage-connection-string`
+- `jwt-secret`
+- `secret-key`
+
+Optional Key Vault secrets:
+
+- `azure-openai-api-key`
+- `resend-api-key`
+
+Azure API and worker Container Apps store database, Redis, storage, Azure OpenAI, auth, and email credentials as Container Apps secrets. The Azure workflow loads Terraform and migration secrets from Key Vault instead of storing them as GitHub Secrets.
+
+Azure migration jobs need `database-url` in Key Vault when the job does not already exist. `redis-url` and `azure-storage-connection-string` are optional and are passed as Container Apps job secrets when configured.
 
 ## Worker Mode
 

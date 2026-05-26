@@ -110,7 +110,7 @@ resource "azurerm_container_app" "api" {
       }
       env {
         name  = "REDIS_ENABLED"
-        value = "true"
+        value = tostring(var.redis_enabled)
       }
       env {
         name  = "STORAGE_PROVIDER"
@@ -364,7 +364,7 @@ resource "azurerm_container_app" "worker" {
       }
       env {
         name  = "REDIS_ENABLED"
-        value = "true"
+        value = tostring(var.redis_enabled)
       }
       env {
         name  = "STORAGE_PROVIDER"

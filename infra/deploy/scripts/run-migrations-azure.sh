@@ -38,16 +38,16 @@ fi
 secret_args=()
 env_args=("APP_ENV=production")
 if [[ -n "${AZURE_DATABASE_URL:-}" ]]; then
-  secret_args+=("database-url=${AZURE_DATABASE_URL}")
-  env_args+=("DATABASE_URL=secretref:database-url")
+  secret_args+=("db-url=${AZURE_DATABASE_URL}")
+  env_args+=("DATABASE_URL=secretref:db-url")
 fi
 if [[ -n "${AZURE_REDIS_URL:-}" ]]; then
   secret_args+=("redis-url=${AZURE_REDIS_URL}")
   env_args+=("REDIS_URL=secretref:redis-url" "REDIS_ENABLED=true")
 fi
 if [[ -n "${AZURE_STORAGE_CONNECTION_STRING:-}" ]]; then
-  secret_args+=("azure-storage-connection-string=${AZURE_STORAGE_CONNECTION_STRING}")
-  env_args+=("AZURE_STORAGE_CONNECTION_STRING=secretref:azure-storage-connection-string" "STORAGE_PROVIDER=azure_blob")
+  secret_args+=("storage-conn=${AZURE_STORAGE_CONNECTION_STRING}")
+  env_args+=("AZURE_STORAGE_CONNECTION_STRING=secretref:storage-conn" "STORAGE_PROVIDER=azure_blob")
 fi
 
 secret_flags=()

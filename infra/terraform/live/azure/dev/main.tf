@@ -100,6 +100,7 @@ module "container_apps" {
   postgres_administrator_password = var.postgres_administrator_password
   redis_hostname                  = module.redis.redis_hostname
   redis_primary_key               = module.redis.redis_primary_key
+  redis_enabled                   = var.redis_enabled
   storage_account_name            = module.storage.storage_account_name
   storage_container_name          = module.storage.storage_container_name
   storage_connection_string       = module.storage.primary_connection_string

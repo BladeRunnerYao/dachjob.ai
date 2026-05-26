@@ -64,6 +64,11 @@ variable "redis_primary_key" {
   sensitive = true
 }
 
+variable "redis_enabled" {
+  type    = bool
+  default = false
+}
+
 variable "storage_account_name" {
   type = string
 }
