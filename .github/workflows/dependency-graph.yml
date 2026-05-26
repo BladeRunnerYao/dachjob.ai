@@ -14,12 +14,11 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Submit Python dependencies
-        uses: actions/dependency-submission@v4
+        uses: actions/dependency-submission@v1
         with:
           directory: app/backend
-          files: pyproject.toml
 
       - name: Submit npm dependencies
-        uses: actions/dependency-submission@v4
+        uses: actions/dependency-submission@v1
         with:
           directory: app/frontend
