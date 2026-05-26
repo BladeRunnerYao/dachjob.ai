@@ -632,8 +632,26 @@ jobs:
       - name: Run Azure migrations
         if: ${{ (needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all') && needs.prepare.outputs.run_migrations == 'true' }}
         run: |
-          bash infra/deploy/scripts/deploy-azure.sh "migrations" \
-            "${{ needs.build-api.outputs.image }}" "" "" "" "true"
+          echo "::group::Run database migrations on Azure"
+          ACR_NAME="${{ env.AZURE_ACR_NAME }}"
+          ACR_PASS=$(az acr credential show -n "$ACR_NAME" --query "passwords[0].value" -o tsv 2>/dev/null || true)
+          az containerapp job create \
+            --name "${{ env.AZURE_MIGRATION_JOB_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --environment "${{ env.AZURE_CONTAINER_APP_ENV }}" \
+            --image "${{ needs.build-api.outputs.image }}" \
+            --registry-server "${ACR_NAME}.azurecr.io" \
+            --registry-username "$ACR_NAME" \
+            --registry-password "$ACR_PASS" \
+            --command "alembic" \
+            --args "-c" "app/db/migrations/alembic.ini" "upgrade" "head" \
+            --trigger-type Manual \
+            --output none 2>/dev/null || true
+          az containerapp job start \
+            --name "${{ env.AZURE_MIGRATION_JOB_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --output none
+          echo "::endgroup::"
 
       - name: Capture service URL
         id: url
