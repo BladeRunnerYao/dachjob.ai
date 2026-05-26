@@ -70,11 +70,11 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  # GCP defaults (for push events and cloud=gcp)
   PROJECT_ID: dachjob-ai-platform
   PROJECT_NUMBER: "936971254595"
   REGION: europe-west1
   GAR_LOCATION: europe-west1
+  ENVIRONMENT: dev
   API_SERVICE_NAME: dachjob-dev-api
   FRONTEND_SERVICE_NAME: dachjob-dev-frontend
   MIGRATION_JOB_NAME: dachjob-dev-migrate
@@ -151,6 +151,9 @@ jobs:
       - name: Authenticate to Google Cloud
         if: ${{ steps.resolve.outputs.cloud == 'gcp' || steps.resolve.outputs.cloud == 'all' }}
         uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
 
       - name: Fetch GCP API keys and run provider smoke
         if: ${{ steps.resolve.outputs.cloud == 'gcp' || steps.resolve.outputs.cloud == 'all' }}
@@ -200,7 +203,6 @@ jobs:
 
           echo "cloud=${cloud}" >> "${GITHUB_OUTPUT}"
           echo "environment=${environment}" >> "${GITHUB_OUTPUT}"
-
           echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
           echo "target=${target}" >> "${GITHUB_OUTPUT}"
           echo "terraform_apply=${terraform_apply}" >> "${GITHUB_OUTPUT}"
@@ -621,7 +623,7 @@ jobs:
           bash infra/deploy/scripts/deploy-azure.sh "api" \
             "${{ needs.build-api.outputs.image }}" "" "" "" "${{ needs.prepare.outputs.run_migrations }}"
 
-      - name: Run GCP migrations
+      - name: Deploy migration job
         if: ${{ (needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all') && needs.prepare.outputs.run_migrations == 'true' }}
         run: |
           gcloud run jobs deploy "${MIGRATION_JOB_NAME}" \
@@ -636,6 +638,10 @@ jobs:
             --args=-c,app/db/migrations/alembic.ini,upgrade,head \
             --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},REDIS_ENABLED=${REDIS_ENABLED},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=deepseek" \
             --update-secrets="DATABASE_PASSWORD=dachjob-dev-db-password:latest,JWT_SECRET=dachjob-dev-jwt-secret-key:latest,SECRET_KEY=dachjob-dev-jwt-secret-key:latest,OPENROUTER_API_KEY=dachjob-dev-openrouter-api-key:latest,DEEPSEEK_API_KEY=dachjob-dev-deepseek-api-key:latest"
+
+      - name: Run migration job
+        if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
+        run: |
           gcloud run jobs execute "${MIGRATION_JOB_NAME}" \
             --project="${PROJECT_ID}" \
             --region="${REGION}" \
@@ -821,6 +827,7 @@ jobs:
             --role="roles/iam.workloadIdentityUser" \
             --member="serviceAccount:${PROJECT_ID}.svc.id.goog[${GKE_NAMESPACE}/worker]" >/dev/null
 
+          set +x
           database_password="$(gcloud secrets versions access latest --secret=dachjob-dev-db-password --project="${PROJECT_ID}")"
           jwt_secret_key="$(gcloud secrets versions access latest --secret=dachjob-dev-jwt-secret-key --project="${PROJECT_ID}")"
           gemini_api_key="$(gcloud secrets versions access latest --secret=dachjob-dev-gemini-api-key --project="${PROJECT_ID}" 2>/dev/null || true)"

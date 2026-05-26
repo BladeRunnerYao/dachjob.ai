@@ -1160,10 +1160,11 @@ async def compute_match(
     tenant: TenantContext,
     job_id: uuid.UUID,
 ) -> MatchReport:
-    from app.core.errors import AppError
-
     job = await get_job(db, job_id, tenant.id)
     if not job:
+        from app.core.errors import AppError
+
+
         raise AppError("job_not_found", "Job posting not found", status_code=404)
 
     if not job.parsed_json:

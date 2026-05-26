@@ -24,8 +24,10 @@ from app.modules.jobs.schemas import (
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 
-async def _invalidate_jobs_cache(tenant_id):
+async def _invalidate_jobs_cache(tenant_id: UUID, job_id: UUID | None = None):
     await cache.delete("jobs:list", str(tenant_id))
+    if job_id:
+        await cache.delete("job:detail", str(job_id))
 
 
 @router.get("", response_model=list[JobResponse])
@@ -112,7 +114,14 @@ async def get_job_endpoint(
     tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
+    if tenant.id is not None:
+        cached = await cache.get_json("job:detail", str(job_id))
+        if cached is not None:
+            return JobResponse.model_validate(cached)
     job = await get_job(db, job_id, tenant.id)
     if not job:
         raise AppError("job_not_found", "Job posting not found", status_code=404)
+    if tenant.id is not None:
+        serialized = JobResponse.model_validate(job).model_dump(mode="json")
+        await cache.set_json("job:detail", str(job_id), value=serialized)
     return job

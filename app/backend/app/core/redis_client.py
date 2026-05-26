@@ -68,7 +68,7 @@ class RedisCache:
         "auth:apikey": 300,
         "tenant:slug": 600,
         "tenant:id": 600,
-        "jobs:list": 120,
+        "jobs:list": 600,
         "job:detail": 300,
         "profile": 600,
         "evidence": 600,

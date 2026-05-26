@@ -20,6 +20,11 @@ from app.modules.matching.service import compute_match, parse_job_posting
 router = APIRouter(prefix="/api/jobs/{job_id}", tags=["matching"])
 
 
+async def _invalidate_job_caches(tenant_id: UUID, job_id: UUID):
+    await cache.delete("jobs:list", str(tenant_id))
+    await cache.delete("job:detail", str(job_id))
+
+
 @router.post("/parse", status_code=201)
 async def parse_job(
     job_id: UUID,
@@ -47,13 +52,13 @@ async def parse_job(
             result_serializer=lambda r: r,
         )
         if mode == "queued":
-            await cache.delete("jobs:list", str(tenant.id))
+            await _invalidate_job_caches(tenant.id, job_id)
             return BackgroundTaskResponse(**result.model_dump())
         result = result
     else:
         result = await parse_job_posting(db, tenant, job, force=True)
 
-    await cache.delete("jobs:list", str(tenant.id))
+    await _invalidate_job_caches(tenant.id, job_id)
     return ParseResponse(
         job_id=job.id, status=result["status"], parsed_json=result.get("parsed_json")
     )
@@ -87,13 +92,13 @@ async def match_job(
             },
         )
         if mode == "queued":
-            await cache.delete("jobs:list", str(tenant.id))
+            await _invalidate_job_caches(tenant.id, job_id)
             return BackgroundTaskResponse(**result.model_dump())
         report = result
     else:
         report = await compute_match(db, tenant, job_id)
 
-    await cache.delete("jobs:list", str(tenant.id))
+    await _invalidate_job_caches(tenant.id, job_id)
     return report
 
 

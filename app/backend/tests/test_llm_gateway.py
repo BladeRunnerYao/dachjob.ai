@@ -76,6 +76,16 @@ def test_build_providers_prefers_azure_openai(monkeypatch):
     gateway = LLMGateway.__new__(LLMGateway)
     monkeypatch.setattr(
         gateway,
+        "_build_azure_openai_provider",
+        lambda settings: None,
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_azure_openai_provider",
+        lambda settings: None,
+    )
+    monkeypatch.setattr(
+        gateway,
         "_build_vertex_ai_provider",
         lambda settings: _provider("vertex_ai", _FakeCompletions("vertex_ai")),
     )
