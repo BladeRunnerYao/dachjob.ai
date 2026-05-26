@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import JobPosting, JobSkill, MatchReport
@@ -46,11 +46,25 @@ async def _attach_skills(db: AsyncSession, jobs: list[JobPosting]) -> list[JobPo
     return jobs
 
 
-async def list_jobs_by_tenant(db: AsyncSession, tenant_id: UUID) -> list[JobPosting]:
+async def count_jobs_by_tenant(db: AsyncSession, tenant_id: UUID) -> int:
+    result = await db.execute(
+        select(func.count()).select_from(JobPosting).where(JobPosting.tenant_id == tenant_id)
+    )
+    return result.scalar() or 0
+
+
+async def list_jobs_by_tenant(
+    db: AsyncSession,
+    tenant_id: UUID,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[JobPosting]:
     result = await db.execute(
         select(JobPosting)
         .where(JobPosting.tenant_id == tenant_id)
         .order_by(JobPosting.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     jobs = list(result.scalars().all())
     await _attach_latest_match(db, jobs)

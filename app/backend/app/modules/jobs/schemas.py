@@ -64,3 +64,10 @@ class JobSkillResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class PaginatedJobResponse(BaseModel):
+    items: list[JobResponse]
+    total: int
+    limit: int
+    offset: int
