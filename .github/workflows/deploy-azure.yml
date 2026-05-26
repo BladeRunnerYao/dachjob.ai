@@ -322,8 +322,20 @@ jobs:
         id: tf_outputs
         working-directory: ${{ env.AZURE_TF_DIR }}
         run: |
-          echo "api_url=$(terraform output -raw api_url 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
-          echo "frontend_url=$(terraform output -raw frontend_url 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
+          api_url="${AZURE_API_URL:-}"
+          frontend_url="${AZURE_FRONTEND_URL:-}"
+
+          if terraform output -json > "${RUNNER_TEMP}/azure-tf-outputs.json" 2>/dev/null; then
+            tf_api_url="$(jq -r '.api_url.value // ""' "${RUNNER_TEMP}/azure-tf-outputs.json")"
+            tf_frontend_url="$(jq -r '.frontend_url.value // ""' "${RUNNER_TEMP}/azure-tf-outputs.json")"
+            [[ -n "${tf_api_url}" ]] && api_url="${tf_api_url}"
+            [[ -n "${tf_frontend_url}" ]] && frontend_url="${tf_frontend_url}"
+          else
+            echo "::notice::Terraform state outputs are not available yet; falling back to repository URL variables."
+          fi
+
+          echo "api_url=${api_url}" >> "${GITHUB_OUTPUT}"
+          echo "frontend_url=${frontend_url}" >> "${GITHUB_OUTPUT}"
 
   build-api:
     name: Build API image
