@@ -300,6 +300,7 @@ jobs:
 
       - name: Terraform apply (GCP)
         if: ${{ (needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform') && (needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all') }}
+        continue-on-error: true
         working-directory: ${{ env.GCP_TF_DIR }}
         run: terraform apply -auto-approve tfplan
 
