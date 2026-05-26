@@ -1,199 +1,54 @@
-import type { BackgroundTask, BackgroundTaskListResponse, JobPosting, CandidateProfile, Application, LLMRun, MatchReport, ResumeArtifact, JobImportResponse, PaginatedJobs, PaginatedLLMRuns, VersionResponse } from './types';
-
-function getApiBase() {
-  if (typeof window === 'undefined') {
-    return process.env.INTERNAL_API_BASE_URL
-      || process.env.NEXT_PUBLIC_API_BASE_URL
-      || 'http://localhost:8000';
-  }
-  return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
-}
+import type { Application, BackgroundTask, CandidateProfile, JobImportResponse, JobPosting, LLMRun, MatchReport, PaginatedJobs, PaginatedLLMRuns, ResumeArtifact } from './types';
+import {
+  checkTaskResult,
+  fetchTask,
+  initWorkerMode,
+  isBackgroundTaskResponse,
+  isBuildTime,
+  isProduction,
+  listTasks,
+  pollTask,
+  request,
+  requestBlob,
+} from './base-client';
 
 export class ApiClient {
   private RESUME_GENERATE_TIMEOUT_MS = 120_000;
-
   workerEnabled = false;
 
-  private getAuthHeaders(): Record<string, string> {
-    if (typeof window === 'undefined') return {};
-    const token = localStorage.getItem('auth_token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  }
-
-  private async request<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
-    const { timeoutMs, ...fetchOptions } = options || {};
-    const url = `${getApiBase()}${path}`;
-    const controller = timeoutMs ? new AbortController() : undefined;
-    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
-
-    try {
-      const res = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...this.getAuthHeaders(),
-          ...fetchOptions.headers,
-        } as Record<string, string>,
-        cache: 'no-store',
-        signal: controller?.signal,
-        ...fetchOptions,
-      });
-      if (timer) clearTimeout(timer);
-      if (res.status === 401 && typeof window !== 'undefined') {
-        localStorage.removeItem('auth_token');
-        window.location.href = '/login';
-        throw new Error('Unauthorized');
-      }
-
-      const isBackgroundTask = res.status === 202;
-      if (isBackgroundTask) {
-        return res.json() as T;
-      }
-
-      if (!res.ok) {
-        let message = `API error: ${res.status}`;
-        try {
-          const body = await res.json();
-          if (body?.error?.message) {
-            message = body.error.message;
-          } else if (body?.detail) {
-            message = body.detail;
-          }
-        } catch {
-          try {
-            const text = await res.text();
-            if (text) message = text.slice(0, 512);
-          } catch {}
-        }
-        throw new Error(message);
-      }
-      return res.json();
-    } catch (e) {
-      if (timer) clearTimeout(timer);
-      if (e instanceof DOMException && e.name === 'AbortError') {
-        throw new Error(`Request timed out after ${Math.round(timeoutMs! / 1000)}s`);
-      }
-      if (e instanceof Error) throw e;
-      throw new Error('API unreachable');
-    }
-  }
-
-  async initWorkerMode(): Promise<void> {
-    try {
-      const version = await this.fetch<VersionResponse>('/api/version');
-      this.workerEnabled = version.worker_enabled;
-    } catch {
-      this.workerEnabled = false;
-    }
-  }
-
-  private isBackgroundTaskResponse(data: unknown): data is BackgroundTask {
-    return (
-      typeof data === 'object' &&
-      data !== null &&
-      'kind' in data &&
-      'status' in data &&
-      'id' in data
-    );
-  }
-
-  private checkTaskResult(task: BackgroundTask): void {
-    if (task.status === 'failed') {
-      const msg = task.error && typeof task.error === 'object'
-        ? (task.error as Record<string, unknown>).message || 'Task failed'
-        : 'Task failed';
-      throw new Error(String(msg));
-    }
-    if (task.status === 'cancelled') {
-      throw new Error('Task was cancelled');
-    }
-  }
-
-  async pollTask(taskId: string, onUpdate?: (task: BackgroundTask) => void): Promise<BackgroundTask> {
-    const terminal = new Set(['succeeded', 'failed', 'cancelled']);
-    while (true) {
-      const task = await this.fetch<BackgroundTask>(`/api/tasks/${taskId}`);
-      if (onUpdate) onUpdate(task);
-      if (terminal.has(task.status)) return task;
-      await new Promise((r) => setTimeout(r, 2000));
-    }
+  async init(): Promise<void> {
+    this.workerEnabled = await initWorkerMode();
   }
 
   async getTask(taskId: string): Promise<BackgroundTask> {
-    return this.fetch<BackgroundTask>(`/api/tasks/${taskId}`);
+    return fetchTask(taskId);
   }
 
-  async listTasks(params?: { status?: string; kind?: string; limit?: number; offset?: number }): Promise<BackgroundTaskListResponse> {
-    const q = new URLSearchParams();
-    if (params?.status) q.set('status', params.status);
-    if (params?.kind) q.set('kind', params.kind);
-    if (params?.limit) q.set('limit', String(params.limit));
-    if (params?.offset) q.set('offset', String(params.offset));
-    const query = q.toString();
-    return this.fetch<BackgroundTaskListResponse>(`/api/tasks${query ? '?' + query : ''}`);
-  }
-
-  async requestBlob(path: string): Promise<Blob> {
-    const url = `${getApiBase()}${path}`;
-    const res = await fetch(url, {
-      headers: { ...this.getAuthHeaders() } as Record<string, string>,
-    });
-    if (res.status === 401 && typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
-      window.location.href = '/login';
-      throw new Error('Unauthorized');
-    }
-    if (!res.ok) {
-      throw new Error(`Failed to fetch: ${res.status}`);
-    }
-    return res.blob();
+  async listTasks(params?: { status?: string; kind?: string; limit?: number; offset?: number }) {
+    return listTasks(params);
   }
 
   async getResumeHtmlUrl(artifactId: string): Promise<string> {
-    const blob = await this.requestBlob(`/api/resumes/${artifactId}/html`);
+    const blob = await requestBlob(`/api/resumes/${artifactId}/html`);
     return URL.createObjectURL(blob);
   }
 
   async getResumePdfUrl(artifactId: string): Promise<string> {
-    const blob = await this.requestBlob(`/api/resumes/${artifactId}/pdf`);
+    const blob = await requestBlob(`/api/resumes/${artifactId}/pdf`);
     return URL.createObjectURL(blob);
   }
 
-  async fetch<T>(path: string): Promise<T> {
-    return this.request<T>(path);
-  }
-
-  async post<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>(path, { method: 'POST', body: JSON.stringify(body) });
-  }
-
-  async createResumeArtifact(jobId: string): Promise<ResumeArtifact> {
-    const result = await this.request<ResumeArtifact | BackgroundTask>(`/api/jobs/${jobId}/resume`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-      timeoutMs: this.workerEnabled ? undefined : this.RESUME_GENERATE_TIMEOUT_MS,
-    });
-    if (this.isBackgroundTaskResponse(result)) {
-      const task = await this.pollTask(result.id);
-      this.checkTaskResult(task);
-      const latest = await this.getLatestResumeArtifact(jobId);
-      if (!latest) throw new Error('Resume generation completed but no artifact found');
-      return latest;
-    }
-    return this.toResumeArtifact(result as ResumeArtifact & { html_object_key: string; pdf_object_key?: string | null; provenance_json?: unknown[] });
-  }
-
-  async patch<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
-  }
+  // ── Jobs ──────────────────────────────────────────────────────
 
   async getJobs(limit?: number, offset?: number): Promise<JobPosting[]> {
     try {
       const q = new URLSearchParams();
       q.set('limit', String(limit ?? 1000));
       q.set('offset', String(offset ?? 0));
-      const result = await this.fetch<PaginatedJobs>(`/api/jobs?${q.toString()}`);
+      const result = await request<PaginatedJobs>(`/api/jobs?${q.toString()}`);
       return result.items;
     } catch {
+      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
       return this.getMockJobs();
     }
   }
@@ -203,8 +58,9 @@ export class ApiClient {
       const q = new URLSearchParams();
       q.set('limit', String(limit));
       q.set('offset', String(offset));
-      return await this.fetch<PaginatedJobs>(`/api/jobs?${q.toString()}`);
+      return await request<PaginatedJobs>(`/api/jobs?${q.toString()}`);
     } catch {
+      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
       const items = this.getMockJobs();
       return { items, total: items.length, limit, offset };
     }
@@ -212,8 +68,9 @@ export class ApiClient {
 
   async getJob(id: string): Promise<JobPosting> {
     try {
-      return await this.fetch<JobPosting>(`/api/jobs/${id}`);
+      return await request<JobPosting>(`/api/jobs/${id}`);
     } catch {
+      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
       const jobs = await this.getJobs();
       const job = jobs.find(j => j.id === id);
       if (!job) throw new Error('Job not found');
@@ -223,10 +80,13 @@ export class ApiClient {
 
   async createJob(rawJd: string): Promise<JobPosting> {
     const titleMatch = rawJd.match(/^#+\s*([^—\n-]+)(?:[—-]\s*([^\n]+))?/m);
-    return this.post<JobPosting>('/api/jobs', {
-      title: titleMatch?.[1]?.trim() || 'New Job',
-      company: titleMatch?.[2]?.trim() || 'Unknown',
-      raw_jd: rawJd,
+    return request<JobPosting>('/api/jobs', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: titleMatch?.[1]?.trim() || 'New Job',
+        company: titleMatch?.[2]?.trim() || 'Unknown',
+        raw_jd: rawJd,
+      }),
     });
   }
 
@@ -240,10 +100,13 @@ export class ApiClient {
     if (urls.length === 0) {
       throw new Error('No valid job URLs found');
     }
-    const result = await this.post<JobImportResponse | BackgroundTask>('/api/jobs/import', { urls });
-    if (this.isBackgroundTaskResponse(result)) {
-      const task = await this.pollTask(result.id);
-      this.checkTaskResult(task);
+    const result = await request<JobImportResponse | BackgroundTask>('/api/jobs/import', {
+      method: 'POST',
+      body: JSON.stringify({ urls }),
+    });
+    if (isBackgroundTaskResponse(result)) {
+      const task = await pollTask(result.id);
+      checkTaskResult(task);
       const jobs = await this.getJobs();
       const taskResult = task.result as { imported_job_ids?: string[]; errors?: Array<{url: string; error: string}> } | undefined;
       return {
@@ -254,47 +117,63 @@ export class ApiClient {
     return result;
   }
 
+  // ── Applications ──────────────────────────────────────────────
+
   async getApplications(): Promise<Application[]> {
     try {
-      return await this.fetch<Application[]>('/api/applications');
+      return await request<Application[]>('/api/applications');
     } catch {
+      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
       return this.getMockApplications();
     }
   }
 
+  // ── Profile ───────────────────────────────────────────────────
+
   async getProfile(): Promise<CandidateProfile> {
     try {
-      const profile = await this.fetch<CandidateProfile>('/api/profile');
+      const profile = await request<CandidateProfile>('/api/profile');
       return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
     } catch {
+      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
       return this.getMockProfile();
     }
   }
 
   async uploadCv(rawCvMd: string): Promise<CandidateProfile> {
-    const profile = await this.post<CandidateProfile>('/api/profile/cv', { raw_cv_md: rawCvMd });
+    const profile = await request<CandidateProfile>('/api/profile/cv', {
+      method: 'POST',
+      body: JSON.stringify({ raw_cv_md: rawCvMd }),
+    });
     return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
   }
 
   async importProfileFromUrl(url: string): Promise<CandidateProfile> {
-    const profile = await this.post<CandidateProfile>('/api/profile/import-url', { url });
+    const profile = await request<CandidateProfile>('/api/profile/import-url', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    });
     return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
   }
 
   async importProfileFromPdf(file: File): Promise<CandidateProfile> {
     const formData = new FormData();
     formData.append('file', file);
+    const { getApiBase } = await import('./base-client');
     const baseUrl = getApiBase();
-    const headers = this.getAuthHeaders();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     const res = await fetch(`${baseUrl}/api/profile/import-pdf`, {
       method: 'POST',
-      headers: { ...headers } as Record<string, string>,
+      headers,
       body: formData,
     });
     if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
     const profile = await res.json();
     return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
   }
+
+  // ── Matching ──────────────────────────────────────────────────
 
   private toMatchReport(report: {
     id: string;
@@ -319,7 +198,7 @@ export class ApiClient {
 
   async getLatestMatchReport(jobId: string): Promise<MatchReport | null> {
     try {
-      const report = await this.fetch<{
+      const report = await request<{
         id: string;
         job_id: string;
         overall_score: number;
@@ -330,15 +209,19 @@ export class ApiClient {
       } | null>(`/api/jobs/${jobId}/match`);
       return report ? this.toMatchReport(report) : null;
     } catch {
+      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
       return null;
     }
   }
 
   async createMatchReport(jobId: string): Promise<MatchReport> {
-    const result = await this.post<MatchReport | BackgroundTask>(`/api/jobs/${jobId}/match`, {});
-    if (this.isBackgroundTaskResponse(result)) {
-      const task = await this.pollTask(result.id);
-      this.checkTaskResult(task);
+    const result = await request<MatchReport | BackgroundTask>(`/api/jobs/${jobId}/match`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    if (isBackgroundTaskResponse(result)) {
+      const task = await pollTask(result.id);
+      checkTaskResult(task);
       const latest = await this.getLatestMatchReport(jobId);
       if (!latest) throw new Error('Match completed but no report found');
       return latest;
@@ -348,8 +231,12 @@ export class ApiClient {
 
   async getMatchReport(jobId: string): Promise<MatchReport> {
     const cached = await this.getLatestMatchReport(jobId);
-    return cached || this.getMockMatchReport(jobId);
+    if (cached) return cached;
+    if (isProduction()) throw new Error('Match report not found');
+    return this.getMockMatchReport(jobId);
   }
+
+  // ── Resumes ───────────────────────────────────────────────────
 
   private toResumeArtifact(artifact: {
     id: string;
@@ -367,9 +254,25 @@ export class ApiClient {
     };
   }
 
+  async createResumeArtifact(jobId: string): Promise<ResumeArtifact> {
+    const result = await request<ResumeArtifact | BackgroundTask>(`/api/jobs/${jobId}/resume`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+      timeoutMs: this.workerEnabled ? undefined : this.RESUME_GENERATE_TIMEOUT_MS,
+    });
+    if (isBackgroundTaskResponse(result)) {
+      const task = await pollTask(result.id);
+      checkTaskResult(task);
+      const latest = await this.getLatestResumeArtifact(jobId);
+      if (!latest) throw new Error('Resume generation completed but no artifact found');
+      return latest;
+    }
+    return this.toResumeArtifact(result as ResumeArtifact & { html_object_key: string; pdf_object_key?: string | null; provenance_json?: unknown[] });
+  }
+
   async getLatestResumeArtifact(jobId: string): Promise<ResumeArtifact | null> {
     try {
-      const artifact = await this.fetch<{
+      const artifact = await request<{
         id: string;
         job_id: string;
         html_object_key: string;
@@ -378,14 +281,19 @@ export class ApiClient {
       } | null>(`/api/jobs/${jobId}/resume`);
       return artifact ? this.toResumeArtifact(artifact) : null;
     } catch {
+      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
       return null;
     }
   }
 
   async getResumeArtifact(jobId: string): Promise<ResumeArtifact> {
     const cached = await this.getLatestResumeArtifact(jobId);
-    return cached || this.getMockResume(jobId);
+    if (cached) return cached;
+    if (isProduction()) throw new Error('Resume artifact not found');
+    return this.getMockResume(jobId);
   }
+
+  // ── LLM Runs ──────────────────────────────────────────────────
 
   async getLLMRuns(params?: { task?: string; status?: string; limit?: number; offset?: number }): Promise<PaginatedLLMRuns> {
     try {
@@ -395,12 +303,15 @@ export class ApiClient {
       if (params?.limit) q.set('limit', String(params.limit));
       if (params?.offset) q.set('offset', String(params.offset));
       const query = q.toString();
-      return await this.fetch<PaginatedLLMRuns>(`/api/llm-runs${query ? '?' + query : ''}`);
+      return await request<PaginatedLLMRuns>(`/api/llm-runs${query ? '?' + query : ''}`);
     } catch {
+      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
       const items = this.getMockLLMRuns();
       return { items, total: items.length };
     }
   }
+
+  // ── Mock data (local dev only) ────────────────────────────────
 
   getMockJobs(): JobPosting[] {
     return [

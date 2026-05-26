@@ -536,7 +536,7 @@ class TestImportFlowRawJD:
 
 class TestSkillExtraction:
     def test_listed_skill_extraction_rejects_sentence_and_page_noise(self):
-        from app.modules.matching.service import _extract_listed_skills
+        from app.modules.matching.jd_parser import _extract_listed_skills
 
         result = _extract_listed_skills(
             "We use technologies including Java, Spring Boot, React, LangChain, "
@@ -550,7 +550,7 @@ class TestSkillExtraction:
             assert noise not in result
 
     def test_greenhouse_getyourguide_skills_split_must_and_nice(self):
-        from app.modules.matching.service import _enrich_parsed_skills
+        from app.modules.matching.jd_parser import _enrich_parsed_skills
 
         job = SimpleNamespace(
             title="Senior Software Engineer, Search Platform",
@@ -599,7 +599,7 @@ class TestSkillExtraction:
         assert "Elasticsearch" not in parsed["must_have_skills"]
 
     def test_bonus_section_skills_stay_nice_to_have(self):
-        from app.modules.matching.service import _enrich_parsed_skills
+        from app.modules.matching.jd_parser import _enrich_parsed_skills
 
         job = SimpleNamespace(
             title="Robotics Wireless & Network Engineer",
@@ -636,7 +636,7 @@ class TestSkillExtraction:
         assert "Python" not in parsed["must_have_skills"]
 
     def test_linkedin_bmw_sections_and_benefits_are_classified(self):
-        from app.modules.matching.service import _enrich_parsed_skills
+        from app.modules.matching.jd_parser import _enrich_parsed_skills
 
         job = SimpleNamespace(
             title="Senior Agentic AI Engineer (f/m/x)",

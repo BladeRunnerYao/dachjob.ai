@@ -71,11 +71,29 @@ infra/terraform/
 | `gke_machine_type` | string | `e2-custom-2-4096` | GKE machine type |
 | `budget_amount` | number | `200` | Monthly budget in EUR |
 
+## Security
+
+**Never commit `terraform.tfvars` files.** They contain secrets (project IDs, billing accounts,
+emails, passwords). Real `.tfvars` files must be:
+
+- Created locally and kept outside version control
+- Supplied by CI from GitHub Variables/Secrets
+
+Copy `terraform.tfvars.example` to `environments/<env>/terraform.tfvars` and fill in values.
+
+The repository `.gitignore` blocks all `*.tfvars`, `*.tfstate`, `*.tfstate.*`, and `*.tfplan` files.
+
 ## CI/CD Pipeline
 
-See [.github/workflows/deploy.yml](/.github/workflows/deploy.yml) for the GitHub Actions pipeline.
+Deployment is split into two cloud-specific workflows:
 
-The pipeline supports:
+- [`.github/workflows/deploy-gcp.yml`](/.github/workflows/deploy-gcp.yml) — GCP Cloud Run + GKE
+- [`.github/workflows/deploy-azure.yml`](/.github/workflows/deploy-azure.yml) — Azure Container Apps
+
+The old combined [`.github/workflows/deploy.yml`](/.github/workflows/deploy.yml) is deprecated
+and kept for manual fallback only.
+
+Each pipeline supports:
 - **Automatic**: Push to `main` or `deploy/*` branches triggers build + deploy
 - **Manual** via `workflow_dispatch`: Select branch, target (all/api/frontend/worker/terraform), and optionally run Terraform
 
