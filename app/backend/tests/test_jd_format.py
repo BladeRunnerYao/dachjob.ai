@@ -180,7 +180,7 @@ class TestImportFlowRawJD:
     """Test the raw_jd scraping flow end-to-end logic."""
 
     def test_scraped_job_dataclass_fields(self):
-        from app.modules.jobs.importer import ScrapedJob
+        from app.modules.jobs.extractor import ScrapedJob
 
         job = ScrapedJob(
             title="Test",
@@ -201,7 +201,7 @@ class TestImportFlowRawJD:
         assert job.source == "linkedin.com"
 
     def test_normalize_text_handles_html_entities(self):
-        from app.modules.jobs.importer import _normalize_text
+        from app.modules.jobs.extractor import _normalize_text
 
         result = _normalize_text("Hello&amp;World &copy; 2024")
         assert "Hello&World" in result
@@ -235,7 +235,7 @@ class TestImportFlowRawJD:
         assert "Referrals increase your chances" not in result
 
     def test_strip_html_removes_script_tags(self):
-        from app.modules.jobs.importer import _strip_html
+        from app.modules.jobs.extractor import _strip_html
 
         result = _strip_html("<html><script>alert('x')</script><p>Job description here</p></html>")
         assert "alert" not in result
@@ -264,7 +264,7 @@ class TestImportFlowRawJD:
         assert "Strong hands-on Python skills" in result
 
     def test_bmwgroup_uses_plain_request_headers(self):
-        from app.modules.jobs.importer import _request_headers_for_url
+        from app.modules.jobs.fetcher import _request_headers_for_url
 
         bmw_headers = _request_headers_for_url(
             "https://www.bmwgroup.jobs/de/en/jobfinder/job-description-copy.182180.html"
@@ -318,7 +318,7 @@ class TestImportFlowRawJD:
         assert _bmwgroup_posted_at_from_html(html).year == 2026
 
     def test_normalize_text_collapses_whitespace(self):
-        from app.modules.jobs.importer import _normalize_text
+        from app.modules.jobs.extractor import _normalize_text
 
         result = _normalize_text("Line   one\n\n\nLine   two  ")
         assert result == "Line one\n\nLine two"
@@ -528,7 +528,7 @@ class TestImportFlowRawJD:
     def test_import_flow_does_not_format_raw_jd_with_llm(self):
         import inspect
 
-        from app.modules.jobs import importer
+        from app.modules.jobs import importer, extractor, fetcher
 
         source = inspect.getsource(importer.import_job_urls)
         assert "format_raw_jd" not in source
