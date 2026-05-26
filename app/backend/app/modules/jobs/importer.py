@@ -22,7 +22,6 @@ from app.modules.jobs.extractor import (
     _strip_html,
 )
 from app.modules.jobs.fetcher import (
-    DEFAULT_JOB_REQUEST_HEADERS,
     _fetch_greenhouse_board_name,
     _fetch_job_page,
 )
