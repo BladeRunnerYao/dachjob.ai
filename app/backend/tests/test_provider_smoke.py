@@ -102,6 +102,17 @@ def _gather_providers() -> list[ProviderConfig]:
             )
         )
 
+    azure_openai_key = os.getenv("AZURE_OPENAI_API_KEY", "")
+    azure_openai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "")
+    if azure_openai_key and azure_openai_endpoint:
+        providers.append(
+            ProviderConfig(
+                name="azure_openai",
+                model=os.getenv("AZURE_OPENAI_MODEL_FAST", "gpt-4o-mini"),
+                create_client=_openai_client_factory(azure_openai_key, azure_openai_endpoint),
+            )
+        )
+
     return providers
 
 

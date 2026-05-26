@@ -63,11 +63,66 @@ def _provider_settings(llm_provider: str = "gemini") -> SimpleNamespace:
         openrouter_model_fast="openrouter-fast",
         openrouter_model_quality="openrouter-quality",
         openrouter_model_reasoning="openrouter-reasoning",
+        azure_openai_api_key="azure-key",
+        azure_openai_endpoint="https://azure-openai.example",
+        azure_openai_api_version="2024-10-21",
+        azure_openai_model_fast="azure-fast",
+        azure_openai_model_quality="azure-quality",
+        azure_openai_model_reasoning="azure-reasoning",
     )
+
+
+def test_build_providers_prefers_azure_openai(monkeypatch):
+    gateway = LLMGateway.__new__(LLMGateway)
+    monkeypatch.setattr(
+        gateway,
+        "_build_azure_openai_provider",
+        lambda settings: None,
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_azure_openai_provider",
+        lambda settings: None,
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_vertex_ai_provider",
+        lambda settings: _provider("vertex_ai", _FakeCompletions("vertex_ai")),
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_gemini_provider",
+        lambda settings: _provider("gemini", _FakeCompletions("gemini")),
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_azure_openai_provider",
+        lambda settings: _provider("azure_openai", _FakeCompletions("azure_openai")),
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_openai_provider",
+        lambda **kwargs: _provider(kwargs["name"], _FakeCompletions(kwargs["name"])),
+    )
+
+    providers = gateway._build_providers(_provider_settings("azure_openai"))
+
+    assert [provider.name for provider in providers] == [
+        "azure_openai",
+        "vertex_ai",
+        "gemini",
+        "deepseek",
+        "openrouter",
+    ]
 
 
 def test_build_providers_prefers_gemini(monkeypatch):
     gateway = LLMGateway.__new__(LLMGateway)
+    monkeypatch.setattr(
+        gateway,
+        "_build_azure_openai_provider",
+        lambda settings: None,
+    )
     monkeypatch.setattr(
         gateway,
         "_build_vertex_ai_provider",
@@ -96,6 +151,11 @@ def test_build_providers_prefers_gemini(monkeypatch):
 
 def test_build_providers_prefers_vertex_ai(monkeypatch):
     gateway = LLMGateway.__new__(LLMGateway)
+    monkeypatch.setattr(
+        gateway,
+        "_build_azure_openai_provider",
+        lambda settings: None,
+    )
     monkeypatch.setattr(
         gateway,
         "_build_vertex_ai_provider",

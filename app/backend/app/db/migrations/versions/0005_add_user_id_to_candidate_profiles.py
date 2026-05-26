@@ -20,12 +20,10 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute(
-        "ALTER TABLE candidate_profiles ADD COLUMN IF NOT EXISTS "
-        "user_id UUID REFERENCES users(id)"
+        "ALTER TABLE candidate_profiles ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)"
     )
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_candidate_profiles_user_id "
-        "ON candidate_profiles (user_id)"
+        "CREATE INDEX IF NOT EXISTS ix_candidate_profiles_user_id ON candidate_profiles (user_id)"
     )
 
     conn = op.get_bind()
@@ -79,11 +77,16 @@ def upgrade() -> None:
                                 :ca, :ua)
                     """),
                     {
-                        "id": new_id, "tid": p.tenant_id, "uid": uid,
-                        "fn": profile_row.full_name, "hl": profile_row.headline,
-                        "loc": profile_row.location, "tz": profile_row.timezone,
+                        "id": new_id,
+                        "tid": p.tenant_id,
+                        "uid": uid,
+                        "fn": profile_row.full_name,
+                        "hl": profile_row.headline,
+                        "loc": profile_row.location,
+                        "tz": profile_row.timezone,
                         "md": profile_row.raw_cv_md,
-                        "ca": profile_row.created_at, "ua": profile_row.updated_at,
+                        "ca": profile_row.created_at,
+                        "ua": profile_row.updated_at,
                     },
                 )
 

@@ -116,6 +116,22 @@ class LLMGateway:
             reasoning_model=settings.vertex_ai_model_reasoning,
         )
 
+    def _build_azure_openai_provider(self, settings) -> LLMProvider | None:
+        if not settings.azure_openai_api_key or not settings.azure_openai_endpoint:
+            return None
+        return LLMProvider(
+            name="azure_openai",
+            client=AsyncOpenAI(
+                api_key=settings.azure_openai_api_key,
+                base_url=f"{settings.azure_openai_endpoint.strip('/')}",
+                default_headers={"api-key": settings.azure_openai_api_key},
+                timeout=120.0,
+            ),
+            default_model=settings.azure_openai_model_fast,
+            quality_model=settings.azure_openai_model_quality,
+            reasoning_model=settings.azure_openai_model_reasoning,
+        )
+
     def _build_openai_provider(
         self,
         *,
@@ -139,12 +155,16 @@ class LLMGateway:
     def _build_providers(self, settings) -> list[LLMProvider]:
         preferred = (settings.llm_provider or "vertex_ai").lower()
         ordered_names = list(
-            dict.fromkeys([preferred, "vertex_ai", "gemini", "deepseek", "openrouter"])
+            dict.fromkeys(
+                [preferred, "azure_openai", "vertex_ai", "gemini", "deepseek", "openrouter"]
+            )
         )
         providers: list[LLMProvider] = []
         for name in ordered_names:
             provider = None
-            if name == "vertex_ai":
+            if name == "azure_openai":
+                provider = self._build_azure_openai_provider(settings)
+            elif name == "vertex_ai":
                 provider = self._build_vertex_ai_provider(settings)
             elif name == "gemini":
                 provider = self._build_gemini_provider(settings)
