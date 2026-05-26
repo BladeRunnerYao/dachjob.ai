@@ -11,18 +11,18 @@ variable "location" {
 }
 
 variable "capacity" {
-  type        = number
-  default     = 1
+  type    = number
+  default = 1
 }
 
 variable "family" {
-  type        = string
-  default     = "C"
+  type    = string
+  default = "C"
 }
 
 variable "sku_name" {
-  type        = string
-  default     = "Basic"
+  type    = string
+  default = "Basic"
 }
 
 variable "tags" {

@@ -3,17 +3,17 @@ resource "random_id" "pg_suffix" {
 }
 
 resource "azurerm_postgresql_flexible_server" "this" {
-  name                         = "${var.name_prefix}-pg-${random_id.pg_suffix.hex}"
-  resource_group_name          = var.resource_group_name
-  location                     = var.location
-  version                      = var.postgres_version
-  administrator_login          = var.administrator_login
-  administrator_password       = var.administrator_password
-  sku_name                     = var.sku_name
-  storage_mb                   = var.storage_mb
-  backup_retention_days        = 7
-  geo_redundant_backup_enabled = false
-  auto_grow_enabled            = true
+  name                          = "${var.name_prefix}-pg-${random_id.pg_suffix.hex}"
+  resource_group_name           = var.resource_group_name
+  location                      = var.location
+  version                       = var.postgres_version
+  administrator_login           = var.administrator_login
+  administrator_password        = var.administrator_password
+  sku_name                      = var.sku_name
+  storage_mb                    = var.storage_mb
+  backup_retention_days         = 7
+  geo_redundant_backup_enabled  = false
+  auto_grow_enabled             = true
   public_network_access_enabled = true
 
   lifecycle {
