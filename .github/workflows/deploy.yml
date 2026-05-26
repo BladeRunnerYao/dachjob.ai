@@ -269,11 +269,11 @@ jobs:
 
       - name: Authenticate to Azure
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
@@ -351,11 +351,11 @@ jobs:
 
       - name: Authenticate to Azure
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
 
       - name: Login to ACR (Azure)
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
@@ -440,11 +440,11 @@ jobs:
 
       - name: Authenticate to Azure
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
 
       - name: Login to ACR (Azure)
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
@@ -528,11 +528,11 @@ jobs:
 
       - name: Authenticate to Azure
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
 
       - name: Login to ACR (Azure)
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
@@ -613,11 +613,11 @@ jobs:
 
       - name: Authenticate to Azure
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
 
       - name: Deploy API (GCP)
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -749,11 +749,11 @@ jobs:
 
       - name: Authenticate to Azure
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
 
       - name: Deploy frontend (GCP)
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -870,11 +870,11 @@ jobs:
 
       - name: Authenticate to Azure
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
 
       - name: Deploy worker (GCP)
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
