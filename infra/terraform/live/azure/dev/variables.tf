@@ -10,8 +10,6 @@ variable "location" {
   default     = "westeurope"
 }
 
-
-
 variable "postgres_administrator_password" {
   description = "Password for PostgreSQL administrator"
   type        = string
@@ -40,6 +38,70 @@ variable "cors_origins" {
   description = "CORS allowed origins for the API"
   type        = string
   default     = ""
+}
+
+variable "azure_openai_api_key" {
+  description = "Azure OpenAI API key. Stored as a Container Apps secret and in Key Vault when provided."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "azure_openai_endpoint" {
+  description = "Azure OpenAI endpoint URL."
+  type        = string
+  default     = ""
+}
+
+variable "azure_openai_api_version" {
+  description = "Azure OpenAI API version used by the backend."
+  type        = string
+  default     = "2024-10-21"
+}
+
+variable "azure_openai_model_fast" {
+  description = "Fast Azure OpenAI deployment/model name."
+  type        = string
+  default     = "gpt-4o-mini"
+}
+
+variable "azure_openai_model_quality" {
+  description = "Quality Azure OpenAI deployment/model name."
+  type        = string
+  default     = "gpt-4o"
+}
+
+variable "azure_openai_model_reasoning" {
+  description = "Reasoning Azure OpenAI deployment/model name."
+  type        = string
+  default     = "o1-mini"
+}
+
+variable "jwt_secret" {
+  description = "JWT signing secret for the API."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "secret_key" {
+  description = "Application secret key."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "resend_api_key" {
+  description = "Resend API key for transactional email."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "resend_from_email" {
+  description = "Sender email address used by Resend."
+  type        = string
+  default     = "onboarding@resend.dev"
 }
 
 variable "tags" {

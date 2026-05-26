@@ -54,6 +54,14 @@ on:
         required: false
         type: boolean
         default: true
+      smoke_test_mode:
+        description: Post-deploy smoke test depth
+        required: false
+        type: choice
+        default: minimal
+        options:
+          - minimal
+          - full
 
 concurrency:
   group: deploy-gcp-${{ github.event.inputs.environment || 'dev' }}
@@ -222,6 +230,12 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      TF_VAR_project_id: ${{ env.PROJECT_ID }}
+      TF_VAR_region: ${{ env.REGION }}
+      TF_VAR_environment: ${{ needs.prepare.outputs.environment }}
+      TF_VAR_billing_account_id: ${{ vars.GCP_BILLING_ACCOUNT_ID || secrets.GCP_BILLING_ACCOUNT_ID || '' }}
+      TF_VAR_notification_email: ${{ vars.GCP_NOTIFICATION_EMAIL || vars.NOTIFICATION_EMAIL || secrets.GCP_NOTIFICATION_EMAIL || '' }}
     outputs:
       api_url: ${{ steps.tf_outputs.outputs.api_url }}
       frontend_url: ${{ steps.tf_outputs.outputs.frontend_url }}
@@ -254,15 +268,26 @@ jobs:
         working-directory: ${{ env.GCP_TF_DIR }}
         run: terraform validate
 
+      - name: Validate Terraform inputs
+        run: |
+          missing=()
+          [[ -n "${TF_VAR_project_id}" ]] || missing+=("TF_VAR_project_id")
+          [[ -n "${TF_VAR_billing_account_id}" ]] || missing+=("TF_VAR_billing_account_id")
+          [[ -n "${TF_VAR_notification_email}" ]] || missing+=("TF_VAR_notification_email")
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required Terraform inputs: %s\n' "${missing[*]}" >&2
+            printf 'Configure repository/environment variables or secrets before running Terraform.\n' >&2
+            exit 1
+          fi
+
       - name: Terraform plan
         working-directory: ${{ env.GCP_TF_DIR }}
-        run: terraform plan -lock-timeout=300s -var-file=environments/${{ needs.prepare.outputs.environment }}/terraform.tfvars -out=tfplan
+        run: terraform plan -input=false -lock-timeout=300s -out=tfplan
 
       - name: Terraform apply
         if: ${{ needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform' }}
-        continue-on-error: true
         working-directory: ${{ env.GCP_TF_DIR }}
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -input=false -auto-approve tfplan
 
       - name: Capture Terraform outputs
         id: tf_outputs

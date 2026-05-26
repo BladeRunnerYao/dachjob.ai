@@ -59,7 +59,24 @@ module "key_vault" {
   resource_group_name = module.networking.resource_group_name
   location            = module.networking.location
   tenant_id           = data.azurerm_client_config.current.tenant_id
-  tags                = var.tags
+  secrets = merge(
+    {
+      "postgres-administrator-password" = var.postgres_administrator_password
+    },
+    nonsensitive(var.azure_openai_api_key != "") ? {
+      "azure-openai-api-key" = var.azure_openai_api_key
+    } : {},
+    nonsensitive(var.jwt_secret != "") ? {
+      "jwt-secret" = var.jwt_secret
+    } : {},
+    nonsensitive(var.secret_key != "") ? {
+      "secret-key" = var.secret_key
+    } : {},
+    nonsensitive(var.resend_api_key != "") ? {
+      "resend-api-key" = var.resend_api_key
+    } : {},
+  )
+  tags = var.tags
 }
 
 data "azurerm_client_config" "current" {}
@@ -87,5 +104,15 @@ module "container_apps" {
   storage_container_name          = module.storage.storage_container_name
   storage_connection_string       = module.storage.primary_connection_string
   cors_origins                    = var.cors_origins
+  azure_openai_api_key            = var.azure_openai_api_key
+  azure_openai_endpoint           = var.azure_openai_endpoint
+  azure_openai_api_version        = var.azure_openai_api_version
+  azure_openai_model_fast         = var.azure_openai_model_fast
+  azure_openai_model_quality      = var.azure_openai_model_quality
+  azure_openai_model_reasoning    = var.azure_openai_model_reasoning
+  jwt_secret                      = var.jwt_secret
+  secret_key                      = var.secret_key
+  resend_api_key                  = var.resend_api_key
+  resend_from_email               = var.resend_from_email
   tags                            = var.tags
 }

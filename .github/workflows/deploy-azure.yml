@@ -49,6 +49,14 @@ on:
         options:
           - disabled
           - enabled
+      smoke_test_mode:
+        description: Post-deploy smoke test depth
+        required: false
+        type: choice
+        default: minimal
+        options:
+          - minimal
+          - full
 
 concurrency:
   group: deploy-azure-${{ github.event.inputs.environment || 'dev' }}
@@ -185,6 +193,22 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      api_url: ${{ steps.tf_outputs.outputs.api_url }}
+      frontend_url: ${{ steps.tf_outputs.outputs.frontend_url }}
+    env:
+      TF_VAR_postgres_administrator_password: ${{ secrets.AZURE_POSTGRES_ADMINISTRATOR_PASSWORD || secrets.TF_VAR_POSTGRES_ADMINISTRATOR_PASSWORD || '' }}
+      TF_VAR_cors_origins: ${{ vars.AZURE_FRONTEND_URL || '' }}
+      TF_VAR_azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY || '' }}
+      TF_VAR_azure_openai_endpoint: ${{ vars.AZURE_OPENAI_ENDPOINT || secrets.AZURE_OPENAI_ENDPOINT || '' }}
+      TF_VAR_azure_openai_api_version: ${{ vars.AZURE_OPENAI_API_VERSION || '2024-10-21' }}
+      TF_VAR_azure_openai_model_fast: ${{ vars.AZURE_OPENAI_MODEL_FAST || 'gpt-4o-mini' }}
+      TF_VAR_azure_openai_model_quality: ${{ vars.AZURE_OPENAI_MODEL_QUALITY || 'gpt-4o' }}
+      TF_VAR_azure_openai_model_reasoning: ${{ vars.AZURE_OPENAI_MODEL_REASONING || 'o1-mini' }}
+      TF_VAR_jwt_secret: ${{ secrets.AZURE_JWT_SECRET || secrets.JWT_SECRET || '' }}
+      TF_VAR_secret_key: ${{ secrets.AZURE_SECRET_KEY || secrets.SECRET_KEY || '' }}
+      TF_VAR_resend_api_key: ${{ secrets.AZURE_RESEND_API_KEY || secrets.RESEND_API_KEY || '' }}
+      TF_VAR_resend_from_email: ${{ vars.AZURE_RESEND_FROM_EMAIL || vars.RESEND_FROM_EMAIL || 'onboarding@resend.dev' }}
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v6
@@ -215,15 +239,34 @@ jobs:
         working-directory: ${{ env.AZURE_TF_DIR }}
         run: terraform validate
 
+      - name: Validate Terraform inputs
+        run: |
+          missing=()
+          [[ -n "${TF_VAR_postgres_administrator_password}" ]] || missing+=("TF_VAR_postgres_administrator_password")
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required Terraform inputs: %s\n' "${missing[*]}" >&2
+            printf 'Set AZURE_POSTGRES_ADMINISTRATOR_PASSWORD as a GitHub environment/repository secret.\n' >&2
+            exit 1
+          fi
+          if [[ -z "${TF_VAR_azure_openai_endpoint}" || -z "${TF_VAR_azure_openai_api_key}" ]]; then
+            printf '::warning::Azure OpenAI endpoint/key not configured; LLM calls may fail after deploy.\n'
+          fi
+
       - name: Terraform plan
         working-directory: ${{ env.AZURE_TF_DIR }}
-        run: terraform plan -lock-timeout=300s -out=tfplan
+        run: terraform plan -input=false -lock-timeout=300s -out=tfplan
 
       - name: Terraform apply
         if: ${{ needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform' }}
-        continue-on-error: true
         working-directory: ${{ env.AZURE_TF_DIR }}
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Capture Terraform outputs
+        id: tf_outputs
+        working-directory: ${{ env.AZURE_TF_DIR }}
+        run: |
+          echo "api_url=$(terraform output -raw api_url 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
+          echo "frontend_url=$(terraform output -raw frontend_url 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
 
   build-api:
     name: Build API image
@@ -440,32 +483,22 @@ jobs:
 
       - name: Run Azure migrations
         if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
+        env:
+          AZURE_DATABASE_URL: ${{ secrets.AZURE_DATABASE_URL || '' }}
+          AZURE_REDIS_URL: ${{ secrets.AZURE_REDIS_URL || '' }}
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING || '' }}
         run: |
-          echo "::group::Run database migrations on Azure"
-          ACR_NAME="${{ env.AZURE_ACR_NAME }}"
-          ACR_PASS=$(az acr credential show -n "$ACR_NAME" --query "passwords[0].value" -o tsv 2>/dev/null || true)
-          az containerapp job create \
-            --name "${{ env.AZURE_MIGRATION_JOB_NAME }}" \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --environment "${{ env.AZURE_CONTAINER_APP_ENV }}" \
-            --image "${{ needs.build-api.outputs.image }}" \
-            --registry-server "${ACR_NAME}.azurecr.io" \
-            --registry-username "$ACR_NAME" \
-            --registry-password "$ACR_PASS" \
-            --command "alembic" \
-            --args "-c" "app/db/migrations/alembic.ini" "upgrade" "head" \
-            --trigger-type Manual \
-            --output none 2>/dev/null || true
-          az containerapp job start \
-            --name "${{ env.AZURE_MIGRATION_JOB_NAME }}" \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --output none
-          echo "::endgroup::"
+          bash infra/deploy/scripts/run-migrations-azure.sh "${{ needs.build-api.outputs.image }}"
 
       - name: Capture service URL
         id: url
         run: |
-          echo "url=${AZURE_API_URL}" >> "${GITHUB_OUTPUT}"
+          url="${AZURE_API_URL:-${{ needs.terraform.outputs.api_url }}}"
+          if [[ -z "${url}" ]]; then
+            fqdn="$(az containerapp show --name "${AZURE_API_NAME}" --resource-group "${AZURE_RESOURCE_GROUP}" --query properties.configuration.ingress.fqdn -o tsv)"
+            url="https://${fqdn}"
+          fi
+          echo "url=${url}" >> "${GITHUB_OUTPUT}"
 
       - name: Health check API
         run: |
@@ -517,7 +550,12 @@ jobs:
       - name: Capture service URL
         id: url
         run: |
-          echo "url=${AZURE_FRONTEND_URL}" >> "${GITHUB_OUTPUT}"
+          url="${AZURE_FRONTEND_URL:-${{ needs.terraform.outputs.frontend_url }}}"
+          if [[ -z "${url}" ]]; then
+            fqdn="$(az containerapp show --name "${AZURE_FRONTEND_NAME}" --resource-group "${AZURE_RESOURCE_GROUP}" --query properties.configuration.ingress.fqdn -o tsv)"
+            url="https://${fqdn}"
+          fi
+          echo "url=${url}" >> "${GITHUB_OUTPUT}"
 
       - name: Health check frontend
         run: |

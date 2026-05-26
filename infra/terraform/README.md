@@ -1,6 +1,6 @@
-# GCP Infrastructure — dachjob.ai
+# Cloud Infrastructure — dachjob.ai
 
-Terraform configuration for deploying dachjob.ai on Google Cloud Platform.
+Terraform configuration for deploying dachjob.ai on GCP and Azure.
 
 ## Architecture
 
@@ -18,7 +18,10 @@ See [docs/deployment/gcp-architecture.md](/docs/deployment/gcp-architecture.md) 
 # 1. First apply (bootstrap state bucket)
 cd infra/terraform
 terraform init
-terraform plan -var-file=environments/dev/terraform.tfvars -out=tfplan
+TF_VAR_project_id=... \
+TF_VAR_billing_account_id=... \
+TF_VAR_notification_email=... \
+terraform plan -out=tfplan
 terraform apply tfplan
 
 # 2. On subsequent runs, use the GCS backend
@@ -51,7 +54,6 @@ infra/terraform/
 │
 └── environments/
     └── dev/
-        ├── terraform.tfvars   # Dev environment variables
         └── backend.conf       # Dev backend config
 ```
 
@@ -79,7 +81,7 @@ emails, passwords). Real `.tfvars` files must be:
 - Created locally and kept outside version control
 - Supplied by CI from GitHub Variables/Secrets
 
-Copy `terraform.tfvars.example` to `environments/<env>/terraform.tfvars` and fill in values.
+For local runs, prefer `TF_VAR_*` environment variables or an untracked local tfvars file.
 
 The repository `.gitignore` blocks all `*.tfvars`, `*.tfstate`, `*.tfstate.*`, and `*.tfplan` files.
 
@@ -96,6 +98,23 @@ and kept for manual fallback only.
 Each pipeline supports:
 - **Automatic**: Push to `main` or `deploy/*` branches triggers build + deploy
 - **Manual** via `workflow_dispatch`: Select branch, target (all/api/frontend/worker/terraform), and optionally run Terraform
+
+### Required CI Variables and Secrets
+
+GCP Terraform reads these GitHub Variables/Secrets as `TF_VAR_*` values:
+
+- `GCP_BILLING_ACCOUNT_ID`
+- `GCP_NOTIFICATION_EMAIL`
+
+Azure Terraform reads these GitHub Variables/Secrets as `TF_VAR_*` values:
+
+- Required secret: `AZURE_POSTGRES_ADMINISTRATOR_PASSWORD`
+- Recommended secrets: `AZURE_OPENAI_API_KEY`, `AZURE_JWT_SECRET`, `AZURE_SECRET_KEY`, `AZURE_RESEND_API_KEY`
+- Recommended variables: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_MODEL_FAST`, `AZURE_OPENAI_MODEL_QUALITY`, `AZURE_OPENAI_MODEL_REASONING`, `AZURE_FRONTEND_URL`
+
+Azure API and worker Container Apps store database, Redis, storage, Azure OpenAI, auth, and email credentials as Container Apps secrets. The Azure Key Vault module also stores the supplied Terraform secrets so production hardening can later move the runtime to Key Vault references or managed identity without changing app settings names.
+
+Azure migration jobs need `AZURE_DATABASE_URL` when the job does not already exist. `AZURE_REDIS_URL` and `AZURE_STORAGE_CONNECTION_STRING` are optional and are passed as Container Apps job secrets when configured.
 
 ## Worker Mode
 

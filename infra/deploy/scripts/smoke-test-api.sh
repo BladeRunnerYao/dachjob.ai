@@ -37,6 +37,38 @@ _json_field() {
   python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('$1',''))"
 }
 
+_is_json() {
+  python3 -c "import sys,json; json.load(sys.stdin)" >/dev/null 2>&1
+}
+
+_poll_background_task_if_needed() {
+  local api_url="$1"
+  local auth_header="$2"
+  local response="$3"
+  local label="$4"
+  local max_attempts="$5"
+
+  local task_id
+  local task_status
+  task_id="$(echo "${response}" | _json_field id 2>/dev/null || true)"
+  task_status="$(echo "${response}" | _json_field status 2>/dev/null || true)"
+  if [[ -z "${task_id}" || -z "${task_status}" ]]; then
+    return 0
+  fi
+
+  info "${label} is background task ${task_id}, polling..."
+  for _ in $(seq 1 "${max_attempts}"); do
+    task_resp="$(curl -fsS "${api_url}/api/tasks/${task_id}" \
+      -H "Content-Type: application/json" \
+      -H "${auth_header}" || true)"
+    task_status="$(echo "${task_resp}" | _json_field status 2>/dev/null || true)"
+    [[ "${task_status}" == "succeeded" ]] && return 0
+    [[ "${task_status}" == "failed" ]] && fail "${label} task failed"
+    sleep 5
+  done
+  fail "${label} task did not succeed within timeout"
+}
+
 # ---------------------------------------------------------------------------
 # Minimal smoke test (required after every deploy)
 # ---------------------------------------------------------------------------
@@ -66,17 +98,19 @@ run_minimal() {
   info "POST /api/auth/register (or login if exists)"
   register_resp="$(curl -fsS -X POST "${api_url}/api/auth/register" \
     -H "Content-Type: application/json" \
-    -d "{\"email\":\"${email}\",\"password\":\"${password}\"}" 2>/dev/null || true)"
+    -d "{\"email\":\"${email}\",\"password\":\"${password}\",\"name\":\"Smoke Test User\"}" 2>/dev/null || true)"
 
-  if echo "${register_resp}" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
-    info "Registered new smoke test user"
-    token="$(echo "${register_resp}" | _json_field access_token)"
-  else
+  token=""
+  if echo "${register_resp}" | _is_json; then
+    token="$(echo "${register_resp}" | _json_field token 2>/dev/null || true)"
+    [[ -n "${token}" ]] && info "Registered new smoke test user"
+  fi
+  if [[ -z "${token}" ]]; then
     info "User exists, logging in"
     login_resp="$(curl -fsS -X POST "${api_url}/api/auth/login" \
       -H "Content-Type: application/json" \
       -d "{\"email\":\"${email}\",\"password\":\"${password}\"}")"
-    token="$(echo "${login_resp}" | _json_field access_token)"
+    token="$(echo "${login_resp}" | _json_field token)"
   fi
   [[ -n "${token}" ]] || fail "Failed to obtain auth token"
 
@@ -94,7 +128,7 @@ run_minimal() {
     -H "Content-Type: application/json" \
     -H "${auth_header}" \
     -d '{"raw_cv_md":"# Smoke Test Candidate\n\n## Experience\n- Built CI/CD pipelines at Example Corp\n\n## Skills\n- Python, TypeScript, Docker, Kubernetes\n\n## Education\n- B.Sc. Computer Science"}' 2>/dev/null || true)"
-  if echo "${cv_resp}" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
+  if echo "${cv_resp}" | _is_json; then
     info "CV uploaded"
   else
     info "CV upload may already exist, continuing"
@@ -153,14 +187,11 @@ run_full() {
 
   info "Starting full smoke test (extends minimal)"
 
-  if echo "${email}" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
-    info "Already registered"
-  else
-    login_resp="$(curl -fsS -X POST "${api_url}/api/auth/login" \
-      -H "Content-Type: application/json" \
-      -d "{\"email\":\"${email}\",\"password\":\"${password}\"}")"
-    token="$(echo "${login_resp}" | _json_field access_token)"
-  fi
+  login_resp="$(curl -fsS -X POST "${api_url}/api/auth/login" \
+    -H "Content-Type: application/json" \
+    -d "{\"email\":\"${email}\",\"password\":\"${password}\"}")"
+  token="$(echo "${login_resp}" | _json_field token)"
+  [[ -n "${token}" ]] || fail "Failed to obtain auth token for full smoke test"
   auth_header="Authorization: Bearer ${token}"
 
   # Create a new job for full test
@@ -176,22 +207,7 @@ run_full() {
     -H "Content-Type: application/json" \
     -H "${auth_header}" \
     -d '{}')"
-  parse_kind="$(echo "${parse_resp}" | _json_field kind)"
-
-  if [[ -n "${parse_kind}" && "${parse_kind}" == "background_task" ]]; then
-    task_id="$(echo "${parse_resp}" | _json_field id)"
-    info "Parse is background task ${task_id}, polling..."
-    for _ in $(seq 1 60); do
-      task_resp="$(curl -fsS "${api_url}/api/tasks/${task_id}" \
-        -H "Content-Type: application/json" \
-        -H "${auth_header}" || true)"
-      task_status="$(echo "${task_resp}" | _json_field status || echo '')"
-      [[ "${task_status}" == "succeeded" ]] && break
-      [[ "${task_status}" == "failed" ]] && fail "Job parse task failed"
-      sleep 5
-    done
-    [[ "${task_status}" == "succeeded" ]] || fail "Job parse task did not succeed within timeout"
-  fi
+  _poll_background_task_if_needed "${api_url}" "${auth_header}" "${parse_resp}" "Job parse" 60
 
   # 2. Match
   info "POST /api/jobs/${job_id}/match"
@@ -199,22 +215,7 @@ run_full() {
     -H "Content-Type: application/json" \
     -H "${auth_header}" \
     -d '{}')"
-  match_kind="$(echo "${match_resp}" | _json_field kind)"
-
-  if [[ -n "${match_kind}" && "${match_kind}" == "background_task" ]]; then
-    task_id="$(echo "${match_resp}" | _json_field id)"
-    info "Match is background task ${task_id}, polling..."
-    for _ in $(seq 1 60); do
-      task_resp="$(curl -fsS "${api_url}/api/tasks/${task_id}" \
-        -H "Content-Type: application/json" \
-        -H "${auth_header}" || true)"
-      task_status="$(echo "${task_resp}" | _json_field status || echo '')"
-      [[ "${task_status}" == "succeeded" ]] && break
-      [[ "${task_status}" == "failed" ]] && fail "Match task failed"
-      sleep 5
-    done
-    [[ "${task_status}" == "succeeded" ]] || fail "Match task did not succeed within timeout"
-  fi
+  _poll_background_task_if_needed "${api_url}" "${auth_header}" "${match_resp}" "Match" 60
 
   # 3. Resume
   info "POST /api/jobs/${job_id}/resume"
@@ -222,22 +223,7 @@ run_full() {
     -H "Content-Type: application/json" \
     -H "${auth_header}" \
     -d '{}')"
-  resume_kind="$(echo "${resume_resp}" | _json_field kind)"
-
-  if [[ -n "${resume_kind}" && "${resume_kind}" == "background_task" ]]; then
-    task_id="$(echo "${resume_resp}" | _json_field id)"
-    info "Resume is background task ${task_id}, polling..."
-    for _ in $(seq 1 120); do
-      task_resp="$(curl -fsS "${api_url}/api/tasks/${task_id}" \
-        -H "Content-Type: application/json" \
-        -H "${auth_header}" || true)"
-      task_status="$(echo "${task_resp}" | _json_field status || echo '')"
-      [[ "${task_status}" == "succeeded" ]] && break
-      [[ "${task_status}" == "failed" ]] && fail "Resume task failed"
-      sleep 5
-    done
-    [[ "${task_status}" == "succeeded" ]] || fail "Resume task did not succeed within timeout"
-  fi
+  _poll_background_task_if_needed "${api_url}" "${auth_header}" "${resume_resp}" "Resume" 120
 
   # Find the artifact
   artifact_resp="$(curl -fsS "${api_url}/api/jobs/${job_id}/resume" \
