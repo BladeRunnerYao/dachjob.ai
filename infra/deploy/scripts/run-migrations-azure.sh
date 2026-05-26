@@ -71,13 +71,32 @@ if [[ "${job_exists}" == "true" ]]; then
 
   # Keep command/args immutable on update. Azure CLI can misparse job args that
   # begin with "-"; the job is created once with the Alembic command and later
-  # deployments only need to refresh image, secrets, and environment values.
+  # deployments only need to refresh image and secrets. Environment variables
+  # are set at job creation time and are not updatable via --env-vars on update.
   az containerapp job update \
     --name "${AZURE_MIGRATION_JOB_NAME}" \
     --resource-group "${AZURE_RESOURCE_GROUP}" \
     --image "${api_image}" \
-    "${env_flags[@]}" \
     --output none
+
+  # Set environment variables via template --set (cross-version compatible)
+  env_json=$(printf '%s\n' "${env_args[@]}" | jq -R -s -c '
+    split("\n") | map(select(length > 0)) | map(
+      capture("^(?<name>[^=]+)=(?<value>.*)$")
+      | if .value | startswith("secretref:") then
+          {name: .name, secretRef: (.value | sub("^secretref:"; ""))}
+        else
+          {name: .name, value: .value}
+        end
+    )
+  ')
+  if [[ -n "${env_json}" && "${env_json}" != "[]" ]]; then
+    az containerapp job update \
+      --name "${AZURE_MIGRATION_JOB_NAME}" \
+      --resource-group "${AZURE_RESOURCE_GROUP}" \
+      --set "template.containers[0].env=${env_json}" \
+      --output none
+  fi
 else
   if [[ -z "${AZURE_DATABASE_URL:-}" ]]; then
     echo "::error::AZURE_DATABASE_URL is required when creating the Azure migration job."
