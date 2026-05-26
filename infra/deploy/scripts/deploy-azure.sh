@@ -4,12 +4,12 @@ set -euo pipefail
 #
 # Deploy to Azure Container Apps.
 #
-# Usage: deploy-azure.sh <target> <api_image> <frontend_image> <worker_image> <image_tag> <run_migrations>
+# Usage: deploy-azure.sh <target> <api_image> <frontend_image> <worker_image> <run_migrations>
 #
 # Reads env vars:
 #   AZURE_RESOURCE_GROUP, AZURE_CONTAINER_APP_ENV, AZURE_API_NAME,
 #   AZURE_FRONTEND_NAME, AZURE_WORKER_NAME, AZURE_MIGRATION_JOB_NAME,
-#   API_BASE_URL, and tfoutputs JSON exported from Terraform.
+#   AZURE_API_URL, AZURE_FRONTEND_URL.
 #
 
 target="$1"
@@ -24,6 +24,7 @@ deploy_api() {
     --name "${AZURE_API_NAME}" \
     --resource-group "${AZURE_RESOURCE_GROUP}" \
     --image "${api_image}" \
+    --set-env-vars "CORS_ORIGINS=${AZURE_FRONTEND_URL:-}" \
     --output none
   echo "::endgroup::"
 }
@@ -34,6 +35,7 @@ deploy_frontend() {
     --name "${AZURE_FRONTEND_NAME}" \
     --resource-group "${AZURE_RESOURCE_GROUP}" \
     --image "${frontend_image}" \
+    --set-env-vars "NEXT_PUBLIC_API_BASE_URL=${AZURE_API_URL:-} INTERNAL_API_BASE_URL=${AZURE_API_URL:-}" \
     --output none
   echo "::endgroup::"
 }
