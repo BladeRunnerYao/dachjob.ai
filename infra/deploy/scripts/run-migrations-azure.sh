@@ -69,12 +69,13 @@ if [[ "${job_exists}" == "true" ]]; then
       --output none
   fi
 
+  # Keep command/args immutable on update. Azure CLI can misparse job args that
+  # begin with "-"; the job is created once with the Alembic command and later
+  # deployments only need to refresh image, secrets, and environment values.
   az containerapp job update \
     --name "${AZURE_MIGRATION_JOB_NAME}" \
     --resource-group "${AZURE_RESOURCE_GROUP}" \
     --image "${api_image}" \
-    --command "alembic" \
-    --args "-c" "app/db/migrations/alembic.ini" "upgrade" "head" \
     "${env_flags[@]}" \
     --output none
 else
