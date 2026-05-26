@@ -323,6 +323,7 @@ jobs:
       id-token: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
+      azure_image: ${{ steps.meta.outputs.azure_image }}
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v6
@@ -365,19 +366,14 @@ jobs:
         id: meta
         run: |
           tag="${{ needs.prepare.outputs.image_tag }}"
-          cloud="${{ needs.prepare.outputs.cloud }}"
-          if [[ "${cloud}" == "gcp" ]]; then
-            image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-api/api:${tag}"
-            latest="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-api/api:latest"
-          elif [[ "${cloud}" == "azure" ]]; then
-            image="${{ env.AZURE_ACR_NAME }}.azurecr.io/api:${tag}"
-            latest="${{ env.AZURE_ACR_NAME }}.azurecr.io/api:latest"
-          else
-            image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-api/api:${tag}"
-            latest="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-api/api:latest"
-          fi
-          echo "image=${image}" >> "${GITHUB_OUTPUT}"
-          echo "latest=${latest}" >> "${GITHUB_OUTPUT}"
+          gcp_image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-api/api:${tag}"
+          gcp_latest="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-api/api:latest"
+          azure_image="${{ env.AZURE_ACR_NAME }}.azurecr.io/api:${tag}"
+          azure_latest="${{ env.AZURE_ACR_NAME }}.azurecr.io/api:latest"
+          echo "image=${gcp_image}" >> "${GITHUB_OUTPUT}"
+          echo "latest=${gcp_latest}" >> "${GITHUB_OUTPUT}"
+          echo "azure_image=${azure_image}" >> "${GITHUB_OUTPUT}"
+          echo "azure_latest=${azure_latest}" >> "${GITHUB_OUTPUT}"
 
       - name: Build and push API image
         uses: docker/build-push-action@v7
@@ -392,6 +388,8 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.image }}
             ${{ steps.meta.outputs.latest }}
+            ${{ steps.meta.outputs.azure_image }}
+            ${{ steps.meta.outputs.azure_latest }}
 
   build-frontend:
     name: Build frontend image (${{ needs.prepare.outputs.cloud }})
@@ -403,6 +401,7 @@ jobs:
       id-token: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
+      azure_image: ${{ steps.meta.outputs.azure_image }}
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v6
@@ -445,16 +444,14 @@ jobs:
         id: meta
         run: |
           tag="${{ needs.prepare.outputs.image_tag }}"
-          cloud="${{ needs.prepare.outputs.cloud }}"
-          if [[ "${cloud}" == "gcp" || "${cloud}" == "all" ]]; then
-            image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-frontend/frontend:${tag}"
-            latest="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-frontend/frontend:latest"
-          else
-            image="${{ env.AZURE_ACR_NAME }}.azurecr.io/frontend:${tag}"
-            latest="${{ env.AZURE_ACR_NAME }}.azurecr.io/frontend:latest"
-          fi
-          echo "image=${image}" >> "${GITHUB_OUTPUT}"
-          echo "latest=${latest}" >> "${GITHUB_OUTPUT}"
+          gcp_image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-frontend/frontend:${tag}"
+          gcp_latest="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-frontend/frontend:latest"
+          azure_image="${{ env.AZURE_ACR_NAME }}.azurecr.io/frontend:${tag}"
+          azure_latest="${{ env.AZURE_ACR_NAME }}.azurecr.io/frontend:latest"
+          echo "image=${gcp_image}" >> "${GITHUB_OUTPUT}"
+          echo "latest=${gcp_latest}" >> "${GITHUB_OUTPUT}"
+          echo "azure_image=${azure_image}" >> "${GITHUB_OUTPUT}"
+          echo "azure_latest=${azure_latest}" >> "${GITHUB_OUTPUT}"
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v7
@@ -468,6 +465,8 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.image }}
             ${{ steps.meta.outputs.latest }}
+            ${{ steps.meta.outputs.azure_image }}
+            ${{ steps.meta.outputs.azure_latest }}
 
   build-worker:
     name: Build worker image (${{ needs.prepare.outputs.cloud }})
@@ -479,6 +478,7 @@ jobs:
       id-token: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
+      azure_image: ${{ steps.meta.outputs.azure_image }}
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v6
@@ -521,16 +521,14 @@ jobs:
         id: meta
         run: |
           tag="${{ needs.prepare.outputs.image_tag }}"
-          cloud="${{ needs.prepare.outputs.cloud }}"
-          if [[ "${cloud}" == "gcp" || "${cloud}" == "all" ]]; then
-            image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-worker/worker:${tag}"
-            latest="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-worker/worker:latest"
-          else
-            image="${{ env.AZURE_ACR_NAME }}.azurecr.io/worker:${tag}"
-            latest="${{ env.AZURE_ACR_NAME }}.azurecr.io/worker:latest"
-          fi
-          echo "image=${image}" >> "${GITHUB_OUTPUT}"
-          echo "latest=${latest}" >> "${GITHUB_OUTPUT}"
+          gcp_image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-worker/worker:${tag}"
+          gcp_latest="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-worker/worker:latest"
+          azure_image="${{ env.AZURE_ACR_NAME }}.azurecr.io/worker:${tag}"
+          azure_latest="${{ env.AZURE_ACR_NAME }}.azurecr.io/worker:latest"
+          echo "image=${gcp_image}" >> "${GITHUB_OUTPUT}"
+          echo "latest=${gcp_latest}" >> "${GITHUB_OUTPUT}"
+          echo "azure_image=${azure_image}" >> "${GITHUB_OUTPUT}"
+          echo "azure_latest=${azure_latest}" >> "${GITHUB_OUTPUT}"
 
       - name: Build and push worker image
         uses: docker/build-push-action@v7
@@ -545,6 +543,8 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.image }}
             ${{ steps.meta.outputs.latest }}
+            ${{ steps.meta.outputs.azure_image }}
+            ${{ steps.meta.outputs.azure_latest }}
 
   deploy-api:
     name: Deploy API (${{ needs.prepare.outputs.cloud }})
@@ -604,7 +604,7 @@ jobs:
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
         run: |
           bash infra/deploy/scripts/deploy-azure.sh "api" \
-            "${{ needs.build-api.outputs.image }}" "" "" "" "${{ needs.prepare.outputs.run_migrations }}"
+            "${{ needs.build-api.outputs.azure_image || needs.build-api.outputs.image }}" "" "" "" "${{ needs.prepare.outputs.run_migrations }}"
 
       - name: Deploy migration job
         if: ${{ (needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all') && needs.prepare.outputs.run_migrations == 'true' }}
@@ -728,7 +728,7 @@ jobs:
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
         run: |
           bash infra/deploy/scripts/deploy-azure.sh "frontend" \
-            "" "${{ needs.build-frontend.outputs.image }}" "" "" ""
+            "" "${{ needs.build-frontend.outputs.azure_image || needs.build-frontend.outputs.image }}" "" "" ""
 
       - name: Capture service URL
         id: url
@@ -854,7 +854,7 @@ jobs:
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
         run: |
           bash infra/deploy/scripts/deploy-azure.sh "worker" \
-            "" "" "${{ needs.build-worker.outputs.image }}" "" ""
+            "" "" "${{ needs.build-worker.outputs.azure_image || needs.build-worker.outputs.image }}" "" ""
 
   summary:
     name: Deployment summary
