@@ -231,8 +231,8 @@ jobs:
       contents: read
       id-token: write
     env:
-      TF_VAR_project_id: ${{ env.PROJECT_ID }}
-      TF_VAR_region: ${{ env.REGION }}
+      TF_VAR_project_id: dachjob-ai-platform
+      TF_VAR_region: europe-west1
       TF_VAR_environment: ${{ needs.prepare.outputs.environment }}
       TF_VAR_billing_account_id: ${{ vars.GCP_BILLING_ACCOUNT_ID || secrets.GCP_BILLING_ACCOUNT_ID || '' }}
       TF_VAR_notification_email: ${{ vars.GCP_NOTIFICATION_EMAIL || vars.NOTIFICATION_EMAIL || secrets.GCP_NOTIFICATION_EMAIL || '' }}
