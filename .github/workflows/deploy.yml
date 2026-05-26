@@ -296,7 +296,7 @@ jobs:
       - name: Terraform plan (GCP)
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
         working-directory: ${{ env.GCP_TF_DIR }}
-        run: terraform plan -var-file=environments/${{ needs.prepare.outputs.environment }}/terraform.tfvars -out=tfplan
+        run: terraform plan -lock-timeout=300s -var-file=environments/${{ needs.prepare.outputs.environment }}/terraform.tfvars -out=tfplan
 
       - name: Terraform apply (GCP)
         if: ${{ (needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform') && (needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all') }}
