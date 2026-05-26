@@ -102,6 +102,13 @@ export interface PaginatedLLMRuns {
   total: number;
 }
 
+export interface PaginatedJobs {
+  items: JobPosting[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export type BackgroundTaskStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'retrying' | 'cancelled';
 
 export interface BackgroundTask {

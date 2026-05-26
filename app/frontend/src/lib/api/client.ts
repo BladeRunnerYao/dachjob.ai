@@ -1,4 +1,4 @@
-import type { BackgroundTask, BackgroundTaskListResponse, JobPosting, CandidateProfile, Application, LLMRun, MatchReport, ResumeArtifact, JobImportResponse, PaginatedLLMRuns, VersionResponse } from './types';
+import type { BackgroundTask, BackgroundTaskListResponse, JobPosting, CandidateProfile, Application, LLMRun, MatchReport, ResumeArtifact, JobImportResponse, PaginatedJobs, PaginatedLLMRuns, VersionResponse } from './types';
 
 function getApiBase() {
   if (typeof window === 'undefined') {
@@ -190,11 +190,27 @@ export class ApiClient {
     return this.request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
   }
 
-  async getJobs(): Promise<JobPosting[]> {
+  async getJobs(limit?: number, offset?: number): Promise<JobPosting[]> {
     try {
-      return await this.fetch<JobPosting[]>('/api/jobs');
+      const q = new URLSearchParams();
+      q.set('limit', String(limit ?? 1000));
+      q.set('offset', String(offset ?? 0));
+      const result = await this.fetch<PaginatedJobs>(`/api/jobs?${q.toString()}`);
+      return result.items;
     } catch {
       return this.getMockJobs();
+    }
+  }
+
+  async getJobsPaginated(limit: number, offset: number): Promise<PaginatedJobs> {
+    try {
+      const q = new URLSearchParams();
+      q.set('limit', String(limit));
+      q.set('offset', String(offset));
+      return await this.fetch<PaginatedJobs>(`/api/jobs?${q.toString()}`);
+    } catch {
+      const items = this.getMockJobs();
+      return { items, total: items.length, limit, offset };
     }
   }
 
