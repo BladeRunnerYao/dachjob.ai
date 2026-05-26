@@ -547,7 +547,14 @@ jobs:
             --name "${AZURE_API_NAME}" \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --image "${{ needs.build-api.outputs.image }}" \
-            --set-env-vars "CORS_ORIGINS=${AZURE_FRONTEND_URL:-} WORKER_ENABLED=${{ needs.prepare.outputs.worker_enabled == 'enabled' && 'true' || 'false' }} WORKER_FALLBACK_TO_SYNC=true LOG_LEVEL=INFO LOG_JSON=true ERROR_LOG_TO_FILE=true ERROR_LOG_DIR=/tmp/dachjob-error-logs STORAGE_PROVIDER=azure_blob" \
+            --set-env-vars CORS_ORIGINS="${AZURE_FRONTEND_URL:-}" \
+              WORKER_ENABLED="${{ needs.prepare.outputs.worker_enabled == 'enabled' && 'true' || 'false' }}" \
+              WORKER_FALLBACK_TO_SYNC=true \
+              LOG_LEVEL=INFO \
+              LOG_JSON=true \
+              ERROR_LOG_TO_FILE=true \
+              ERROR_LOG_DIR=/tmp/dachjob-error-logs \
+              STORAGE_PROVIDER=azure_blob \
             --output none
 
       - name: Run Azure migrations
@@ -624,7 +631,8 @@ jobs:
             --name "${AZURE_FRONTEND_NAME}" \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --image "${{ needs.build-frontend.outputs.image }}" \
-            --set-env-vars "NEXT_PUBLIC_API_BASE_URL=${AZURE_API_URL:-} INTERNAL_API_BASE_URL=${AZURE_API_URL:-}" \
+            --set-env-vars NEXT_PUBLIC_API_BASE_URL="${AZURE_API_URL:-}" \
+              INTERNAL_API_BASE_URL="${AZURE_API_URL:-}" \
             --output none
 
       - name: Capture service URL
