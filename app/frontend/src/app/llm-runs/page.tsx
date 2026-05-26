@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Fragment, type ChangeEvent } from 'react';
+import { useState, useEffect, Fragment, type ChangeEvent } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api/client';
@@ -26,51 +26,70 @@ export default function LLMRunsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<string[]>([]);
 
-  const fetchRuns = useCallback(async () => {
-    setLoading(true);
-    const params: { task?: string; status?: string; limit: number; offset: number } = {
-      limit: pageSize,
-      offset: page * pageSize,
-    };
-    if (taskFilter !== 'all') params.task = taskFilter;
-    if (statusFilter !== 'all') params.status = statusFilter;
+  useEffect(() => {
+    let cancelled = false;
 
-    const result = await api.getLLMRuns(params);
-    setRuns(result.items);
-    setTotal(result.total);
-    if (tasks.length === 0) {
-      const all = await api.getLLMRuns({ limit: 1 });
-      setTasks([]);
+    async function loadRuns() {
+      const params: { task?: string; status?: string; limit: number; offset: number } = {
+        limit: pageSize,
+        offset: page * pageSize,
+      };
+      if (taskFilter !== 'all') params.task = taskFilter;
+      if (statusFilter !== 'all') params.status = statusFilter;
+
+      const result = await api.getLLMRuns(params);
+      if (!cancelled) {
+        setRuns(result.items);
+        setTotal(result.total);
+        setLoading(false);
+      }
     }
-    setLoading(false);
-  }, [taskFilter, statusFilter, page, pageSize, tasks.length]);
+
+    void loadRuns();
+    return () => {
+      cancelled = true;
+    };
+  }, [taskFilter, statusFilter, page, pageSize]);
 
   useEffect(() => {
-    fetchRuns();
-  }, [fetchRuns]);
+    let cancelled = false;
 
-  useEffect(() => {
-    api.getLLMRuns({ limit: 200 }).then(r => {
-      const t = [...new Set(r.items.map(x => x.task))];
-      setTasks(t);
-    });
+    async function loadTasks() {
+      const result = await api.getLLMRuns({ limit: 200 });
+      if (!cancelled) {
+        setTasks([...new Set(result.items.map((run) => run.task))]);
+      }
+    }
+
+    void loadTasks();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const handlePageSizeChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    setLoading(true);
     setPageSize(Number(e.target.value));
     setPage(0);
   };
 
   const handleTaskChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    setLoading(true);
     setTaskFilter(e.target.value);
     setPage(0);
   };
 
   const handleStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    setLoading(true);
     setStatusFilter(e.target.value);
     setPage(0);
+  };
+
+  const goToPage = (nextPage: number | ((current: number) => number)) => {
+    setLoading(true);
+    setPage(nextPage);
   };
 
   return (
@@ -83,7 +102,7 @@ export default function LLMRunsPage() {
       <div className="flex gap-2 flex-wrap items-center">
         <select
           value={taskFilter}
-          onChange={(e) => setTaskFilter(e.target.value)}
+          onChange={handleTaskChange}
           className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs bg-white"
         >
           <option value="all">All Tasks</option>
@@ -91,7 +110,7 @@ export default function LLMRunsPage() {
         </select>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={handleStatusChange}
           className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs bg-white"
         >
           <option value="all">All Statuses</option>
@@ -161,7 +180,7 @@ export default function LLMRunsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 text-sm">
           <button
-            onClick={() => setPage(p => Math.max(0, p - 1))}
+            onClick={() => goToPage(p => Math.max(0, p - 1))}
             disabled={page === 0}
             className="px-3 py-1.5 rounded border border-slate-300 disabled:opacity-40 hover:bg-slate-50"
           >
@@ -170,14 +189,14 @@ export default function LLMRunsPage() {
           {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => (
             <button
               key={i}
-              onClick={() => setPage(i)}
+              onClick={() => goToPage(i)}
               className={`px-3 py-1.5 rounded border ${i === page ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-300 hover:bg-slate-50'}`}
             >
               {i + 1}
             </button>
           ))}
           <button
-            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            onClick={() => goToPage(p => Math.min(totalPages - 1, p + 1))}
             disabled={page >= totalPages - 1}
             className="px-3 py-1.5 rounded border border-slate-300 disabled:opacity-40 hover:bg-slate-50"
           >

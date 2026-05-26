@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         router.push('/login');
       });
-  }, [router]);
+  }, [router, token]);
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await fetch(`${getApiBase()}/api/auth/login`, {

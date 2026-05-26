@@ -107,16 +107,19 @@ export default function JobDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (!resume) {
-      setHtmlBlobUrl(null);
-      setPdfBlobUrl(null);
-      return;
-    }
     const artifact = resume;
     let cancelled = false;
     const blobUrls: string[] = [];
 
     async function load() {
+      if (!artifact) {
+        await Promise.resolve();
+        if (!cancelled) {
+          setHtmlBlobUrl(null);
+          setPdfBlobUrl(null);
+        }
+        return;
+      }
       try {
         if (artifact.has_html) {
           const url = await api.getResumeHtmlUrl(artifact.id);
@@ -141,7 +144,7 @@ export default function JobDetailPage() {
       cancelled = true;
       blobUrls.forEach((u) => URL.revokeObjectURL(u));
     };
-  }, [resume?.id, resume?.has_html, resume?.has_pdf]);
+  }, [resume]);
 
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
   if (!job) return <p className="text-sm text-red-500">Job not found</p>;

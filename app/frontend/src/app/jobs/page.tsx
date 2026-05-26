@@ -22,7 +22,6 @@ export default function JobsPage() {
   const [importError, setImportError] = useState<string | null>(null);
 
   const fetchJobs = useCallback(async () => {
-    setLoading(true);
     const result = await api.getJobsPaginated(pageSize, page * pageSize);
     setJobs(result.items);
     setTotal(result.total);
@@ -30,8 +29,22 @@ export default function JobsPage() {
   }, [page, pageSize]);
 
   useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
+    let cancelled = false;
+
+    async function loadJobs() {
+      const result = await api.getJobsPaginated(pageSize, page * pageSize);
+      if (!cancelled) {
+        setJobs(result.items);
+        setTotal(result.total);
+        setLoading(false);
+      }
+    }
+
+    void loadJobs();
+    return () => {
+      cancelled = true;
+    };
+  }, [page, pageSize]);
 
   const handleSave = async (urlText: string) => {
     setImporting(true);
@@ -55,8 +68,14 @@ export default function JobsPage() {
   };
 
   const handlePageSizeChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    setLoading(true);
     setPageSize(Number(e.target.value));
     setPage(0);
+  };
+
+  const goToPage = (nextPage: number | ((current: number) => number)) => {
+    setLoading(true);
+    setPage(nextPage);
   };
 
   const filtered = filter === 'all' ? jobs : jobs.filter(j => j.recommendation === filter);
@@ -117,7 +136,7 @@ export default function JobsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 text-sm">
           <button
-            onClick={() => setPage(p => Math.max(0, p - 1))}
+            onClick={() => goToPage(p => Math.max(0, p - 1))}
             disabled={page === 0}
             className="px-3 py-1.5 rounded border border-slate-300 disabled:opacity-40 hover:bg-slate-50"
           >
@@ -126,14 +145,14 @@ export default function JobsPage() {
           {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => (
             <button
               key={i}
-              onClick={() => setPage(i)}
+              onClick={() => goToPage(i)}
               className={`px-3 py-1.5 rounded border ${i === page ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-300 hover:bg-slate-50'}`}
             >
               {i + 1}
             </button>
           ))}
           <button
-            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            onClick={() => goToPage(p => Math.min(totalPages - 1, p + 1))}
             disabled={page >= totalPages - 1}
             className="px-3 py-1.5 rounded border border-slate-300 disabled:opacity-40 hover:bg-slate-50"
           >
