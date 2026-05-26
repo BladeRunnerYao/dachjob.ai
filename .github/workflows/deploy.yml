@@ -129,9 +129,14 @@ jobs:
           echo "environment=${environment}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref_name }}
+        env:
+          CHECKOUT_REF: ${{ github.event.inputs.branch || github.ref_name }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
+          git checkout --force FETCH_HEAD
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -225,9 +230,14 @@ jobs:
           [[ "${target}" == "all" || "${target}" == "terraform" ]] && echo "run_terraform=true" >> "${GITHUB_OUTPUT}" || echo "run_terraform=false" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout selected branch
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ steps.inputs.outputs.branch }}
+        env:
+          CHECKOUT_REF: ${{ steps.inputs.outputs.branch }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
+          git checkout --force FETCH_HEAD
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Create image tag
         id: tag
@@ -251,9 +261,14 @@ jobs:
       frontend_url: ${{ steps.tf_outputs.outputs.frontend_url }}
     steps:
       - name: Checkout selected branch
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.branch }}
+        env:
+          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
+          git checkout --force FETCH_HEAD
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -274,11 +289,6 @@ jobs:
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.10.0"
-
-      - name: Terraform init (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
-        working-directory: ${{ env.GCP_TF_DIR }}
-        run: terraform init -backend-config=environments/${{ needs.prepare.outputs.environment }}/backend.conf
 
       - name: Terraform init (GCP)
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -326,9 +336,14 @@ jobs:
       azure_image: ${{ steps.meta.outputs.azure_image }}
     steps:
       - name: Checkout selected branch
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.branch }}
+        env:
+          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
+          git checkout --force FETCH_HEAD
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -374,6 +389,18 @@ jobs:
           echo "latest=${gcp_latest}" >> "${GITHUB_OUTPUT}"
           echo "azure_image=${azure_image}" >> "${GITHUB_OUTPUT}"
           echo "azure_latest=${azure_latest}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "tags<<EOF"
+            if [[ "${{ needs.prepare.outputs.cloud }}" == "gcp" || "${{ needs.prepare.outputs.cloud }}" == "all" ]]; then
+              echo "${gcp_image}"
+              echo "${gcp_latest}"
+            fi
+            if [[ "${{ needs.prepare.outputs.cloud }}" == "azure" || "${{ needs.prepare.outputs.cloud }}" == "all" ]]; then
+              echo "${azure_image}"
+              echo "${azure_latest}"
+            fi
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Build and push API image
         uses: docker/build-push-action@v7
@@ -386,10 +413,7 @@ jobs:
             GIT_BRANCH=${{ needs.prepare.outputs.branch }}
             GIT_COMMIT_SHA=${{ needs.prepare.outputs.commit_sha }}
           tags: |
-            ${{ steps.meta.outputs.image }}
-            ${{ steps.meta.outputs.latest }}
-            ${{ steps.meta.outputs.azure_image }}
-            ${{ steps.meta.outputs.azure_latest }}
+            ${{ steps.meta.outputs.tags }}
 
   build-frontend:
     name: Build frontend image (${{ needs.prepare.outputs.cloud }})
@@ -404,9 +428,14 @@ jobs:
       azure_image: ${{ steps.meta.outputs.azure_image }}
     steps:
       - name: Checkout selected branch
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.branch }}
+        env:
+          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
+          git checkout --force FETCH_HEAD
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -452,6 +481,18 @@ jobs:
           echo "latest=${gcp_latest}" >> "${GITHUB_OUTPUT}"
           echo "azure_image=${azure_image}" >> "${GITHUB_OUTPUT}"
           echo "azure_latest=${azure_latest}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "tags<<EOF"
+            if [[ "${{ needs.prepare.outputs.cloud }}" == "gcp" || "${{ needs.prepare.outputs.cloud }}" == "all" ]]; then
+              echo "${gcp_image}"
+              echo "${gcp_latest}"
+            fi
+            if [[ "${{ needs.prepare.outputs.cloud }}" == "azure" || "${{ needs.prepare.outputs.cloud }}" == "all" ]]; then
+              echo "${azure_image}"
+              echo "${azure_latest}"
+            fi
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v7
@@ -463,10 +504,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=${{ env.API_BASE_URL }}
           tags: |
-            ${{ steps.meta.outputs.image }}
-            ${{ steps.meta.outputs.latest }}
-            ${{ steps.meta.outputs.azure_image }}
-            ${{ steps.meta.outputs.azure_latest }}
+            ${{ steps.meta.outputs.tags }}
 
   build-worker:
     name: Build worker image (${{ needs.prepare.outputs.cloud }})
@@ -481,9 +519,14 @@ jobs:
       azure_image: ${{ steps.meta.outputs.azure_image }}
     steps:
       - name: Checkout selected branch
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.branch }}
+        env:
+          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
+          git checkout --force FETCH_HEAD
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -529,6 +572,18 @@ jobs:
           echo "latest=${gcp_latest}" >> "${GITHUB_OUTPUT}"
           echo "azure_image=${azure_image}" >> "${GITHUB_OUTPUT}"
           echo "azure_latest=${azure_latest}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "tags<<EOF"
+            if [[ "${{ needs.prepare.outputs.cloud }}" == "gcp" || "${{ needs.prepare.outputs.cloud }}" == "all" ]]; then
+              echo "${gcp_image}"
+              echo "${gcp_latest}"
+            fi
+            if [[ "${{ needs.prepare.outputs.cloud }}" == "azure" || "${{ needs.prepare.outputs.cloud }}" == "all" ]]; then
+              echo "${azure_image}"
+              echo "${azure_latest}"
+            fi
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Build and push worker image
         uses: docker/build-push-action@v7
@@ -541,10 +596,7 @@ jobs:
             GIT_BRANCH=${{ needs.prepare.outputs.branch }}
             GIT_COMMIT_SHA=${{ needs.prepare.outputs.commit_sha }}
           tags: |
-            ${{ steps.meta.outputs.image }}
-            ${{ steps.meta.outputs.latest }}
-            ${{ steps.meta.outputs.azure_image }}
-            ${{ steps.meta.outputs.azure_latest }}
+            ${{ steps.meta.outputs.tags }}
 
   deploy-api:
     name: Deploy API (${{ needs.prepare.outputs.cloud }})
@@ -561,9 +613,14 @@ jobs:
       url: ${{ steps.url.outputs.url }}
     steps:
       - name: Checkout selected branch
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.branch }}
+        env:
+          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
+          git checkout --force FETCH_HEAD
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -640,7 +697,7 @@ jobs:
             --name "${{ env.AZURE_MIGRATION_JOB_NAME }}" \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
             --environment "${{ env.AZURE_CONTAINER_APP_ENV }}" \
-            --image "${{ needs.build-api.outputs.image }}" \
+            --image "${{ needs.build-api.outputs.azure_image || needs.build-api.outputs.image }}" \
             --registry-server "${ACR_NAME}.azurecr.io" \
             --registry-username "$ACR_NAME" \
             --registry-password "$ACR_PASS" \
@@ -689,9 +746,14 @@ jobs:
       url: ${{ steps.url.outputs.url }}
     steps:
       - name: Checkout selected branch
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.branch }}
+        env:
+          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
+          git checkout --force FETCH_HEAD
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -798,9 +860,14 @@ jobs:
       id-token: write
     steps:
       - name: Checkout selected branch
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.branch }}
+        env:
+          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
+          git checkout --force FETCH_HEAD
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -812,6 +879,14 @@ jobs:
       - name: Setup gcloud (GCP)
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
         uses: google-github-actions/setup-gcloud@v3
+
+      - name: Get GKE credentials
+        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+        uses: google-github-actions/get-gke-credentials@v3
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER_NAME }}
+          location: ${{ env.REGION }}
+          project_id: ${{ env.PROJECT_ID }}
 
       - name: Authenticate to Azure
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}

@@ -68,6 +68,10 @@ deploy_worker() {
   gemini_api_key="$(gcloud secrets versions access latest --secret=dachjob-dev-gemini-api-key --project="${PROJECT_ID}" 2>/dev/null || true)"
   database_url="postgresql+psycopg://postgres:${database_password}@localhost/dachjob?host=/cloudsql/${CLOUD_SQL_CONNECTION_NAME}"
 
+  gcloud container clusters get-credentials "${GKE_CLUSTER_NAME}" \
+    --region="${REGION}" \
+    --project="${PROJECT_ID}"
+
   kubectl create namespace "${GKE_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
   kubectl create secret generic worker-secrets \
     --namespace="${GKE_NAMESPACE}" \
