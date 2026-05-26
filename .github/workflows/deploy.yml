@@ -129,14 +129,10 @@ jobs:
           echo "environment=${environment}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout
-        env:
-          CHECKOUT_REF: ${{ github.event.inputs.branch || github.ref_name }}
-        run: |
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
-          git checkout --force FETCH_HEAD
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -230,14 +226,10 @@ jobs:
           [[ "${target}" == "all" || "${target}" == "terraform" ]] && echo "run_terraform=true" >> "${GITHUB_OUTPUT}" || echo "run_terraform=false" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout selected branch
-        env:
-          CHECKOUT_REF: ${{ steps.inputs.outputs.branch }}
-        run: |
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
-          git checkout --force FETCH_HEAD
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.inputs.outputs.branch }}
+          persist-credentials: false
 
       - name: Create image tag
         id: tag
@@ -261,14 +253,10 @@ jobs:
       frontend_url: ${{ steps.tf_outputs.outputs.frontend_url }}
     steps:
       - name: Checkout selected branch
-        env:
-          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
-        run: |
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
-          git checkout --force FETCH_HEAD
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -336,14 +324,10 @@ jobs:
       azure_image: ${{ steps.meta.outputs.azure_image }}
     steps:
       - name: Checkout selected branch
-        env:
-          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
-        run: |
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
-          git checkout --force FETCH_HEAD
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -428,14 +412,10 @@ jobs:
       azure_image: ${{ steps.meta.outputs.azure_image }}
     steps:
       - name: Checkout selected branch
-        env:
-          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
-        run: |
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
-          git checkout --force FETCH_HEAD
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -519,14 +499,10 @@ jobs:
       azure_image: ${{ steps.meta.outputs.azure_image }}
     steps:
       - name: Checkout selected branch
-        env:
-          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
-        run: |
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
-          git checkout --force FETCH_HEAD
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -613,14 +589,10 @@ jobs:
       url: ${{ steps.url.outputs.url }}
     steps:
       - name: Checkout selected branch
-        env:
-          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
-        run: |
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
-          git checkout --force FETCH_HEAD
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -746,14 +718,10 @@ jobs:
       url: ${{ steps.url.outputs.url }}
     steps:
       - name: Checkout selected branch
-        env:
-          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
-        run: |
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
-          git checkout --force FETCH_HEAD
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
@@ -860,14 +828,10 @@ jobs:
       id-token: write
     steps:
       - name: Checkout selected branch
-        env:
-          CHECKOUT_REF: ${{ needs.prepare.outputs.branch }}
-        run: |
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --no-tags --depth=1 origin "+refs/heads/${CHECKOUT_REF}:refs/remotes/origin/${CHECKOUT_REF}"
-          git checkout --force FETCH_HEAD
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
 
       - name: Authenticate to Google Cloud
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
