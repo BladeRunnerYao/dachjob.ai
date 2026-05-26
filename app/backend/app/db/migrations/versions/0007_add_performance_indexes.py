@@ -28,9 +28,7 @@ def upgrade() -> None:
         "ON resume_artifacts (job_id, tenant_id, created_at DESC)"
     )
     op.execute(
-        "CREATE INDEX IF NOT EXISTS "
-        "ix_evidence_chunks_profile_id "
-        "ON evidence_chunks (profile_id)"
+        "CREATE INDEX IF NOT EXISTS ix_evidence_chunks_profile_id ON evidence_chunks (profile_id)"
     )
 
 

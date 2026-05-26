@@ -10,9 +10,7 @@ class StorageService:
         self._bucket_name = settings.storage_bucket_name
 
         if not self._provider:
-            self._provider = (
-                "gcs" if "storage.googleapis.com" in settings.s3_endpoint_url else "s3"
-            )
+            self._provider = "gcs" if "storage.googleapis.com" in settings.s3_endpoint_url else "s3"
 
         if self._provider == "gcs":
             self._init_gcs(settings)
@@ -56,9 +54,12 @@ class StorageService:
             blob.upload_from_file(io.BytesIO(body), content_type=content_type)
         elif self._provider == "azure_blob":
             from azure.storage.blob import ContentSettings
+
             self._blob_container.upload_blob(
-                name=key, data=io.BytesIO(body), overwrite=True,
-                content_settings=ContentSettings(content_type=content_type)
+                name=key,
+                data=io.BytesIO(body),
+                overwrite=True,
+                content_settings=ContentSettings(content_type=content_type),
             )
         else:
             self._s3_client.put_object(

@@ -155,7 +155,9 @@ class LLMGateway:
     def _build_providers(self, settings) -> list[LLMProvider]:
         preferred = (settings.llm_provider or "vertex_ai").lower()
         ordered_names = list(
-            dict.fromkeys([preferred, "azure_openai", "vertex_ai", "gemini", "deepseek", "openrouter"])
+            dict.fromkeys(
+                [preferred, "azure_openai", "vertex_ai", "gemini", "deepseek", "openrouter"]
+            )
         )
         providers: list[LLMProvider] = []
         for name in ordered_names:

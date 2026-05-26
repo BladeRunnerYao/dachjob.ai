@@ -184,6 +184,7 @@ def test_error_archive_handler_includes_exception():
             handler.emit(record)
 
         import time
+
         time.sleep(0.1)
 
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -262,6 +263,7 @@ async def test_list_tasks():
             if str(mock_select.call_args[0][0]).startswith("count("):
                 return mock_count
             return mock_result
+
         mock_db.execute.side_effect = side
 
         items, total = await list_tasks(mock_db, tenant_id)

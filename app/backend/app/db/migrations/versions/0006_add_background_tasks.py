@@ -4,6 +4,7 @@ Revision ID: 0006_add_background_tasks
 Revises: 0005_add_user_id_to_candidate_profiles
 Create Date: 2026-05-25
 """
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql

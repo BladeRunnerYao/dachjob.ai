@@ -1164,7 +1164,6 @@ async def compute_match(
     if not job:
         from app.core.errors import AppError
 
-
         raise AppError("job_not_found", "Job posting not found", status_code=404)
 
     if not job.parsed_json:
