@@ -624,7 +624,7 @@ jobs:
         run: |
           CORS_ORIGINS="${FRONTEND_URL}"
           if [[ -n "${AZURE_FRONTEND_URL}" ]]; then
-            CORS_ORIGINS="${CORS_ORIGINS},${AZURE_FRONTEND_URL}"
+            CORS_ORIGINS="${CORS_ORIGINS}^,${AZURE_FRONTEND_URL}"
           fi
           gcloud run deploy "${API_SERVICE_NAME}" \
             --project="${PROJECT_ID}" \
