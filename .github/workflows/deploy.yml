@@ -308,10 +308,19 @@ jobs:
         working-directory: ${{ env.AZURE_TF_DIR }}
         run: |
           set +e
-          # Import existing resources if they exist
-          RG_ID="/subscriptions/${{ vars.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ env.AZURE_RESOURCE_GROUP }}"
-          az group show --id "$RG_ID" &>/dev/null && terraform import module.networking.azurerm_resource_group.this "$RG_ID" 2>/dev/null || true
-          echo "Import done"
+          RG_NAME="${{ env.AZURE_RESOURCE_GROUP }}"
+          SUB_ID="${{ vars.AZURE_SUBSCRIPTION_ID }}"
+          RG_ID="/subscriptions/${SUB_ID}/resourceGroups/${RG_NAME}"
+          echo "Checking RG: ${RG_NAME} at ${RG_ID}"
+          if az group show --id "$RG_ID" &>/dev/null; then
+            echo "RG exists, importing..."
+            terraform import module.networking.azurerm_resource_group.this "$RG_ID" 2>&1 || echo "Import failed (might already be in state)"
+          else
+            echo "RG does not exist, will be created by plan"
+          fi
+          # Also import existing VNet
+          VNET_ID="/subscriptions/${SUB_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.Network/virtualNetworks/${RG_NAME//-rg}-vnet"
+          az network vnet show --id "$VNET_ID" &>/dev/null && terraform import module.networking.azurerm_virtual_network.this "$VNET_ID" 2>/dev/null || true
 
       - name: Terraform plan (Azure)
         if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
