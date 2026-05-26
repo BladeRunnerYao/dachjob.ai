@@ -1,35 +1,44 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
 import { JobCard } from '@/components/jobs/job-card';
 import { JobForm } from '@/components/jobs/job-form';
 import { api } from '@/lib/api/client';
 import type { JobPosting } from '@/lib/api/types';
 
+const PAGE_SIZES = [15, 30, 50, 100];
+
 type FilterKey = 'all' | 'apply' | 'maybe' | 'skip';
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(15);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
+  const fetchJobs = useCallback(async () => {
+    setLoading(true);
+    const result = await api.getJobsPaginated(pageSize, page * pageSize);
+    setJobs(result.items);
+    setTotal(result.total);
+    setLoading(false);
+  }, [page, pageSize]);
+
   useEffect(() => {
-    api.getJobs().then((data) => {
-      setJobs(data);
-      setLoading(false);
-    });
-  }, []);
+    fetchJobs();
+  }, [fetchJobs]);
 
   const handleSave = async (urlText: string) => {
     setImporting(true);
     setImportError(null);
     try {
       const result = await api.importJobs(urlText);
-      const importedIds = new Set(result.imported.map((job) => job.id));
-      setJobs([...result.imported, ...jobs.filter((job) => !importedIds.has(job.id))]);
+      await fetchJobs();
       if (result.errors.length > 0) {
         const errorMessages = result.errors.map(
           (e) => `${e.url}: ${e.error}`
@@ -45,7 +54,13 @@ export default function JobsPage() {
     }
   };
 
+  const handlePageSizeChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    setPageSize(Number(e.target.value));
+    setPage(0);
+  };
+
   const filtered = filter === 'all' ? jobs : jobs.filter(j => j.recommendation === filter);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
 
@@ -54,7 +69,7 @@ export default function JobsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Jobs</h1>
-          <p className="text-sm text-slate-500 mt-1">{jobs.length} job postings</p>
+          <p className="text-sm text-slate-500 mt-1">{total} job postings</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -64,7 +79,7 @@ export default function JobsPage() {
         </button>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap items-center">
         {(['all', 'apply', 'maybe', 'skip'] as FilterKey[]).map((f) => (
           <button
             key={f}
@@ -77,10 +92,17 @@ export default function JobsPage() {
           >
             {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
             <span className="ml-1 opacity-60">
-              ({f === 'all' ? jobs.length : jobs.filter(j => j.recommendation === f).length})
+              ({f === 'all' ? total : jobs.filter(j => j.recommendation === f).length})
             </span>
           </button>
         ))}
+        <select
+          value={pageSize}
+          onChange={handlePageSizeChange}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs bg-white ml-auto"
+        >
+          {PAGE_SIZES.map(s => <option key={s} value={s}>{s} / page</option>)}
+        </select>
       </div>
 
       <div className="space-y-2">
@@ -91,6 +113,34 @@ export default function JobsPage() {
           <p className="text-sm text-slate-500 py-8 text-center">No jobs match this filter.</p>
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 text-sm">
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="px-3 py-1.5 rounded border border-slate-300 disabled:opacity-40 hover:bg-slate-50"
+          >
+            Previous
+          </button>
+          {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => setPage(i)}
+              className={`px-3 py-1.5 rounded border ${i === page ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-300 hover:bg-slate-50'}`}
+            >
+              {i + 1}
+            </button>
+          ))}
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="px-3 py-1.5 rounded border border-slate-300 disabled:opacity-40 hover:bg-slate-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
 
       {showForm && (
         <JobForm

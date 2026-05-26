@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext
@@ -12,38 +12,53 @@ from app.db.session import get_db
 from app.modules.background_tasks.execution import run_or_enqueue
 from app.modules.background_tasks.schemas import BackgroundTaskResponse
 from app.modules.jobs.importer import import_job_urls
-from app.modules.jobs.repository import create_job, get_job, list_jobs_by_tenant
+from app.modules.jobs.repository import (
+    count_jobs_by_tenant,
+    create_job,
+    get_job,
+    list_jobs_by_tenant,
+)
 from app.modules.jobs.schemas import (
     ImportError,
     JobCreateRequest,
     JobImportRequest,
     JobImportResponse,
     JobResponse,
+    PaginatedJobResponse,
 )
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 
 async def _invalidate_jobs_cache(tenant_id: UUID, job_id: UUID | None = None):
-    await cache.delete("jobs:list", str(tenant_id))
+    await cache.delete_pattern(f"jobs:list:{tenant_id}")
     if job_id:
         await cache.delete("job:detail", str(job_id))
 
 
-@router.get("", response_model=list[JobResponse])
+@router.get("", response_model=PaginatedJobResponse)
 async def list_jobs(
     tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
+    limit: int = Query(15, ge=1, le=200, description="Number of jobs per page"),
+    offset: int = Query(0, ge=0, description="Number of jobs to skip"),
 ):
     if tenant.id is None:
-        return []
-    cached = await cache.get_json("jobs:list", str(tenant.id))
+        return PaginatedJobResponse(items=[], total=0, limit=limit, offset=offset)
+    cache_key = f"jobs:list:{tenant.id}:{limit}:{offset}"
+    cached = await cache.get_json("jobs:list", cache_key)
     if cached is not None:
-        return [JobResponse.model_validate(item) for item in cached]
-    jobs = await list_jobs_by_tenant(db, tenant.id)
-    serialized = [JobResponse.model_validate(job).model_dump(mode="json") for job in jobs]
-    await cache.set_json("jobs:list", str(tenant.id), value=serialized)
-    return jobs
+        return PaginatedJobResponse.model_validate(cached)
+    total = await count_jobs_by_tenant(db, tenant.id)
+    jobs = await list_jobs_by_tenant(db, tenant.id, limit=limit, offset=offset)
+    serialized = PaginatedJobResponse(
+        items=[JobResponse.model_validate(job).model_dump(mode="json") for job in jobs],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+    await cache.set_json("jobs:list", cache_key, value=serialized.model_dump(mode="json"))
+    return serialized
 
 
 @router.post("", response_model=JobResponse, status_code=201)
