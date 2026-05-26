@@ -77,6 +77,11 @@ variable "storage_connection_string" {
   sensitive = true
 }
 
+variable "cors_origins" {
+  type    = string
+  default = ""
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

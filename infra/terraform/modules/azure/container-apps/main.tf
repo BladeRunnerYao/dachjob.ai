@@ -72,10 +72,10 @@ resource "azurerm_container_app" "api" {
         name  = "LLM_PROVIDER"
         value = "azure_openai"
       }
-      env {
-        name  = "CORS_ORIGINS"
-        value = "https://${var.name_prefix}-frontend.--placeholder--"
-      }
+              env {
+                  name  = "CORS_ORIGINS"
+                  value = var.cors_origins != "" ? var.cors_origins : "https://${var.name_prefix}-frontend.--placeholder--"
+                }
 
       liveness_probe {
         port    = 8000

@@ -86,5 +86,6 @@ module "container_apps" {
   storage_account_name         = module.storage.storage_account_name
   storage_container_name       = module.storage.storage_container_name
   storage_connection_string    = module.storage.primary_connection_string
+  cors_origins                 = var.cors_origins
   tags                         = var.tags
 }

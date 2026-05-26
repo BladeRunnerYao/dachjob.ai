@@ -36,6 +36,12 @@ variable "worker_image_tag" {
   default     = "latest"
 }
 
+variable "cors_origins" {
+  description = "CORS allowed origins for the API"
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
