@@ -21,16 +21,16 @@ resource "azurerm_container_app_environment" "this" {
 }
 
 locals {
-  database_url                 = "postgresql+asyncpg://${var.postgres_administrator_login}:${var.postgres_administrator_password}@${var.postgres_host}:5432/dachjob"
-  redis_url                    = "rediss://:${var.redis_primary_key}@${var.redis_hostname}:6380/0"
-  has_azure_openai_api_key     = nonsensitive(var.azure_openai_api_key != "")
-  has_jwt_secret               = nonsensitive(var.jwt_secret != "")
-  has_secret_key               = nonsensitive(var.secret_key != "")
-  has_resend_api_key           = nonsensitive(var.resend_api_key != "")
-  azure_openai_api_key_secret  = "azure-openai-api-key"
-  jwt_secret_name              = "jwt-secret"
-  secret_key_name              = "secret-key"
-  resend_api_key_secret        = "resend-api-key"
+  database_url                = "postgresql+asyncpg://${var.postgres_administrator_login}:${var.postgres_administrator_password}@${var.postgres_host}:5432/dachjob"
+  redis_url                   = "rediss://:${var.redis_primary_key}@${var.redis_hostname}:6380/0"
+  has_azure_openai_api_key    = nonsensitive(var.azure_openai_api_key != "")
+  has_jwt_secret              = nonsensitive(var.jwt_secret != "")
+  has_secret_key              = nonsensitive(var.secret_key != "")
+  has_resend_api_key          = nonsensitive(var.resend_api_key != "")
+  azure_openai_api_key_secret = "azure-openai-api-key"
+  jwt_secret_name             = "jwt-secret"
+  secret_key_name             = "secret-key"
+  resend_api_key_secret       = "resend-api-key"
 }
 
 resource "azurerm_container_app" "api" {

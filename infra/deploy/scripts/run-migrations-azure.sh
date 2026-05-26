@@ -61,13 +61,20 @@ if (( ${#env_args[@]} > 0 )); then
 fi
 
 if [[ "${job_exists}" == "true" ]]; then
+  if (( ${#secret_args[@]} > 0 )); then
+    az containerapp job secret set \
+      --name "${AZURE_MIGRATION_JOB_NAME}" \
+      --resource-group "${AZURE_RESOURCE_GROUP}" \
+      --secrets "${secret_args[@]}" \
+      --output none
+  fi
+
   az containerapp job update \
     --name "${AZURE_MIGRATION_JOB_NAME}" \
     --resource-group "${AZURE_RESOURCE_GROUP}" \
     --image "${api_image}" \
     --command "alembic" \
     --args "-c" "app/db/migrations/alembic.ini" "upgrade" "head" \
-    "${secret_flags[@]}" \
     "${env_flags[@]}" \
     --output none
 else
