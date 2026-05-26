@@ -318,6 +318,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.deploy_api == 'true' }}
     runs-on: ubuntu-latest
+    environment: dev
     permissions:
       contents: read
       id-token: write
@@ -406,6 +407,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.deploy_frontend == 'true' }}
     runs-on: ubuntu-latest
+    environment: dev
     permissions:
       contents: read
       id-token: write
@@ -493,6 +495,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.deploy_worker == 'true' }}
     runs-on: ubuntu-latest
+    environment: dev
     permissions:
       contents: read
       id-token: write
@@ -584,6 +587,7 @@ jobs:
       - build-api
     if: ${{ always() && needs.prepare.outputs.deploy_api == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-api.result == 'success' }}
     runs-on: ubuntu-latest
+    environment: dev
     permissions:
       contents: read
       id-token: write
@@ -719,6 +723,7 @@ jobs:
       - build-frontend
     if: ${{ always() && needs.prepare.outputs.deploy_frontend == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-frontend.result == 'success' }}
     runs-on: ubuntu-latest
+    environment: dev
     permissions:
       contents: read
       id-token: write
@@ -833,6 +838,7 @@ jobs:
     if: ${{ always() && needs.prepare.outputs.deploy_worker == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-worker.result == 'success' }}
     runs-on: ubuntu-latest
     continue-on-error: true
+    environment: dev
     permissions:
       contents: read
       id-token: write
