@@ -280,10 +280,10 @@ jobs:
         working-directory: ${{ env.GCP_TF_DIR }}
         run: terraform init -backend-config=environments/${{ needs.prepare.outputs.environment }}/backend.conf
 
-      - name: Terraform init (Azure)
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        working-directory: ${{ env.AZURE_TF_DIR }}
-        run: terraform init
+      - name: Terraform init (GCP)
+        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+        working-directory: ${{ env.GCP_TF_DIR }}
+        run: terraform init -backend-config=environments/${{ needs.prepare.outputs.environment }}/backend.conf
 
       - name: Terraform format check
         run: terraform fmt -check -recursive
@@ -293,61 +293,23 @@ jobs:
         working-directory: ${{ env.GCP_TF_DIR }}
         run: terraform validate
 
-      - name: Terraform validate (Azure)
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        working-directory: ${{ env.AZURE_TF_DIR }}
-        run: terraform validate
-
       - name: Terraform plan (GCP)
         if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
         working-directory: ${{ env.GCP_TF_DIR }}
         run: terraform plan -var-file=environments/${{ needs.prepare.outputs.environment }}/terraform.tfvars -out=tfplan
 
-      - name: Terraform import existing (Azure)
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        continue-on-error: true
-        working-directory: ${{ env.AZURE_TF_DIR }}
-        run: |
-          set +e
-          RG_NAME="${{ env.AZURE_RESOURCE_GROUP }}"
-          SUB_ID="${{ vars.AZURE_SUBSCRIPTION_ID }}"
-          RG_ID="/subscriptions/${SUB_ID}/resourceGroups/${RG_NAME}"
-          echo "Checking RG: ${RG_NAME}"
-          if az group exists -n "$RG_NAME" | grep -q true; then
-            echo "RG exists, importing..."
-            terraform init 2>/dev/null
-            terraform import module.networking.azurerm_resource_group.this "$RG_ID" 2>&1 || echo "import end"
-          else
-            echo "RG does not exist"
-          fi
-
-      - name: Terraform plan (Azure)
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        working-directory: ${{ env.AZURE_TF_DIR }}
-        run: terraform plan -out=tfplan
-
-      - name: Terraform apply
-        if: ${{ needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform' }}
-        run: |
-          if [[ "${{ needs.prepare.outputs.cloud }}" == "gcp" ]]; then
-            cd "${{ env.GCP_TF_DIR }}"
-          else
-            cd "${{ env.AZURE_TF_DIR }}"
-          fi
-          terraform apply -auto-approve tfplan
+      - name: Terraform apply (GCP)
+        if: ${{ (needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform') && (needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all') }}
+        working-directory: ${{ env.GCP_TF_DIR }}
+        run: terraform apply -auto-approve tfplan
 
       - name: Capture Terraform outputs
         id: tf_outputs
         run: |
           if [[ "${{ needs.prepare.outputs.cloud }}" == "gcp" ]]; then
             cd "${{ env.GCP_TF_DIR }}"
-          else
-            cd "${{ env.AZURE_TF_DIR }}"
-          fi
-          echo "api_url=$(terraform output -raw api_url 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
-          echo "frontend_url=$(terraform output -raw frontend_url 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
-          if [[ "${{ needs.prepare.outputs.cloud }}" == "azure" ]]; then
-            echo "acr_login_server=$(terraform output -raw acr_login_server 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
+            echo "api_url=$(terraform output -raw api_url 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
+            echo "frontend_url=$(terraform output -raw frontend_url 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
           fi
 
   build-api:
