@@ -1,6 +1,6 @@
-# GCP Infrastructure — dachjob.ai
+# Cloud Infrastructure — dachjob.ai
 
-Terraform configuration for deploying dachjob.ai on Google Cloud Platform.
+Terraform configuration for deploying dachjob.ai on GCP and Azure.
 
 ## Architecture
 
@@ -18,7 +18,10 @@ See [docs/deployment/gcp-architecture.md](/docs/deployment/gcp-architecture.md) 
 # 1. First apply (bootstrap state bucket)
 cd infra/terraform
 terraform init
-terraform plan -var-file=environments/dev/terraform.tfvars -out=tfplan
+TF_VAR_project_id=... \
+TF_VAR_billing_account_id=... \
+TF_VAR_notification_email=... \
+terraform plan -out=tfplan
 terraform apply tfplan
 
 # 2. On subsequent runs, use the GCS backend
@@ -51,7 +54,6 @@ infra/terraform/
 │
 └── environments/
     └── dev/
-        ├── terraform.tfvars   # Dev environment variables
         └── backend.conf       # Dev backend config
 ```
 
@@ -71,13 +73,64 @@ infra/terraform/
 | `gke_machine_type` | string | `e2-custom-2-4096` | GKE machine type |
 | `budget_amount` | number | `200` | Monthly budget in EUR |
 
+## Security
+
+**Never commit `terraform.tfvars` files.** They contain secrets (project IDs, billing accounts,
+emails, passwords). Real `.tfvars` files must be:
+
+- Created locally and kept outside version control
+- Supplied by CI from GitHub Variables/Secrets
+
+For local runs, prefer `TF_VAR_*` environment variables or an untracked local tfvars file.
+
+The repository `.gitignore` blocks all `*.tfvars`, `*.tfstate`, `*.tfstate.*`, and `*.tfplan` files.
+
 ## CI/CD Pipeline
 
-See [.github/workflows/deploy.yml](/.github/workflows/deploy.yml) for the GitHub Actions pipeline.
+Deployment is split into two cloud-specific workflows:
 
-The pipeline supports:
+- [`.github/workflows/deploy-gcp.yml`](/.github/workflows/deploy-gcp.yml) — GCP Cloud Run + GKE
+- [`.github/workflows/deploy-azure.yml`](/.github/workflows/deploy-azure.yml) — Azure Container Apps
+
+The old combined [`.github/workflows/deploy.yml`](/.github/workflows/deploy.yml) is deprecated
+and kept for manual fallback only.
+
+Each pipeline supports:
 - **Automatic**: Push to `main` or `deploy/*` branches triggers build + deploy
 - **Manual** via `workflow_dispatch`: Select branch, target (all/api/frontend/worker/terraform), and optionally run Terraform
+
+### Required CI Variables and Secrets
+
+GCP Terraform reads these GitHub Variables/Secrets as `TF_VAR_*` values:
+
+- `GCP_BILLING_ACCOUNT_ID`
+- `GCP_NOTIFICATION_EMAIL`
+
+Azure Terraform reads sensitive values from Azure Key Vault after GitHub Actions authenticates
+to Azure with OIDC. GitHub should only store non-sensitive Azure identifiers as repository
+variables:
+
+- Required variables: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_KEY_VAULT_NAME`
+- Runtime variables: `AZURE_ACR_NAME`, `AZURE_CONTAINER_APP_ENV`, `AZURE_API_NAME`, `AZURE_FRONTEND_NAME`, `AZURE_WORKER_NAME`, `AZURE_MIGRATION_JOB_NAME`, `AZURE_API_URL`, `AZURE_FRONTEND_URL`
+- Optional Azure OpenAI variables: `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_MODEL_FAST`, `AZURE_OPENAI_MODEL_QUALITY`, `AZURE_OPENAI_MODEL_REASONING`
+
+Required Key Vault secrets:
+
+- `postgres-administrator-password`
+- `database-url`
+- `redis-url`
+- `azure-storage-connection-string`
+- `jwt-secret`
+- `secret-key`
+
+Optional Key Vault secrets:
+
+- `azure-openai-api-key`
+- `resend-api-key`
+
+Azure API and worker Container Apps store database, Redis, storage, Azure OpenAI, auth, and email credentials as Container Apps secrets. The Azure workflow loads Terraform and migration secrets from Key Vault instead of storing them as GitHub Secrets.
+
+Azure migration jobs need `database-url` in Key Vault when the job does not already exist. `redis-url` and `azure-storage-connection-string` are optional and are passed as Container Apps job secrets when configured.
 
 ## Worker Mode
 

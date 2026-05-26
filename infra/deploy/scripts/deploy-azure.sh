@@ -4,33 +4,40 @@ set -euo pipefail
 #
 # Deploy to Azure Container Apps.
 #
-# Usage: deploy-azure.sh <target> <api_image> <frontend_image> <worker_image> <run_migrations>
+# Usage: deploy-azure.sh <target> <api_image> <frontend_image> <worker_image>
+#
+# target: one of api, frontend, worker, all
 #
 # Reads env vars:
 #   AZURE_RESOURCE_GROUP, AZURE_CONTAINER_APP_ENV, AZURE_API_NAME,
-#   AZURE_FRONTEND_NAME, AZURE_WORKER_NAME, AZURE_MIGRATION_JOB_NAME,
-#   AZURE_API_URL, AZURE_FRONTEND_URL.
+#   AZURE_FRONTEND_NAME, AZURE_WORKER_NAME
+#
+# The caller is responsible for Azure authentication (az login) before calling
+# this script.
 #
 
 target="$1"
 api_image="$2"
 frontend_image="$3"
 worker_image="$4"
-run_migrations="$5"
 
 deploy_api() {
   echo "::group::Deploy API to Azure Container Apps"
+  : "${AZURE_API_NAME:?AZURE_API_NAME is required}"
+  : "${AZURE_RESOURCE_GROUP:?AZURE_RESOURCE_GROUP is required}"
   az containerapp update \
     --name "${AZURE_API_NAME}" \
     --resource-group "${AZURE_RESOURCE_GROUP}" \
     --image "${api_image}" \
-    --set-env-vars "CORS_ORIGINS=${AZURE_FRONTEND_URL:-}" \
+    --set-env-vars "CORS_ORIGINS=${AZURE_API_URL:-}" \
     --output none
   echo "::endgroup::"
 }
 
 deploy_frontend() {
   echo "::group::Deploy frontend to Azure Container Apps"
+  : "${AZURE_FRONTEND_NAME:?AZURE_FRONTEND_NAME is required}"
+  : "${AZURE_RESOURCE_GROUP:?AZURE_RESOURCE_GROUP is required}"
   az containerapp update \
     --name "${AZURE_FRONTEND_NAME}" \
     --resource-group "${AZURE_RESOURCE_GROUP}" \
@@ -42,29 +49,12 @@ deploy_frontend() {
 
 deploy_worker() {
   echo "::group::Deploy worker to Azure Container Apps"
+  : "${AZURE_WORKER_NAME:?AZURE_WORKER_NAME is required}"
+  : "${AZURE_RESOURCE_GROUP:?AZURE_RESOURCE_GROUP is required}"
   az containerapp update \
     --name "${AZURE_WORKER_NAME}" \
     --resource-group "${AZURE_RESOURCE_GROUP}" \
     --image "${worker_image}" \
-    --output none
-  echo "::endgroup::"
-}
-
-run_migrations_fn() {
-  echo "::group::Run database migrations on Azure"
-  az containerapp job create \
-    --name "${AZURE_MIGRATION_JOB_NAME}" \
-    --resource-group "${AZURE_RESOURCE_GROUP}" \
-    --environment "${AZURE_CONTAINER_APP_ENV}" \
-    --image "${api_image}" \
-    --command "alembic" \
-    --args "-c app/db/migrations/alembic.ini upgrade head" \
-    --trigger-type Manual \
-    --output none 2>/dev/null || true
-
-  az containerapp job start \
-    --name "${AZURE_MIGRATION_JOB_NAME}" \
-    --resource-group "${AZURE_RESOURCE_GROUP}" \
     --output none
   echo "::endgroup::"
 }
@@ -79,19 +69,15 @@ case "${target}" in
   worker)
     deploy_worker
     ;;
-  migrations)
-    run_migrations_fn
-    ;;
   all)
     deploy_api
     deploy_frontend
     deploy_worker
-    if [[ "${run_migrations}" == "true" ]]; then
-      run_migrations_fn
-    fi
     ;;
   *)
     echo "Unknown target: ${target}"
+    echo "Usage: deploy-azure.sh <target> <api_image> <frontend_image> <worker_image>"
+    echo "  target: api | frontend | worker | all"
     exit 1
     ;;
 esac

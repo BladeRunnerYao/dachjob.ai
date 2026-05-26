@@ -10,7 +10,7 @@ class StorageService:
         self._bucket_name = settings.storage_bucket_name
 
         if not self._provider:
-            self._provider = "gcs" if "storage.googleapis.com" in settings.s3_endpoint_url else "s3"
+            self._provider = "s3"
 
         if self._provider == "gcs":
             self._init_gcs(settings)

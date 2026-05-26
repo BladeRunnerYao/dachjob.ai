@@ -64,6 +64,11 @@ variable "redis_primary_key" {
   sensitive = true
 }
 
+variable "redis_enabled" {
+  type    = bool
+  default = false
+}
+
 variable "storage_account_name" {
   type = string
 }
@@ -80,6 +85,60 @@ variable "storage_connection_string" {
 variable "cors_origins" {
   type    = string
   default = ""
+}
+
+variable "azure_openai_api_key" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+variable "azure_openai_endpoint" {
+  type    = string
+  default = ""
+}
+
+variable "azure_openai_api_version" {
+  type    = string
+  default = "2024-10-21"
+}
+
+variable "azure_openai_model_fast" {
+  type    = string
+  default = "gpt-4o-mini"
+}
+
+variable "azure_openai_model_quality" {
+  type    = string
+  default = "gpt-4o"
+}
+
+variable "azure_openai_model_reasoning" {
+  type    = string
+  default = "o1-mini"
+}
+
+variable "jwt_secret" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+variable "secret_key" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+variable "resend_api_key" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+variable "resend_from_email" {
+  type    = string
+  default = "onboarding@resend.dev"
 }
 
 variable "tags" {

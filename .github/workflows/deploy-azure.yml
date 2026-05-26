@@ -1,0 +1,763 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches:
+      - main
+      - deploy/*
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        type: choice
+        default: dev
+        options:
+          - dev
+          - staging
+          - prod
+      branch:
+        description: Optional branch override. Leave empty to deploy the selected workflow branch.
+        required: false
+        default: ""
+      target:
+        description: Deployment target
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - api
+          - frontend
+          - worker
+          - terraform
+      terraform_apply:
+        description: Apply Terraform after plan
+        required: false
+        type: boolean
+        default: false
+      run_migrations:
+        description: Run database migrations after API deploy
+        required: false
+        type: boolean
+        default: true
+      worker_mode:
+        description: Worker mode for this deploy
+        required: true
+        type: choice
+        default: disabled
+        options:
+          - disabled
+          - enabled
+      smoke_test_mode:
+        description: Post-deploy smoke test depth
+        required: false
+        type: choice
+        default: minimal
+        options:
+          - minimal
+          - full
+
+concurrency:
+  group: deploy-azure-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || '' }}
+  AZURE_CONTAINER_APP_ENV: ${{ vars.AZURE_CONTAINER_APP_ENV || '' }}
+  AZURE_API_NAME: ${{ vars.AZURE_API_NAME || '' }}
+  AZURE_FRONTEND_NAME: ${{ vars.AZURE_FRONTEND_NAME || '' }}
+  AZURE_WORKER_NAME: ${{ vars.AZURE_WORKER_NAME || '' }}
+  AZURE_MIGRATION_JOB_NAME: ${{ vars.AZURE_MIGRATION_JOB_NAME || '' }}
+  AZURE_ACR_NAME: ${{ vars.AZURE_ACR_NAME || '' }}
+  AZURE_API_URL: ${{ vars.AZURE_API_URL || '' }}
+  AZURE_FRONTEND_URL: ${{ vars.AZURE_FRONTEND_URL || '' }}
+  AZURE_KEY_VAULT_NAME: ${{ vars.AZURE_KEY_VAULT_NAME || '' }}
+  AZURE_TF_DIR: infra/terraform/live/azure/dev
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: app/backend
+    outputs:
+      environment: ${{ steps.resolve.outputs.environment }}
+    steps:
+      - name: Resolve environment
+        id: resolve
+        working-directory: .
+        run: |
+          environment="${{ github.event.inputs.environment || 'dev' }}"
+          echo "environment=${environment}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+      - name: Run unit tests
+        run: pytest tests/ --ignore=tests/test_provider_smoke.py -v
+
+  prepare:
+    name: Prepare deployment
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      environment: ${{ steps.inputs.outputs.environment }}
+      branch: ${{ steps.inputs.outputs.branch }}
+      target: ${{ steps.inputs.outputs.target }}
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+      commit_sha: ${{ steps.tag.outputs.commit_sha }}
+      deploy_api: ${{ steps.inputs.outputs.deploy_api }}
+      deploy_frontend: ${{ steps.inputs.outputs.deploy_frontend }}
+      deploy_worker: ${{ steps.inputs.outputs.deploy_worker }}
+      run_terraform: ${{ steps.inputs.outputs.run_terraform }}
+      terraform_apply: ${{ steps.inputs.outputs.terraform_apply }}
+      run_migrations: ${{ steps.inputs.outputs.run_migrations }}
+      worker_enabled: ${{ steps.inputs.outputs.worker_enabled }}
+    steps:
+      - name: Resolve inputs
+        id: inputs
+        run: |
+          environment="${{ needs.validate.outputs.environment || 'dev' }}"
+          branch="${{ github.event.inputs.branch }}"
+          if [[ -z "${branch}" ]]; then
+            branch="${GITHUB_REF_NAME}"
+          fi
+          target="${{ github.event.inputs.target || 'all' }}"
+          terraform_apply="${{ github.event.inputs.terraform_apply || 'false' }}"
+          run_migrations="${{ github.event.inputs.run_migrations || 'true' }}"
+          worker_mode="${{ github.event.inputs.worker_mode || 'disabled' }}"
+
+          echo "environment=${environment}" >> "${GITHUB_OUTPUT}"
+          echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
+          echo "target=${target}" >> "${GITHUB_OUTPUT}"
+          echo "terraform_apply=${terraform_apply}" >> "${GITHUB_OUTPUT}"
+          echo "run_migrations=${run_migrations}" >> "${GITHUB_OUTPUT}"
+          echo "worker_enabled=${worker_mode}" >> "${GITHUB_OUTPUT}"
+
+          [[ "${target}" == "all" || "${target}" == "api" ]] && echo "deploy_api=true" >> "${GITHUB_OUTPUT}" || echo "deploy_api=false" >> "${GITHUB_OUTPUT}"
+          [[ "${target}" == "all" || "${target}" == "frontend" ]] && echo "deploy_frontend=true" >> "${GITHUB_OUTPUT}" || echo "deploy_frontend=false" >> "${GITHUB_OUTPUT}"
+          if [[ "${worker_mode}" == "disabled" && "${target}" == "worker" ]]; then
+            echo "Error: target=worker requires worker_mode=enabled" >&2
+            exit 1
+          fi
+          if [[ "${worker_mode}" == "enabled" && ("${target}" == "all" || "${target}" == "worker") ]]; then
+            echo "deploy_worker=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "deploy_worker=false" >> "${GITHUB_OUTPUT}"
+          fi
+          [[ "${target}" == "all" || "${target}" == "terraform" ]] && echo "run_terraform=true" >> "${GITHUB_OUTPUT}" || echo "run_terraform=false" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.inputs.outputs.branch }}
+          persist-credentials: false
+
+      - name: Create image tag
+        id: tag
+        run: |
+          commit_sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          echo "image_tag=${short_sha}-${GITHUB_RUN_NUMBER}" >> "${GITHUB_OUTPUT}"
+          echo "commit_sha=${commit_sha}" >> "${GITHUB_OUTPUT}"
+
+  terraform:
+    name: Terraform (Azure)
+    needs: prepare
+    if: ${{ needs.prepare.outputs.run_terraform == 'true' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      api_url: ${{ steps.tf_outputs.outputs.api_url }}
+      frontend_url: ${{ steps.tf_outputs.outputs.frontend_url }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to Azure
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+          az account set --subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Load Terraform secrets from Key Vault
+        run: |
+          : "${AZURE_KEY_VAULT_NAME:?AZURE_KEY_VAULT_NAME repository variable is required}"
+          set +x
+          fetch_secret() {
+            az keyvault secret show \
+              --vault-name "${AZURE_KEY_VAULT_NAME}" \
+              --name "$1" \
+              --query value \
+              -o tsv 2>/dev/null || true
+          }
+
+          postgres_password="$(fetch_secret postgres-administrator-password)"
+          azure_openai_api_key="$(fetch_secret azure-openai-api-key)"
+          jwt_secret="$(fetch_secret jwt-secret)"
+          secret_key="$(fetch_secret secret-key)"
+          resend_api_key="$(fetch_secret resend-api-key)"
+          deepseek_api_key="$(fetch_secret deepseek-api-key)"
+
+          [[ -n "${postgres_password}" ]] && echo "::add-mask::${postgres_password}"
+          [[ -n "${azure_openai_api_key}" ]] && echo "::add-mask::${azure_openai_api_key}"
+          [[ -n "${jwt_secret}" ]] && echo "::add-mask::${jwt_secret}"
+          [[ -n "${secret_key}" ]] && echo "::add-mask::${secret_key}"
+          [[ -n "${resend_api_key}" ]] && echo "::add-mask::${resend_api_key}"
+          [[ -n "${deepseek_api_key}" ]] && echo "::add-mask::${deepseek_api_key}"
+
+          {
+            echo "TF_VAR_postgres_administrator_password<<EOF"
+            echo "${postgres_password}"
+            echo "EOF"
+            echo "TF_VAR_azure_openai_api_key<<EOF"
+            echo "${azure_openai_api_key}"
+            echo "EOF"
+            echo "TF_VAR_jwt_secret<<EOF"
+            echo "${jwt_secret}"
+            echo "EOF"
+            echo "TF_VAR_secret_key<<EOF"
+            echo "${secret_key}"
+            echo "EOF"
+            echo "TF_VAR_resend_api_key<<EOF"
+            echo "${resend_api_key}"
+            echo "EOF"
+            echo "TF_VAR_cors_origins=${AZURE_FRONTEND_URL}"
+            echo "TF_VAR_azure_openai_endpoint=${{ vars.AZURE_OPENAI_ENDPOINT || '' }}"
+            echo "TF_VAR_azure_openai_api_version=${{ vars.AZURE_OPENAI_API_VERSION || '2024-10-21' }}"
+            echo "TF_VAR_azure_openai_model_fast=${{ vars.AZURE_OPENAI_MODEL_FAST || 'gpt-4o-mini' }}"
+            echo "TF_VAR_azure_openai_model_quality=${{ vars.AZURE_OPENAI_MODEL_QUALITY || 'gpt-4o' }}"
+            echo "TF_VAR_azure_openai_model_reasoning=${{ vars.AZURE_OPENAI_MODEL_REASONING || 'o1-mini' }}"
+            echo "TF_VAR_resend_from_email=${{ vars.AZURE_RESEND_FROM_EMAIL || vars.RESEND_FROM_EMAIL || 'onboarding@resend.dev' }}"
+            echo "TF_VAR_deepseek_api_key<<EOF"
+            echo "${deepseek_api_key}"
+            echo "EOF"
+          } >> "${GITHUB_ENV}"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.10.0"
+
+      - name: Write Terraform backend config
+        env:
+          TF_BACKEND_RESOURCE_GROUP: ${{ vars.AZURE_TF_BACKEND_RESOURCE_GROUP || '' }}
+          TF_BACKEND_STORAGE_ACCOUNT: ${{ vars.AZURE_TF_BACKEND_STORAGE_ACCOUNT || '' }}
+          TF_BACKEND_CONTAINER: ${{ vars.AZURE_TF_BACKEND_CONTAINER || '' }}
+          TF_BACKEND_KEY: ${{ vars.AZURE_TF_BACKEND_KEY || '' }}
+        run: |
+          : "${TF_BACKEND_RESOURCE_GROUP:?AZURE_TF_BACKEND_RESOURCE_GROUP repository variable is required}"
+          : "${TF_BACKEND_STORAGE_ACCOUNT:?AZURE_TF_BACKEND_STORAGE_ACCOUNT repository variable is required}"
+          : "${TF_BACKEND_CONTAINER:?AZURE_TF_BACKEND_CONTAINER repository variable is required}"
+          : "${TF_BACKEND_KEY:?AZURE_TF_BACKEND_KEY repository variable is required}"
+          cat > "${RUNNER_TEMP}/backend.azure.conf" <<EOF
+          resource_group_name  = "${TF_BACKEND_RESOURCE_GROUP}"
+          storage_account_name = "${TF_BACKEND_STORAGE_ACCOUNT}"
+          container_name       = "${TF_BACKEND_CONTAINER}"
+          key                  = "${TF_BACKEND_KEY}"
+          use_azuread_auth     = true
+          EOF
+
+      - name: Terraform init
+        working-directory: ${{ env.AZURE_TF_DIR }}
+        run: terraform init -backend-config="${RUNNER_TEMP}/backend.azure.conf"
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate
+        working-directory: ${{ env.AZURE_TF_DIR }}
+        run: terraform validate
+
+      - name: Validate Terraform inputs
+        run: |
+          missing=()
+          [[ -n "${TF_VAR_postgres_administrator_password}" ]] || missing+=("TF_VAR_postgres_administrator_password")
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required Terraform inputs: %s\n' "${missing[*]}" >&2
+            printf 'Store postgres-administrator-password in Azure Key Vault and ensure AZURE_KEY_VAULT_NAME is configured.\n' >&2
+            exit 1
+          fi
+          if [[ -z "${TF_VAR_azure_openai_endpoint}" || -z "${TF_VAR_azure_openai_api_key}" ]]; then
+            printf '::warning::Azure OpenAI endpoint/key not configured; LLM calls may fail after deploy.\n'
+          fi
+
+      - name: Terraform plan
+        working-directory: ${{ env.AZURE_TF_DIR }}
+        run: terraform plan -input=false -lock-timeout=300s -out=tfplan
+
+      - name: Terraform apply
+        if: ${{ needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform' }}
+        working-directory: ${{ env.AZURE_TF_DIR }}
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Capture Terraform outputs
+        id: tf_outputs
+        working-directory: ${{ env.AZURE_TF_DIR }}
+        run: |
+          api_url="${AZURE_API_URL:-}"
+          frontend_url="${AZURE_FRONTEND_URL:-}"
+
+          if terraform output -json > "${RUNNER_TEMP}/azure-tf-outputs.json" 2>/dev/null; then
+            tf_api_url="$(jq -r '.api_url.value // ""' "${RUNNER_TEMP}/azure-tf-outputs.json")"
+            tf_frontend_url="$(jq -r '.frontend_url.value // ""' "${RUNNER_TEMP}/azure-tf-outputs.json")"
+            [[ -n "${tf_api_url}" ]] && api_url="${tf_api_url}"
+            [[ -n "${tf_frontend_url}" ]] && frontend_url="${tf_frontend_url}"
+          else
+            echo "::notice::Terraform state outputs are not available yet; falling back to repository URL variables."
+          fi
+
+          echo "api_url=${api_url}" >> "${GITHUB_OUTPUT}"
+          echo "frontend_url=${frontend_url}" >> "${GITHUB_OUTPUT}"
+
+  build-api:
+    name: Build API image
+    needs: prepare
+    if: ${{ needs.prepare.outputs.deploy_api == 'true' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to Azure
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+
+      - name: Login to ACR
+        run: az acr login --name "${{ env.AZURE_ACR_NAME }}"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          tag="${{ needs.prepare.outputs.image_tag }}"
+          azure_image="${{ env.AZURE_ACR_NAME }}.azurecr.io/api:${tag}"
+          azure_latest="${{ env.AZURE_ACR_NAME }}.azurecr.io/api:latest"
+          echo "image=${azure_image}" >> "${GITHUB_OUTPUT}"
+          echo "latest=${azure_latest}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "tags<<EOF"
+            echo "${azure_image}"
+            echo "${azure_latest}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: app/backend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            GIT_BRANCH=${{ needs.prepare.outputs.branch }}
+            GIT_COMMIT_SHA=${{ needs.prepare.outputs.commit_sha }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+
+  build-frontend:
+    name: Build frontend image
+    needs: prepare
+    if: ${{ needs.prepare.outputs.deploy_frontend == 'true' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to Azure
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+
+      - name: Login to ACR
+        run: az acr login --name "${{ env.AZURE_ACR_NAME }}"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          tag="${{ needs.prepare.outputs.image_tag }}"
+          azure_image="${{ env.AZURE_ACR_NAME }}.azurecr.io/frontend:${tag}"
+          azure_latest="${{ env.AZURE_ACR_NAME }}.azurecr.io/frontend:latest"
+          echo "image=${azure_image}" >> "${GITHUB_OUTPUT}"
+          echo "latest=${azure_latest}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "tags<<EOF"
+            echo "${azure_image}"
+            echo "${azure_latest}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: app/frontend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ env.AZURE_API_URL }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+
+  build-worker:
+    name: Build worker image
+    needs: prepare
+    if: ${{ needs.prepare.outputs.deploy_worker == 'true' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to Azure
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+
+      - name: Login to ACR
+        run: az acr login --name "${{ env.AZURE_ACR_NAME }}"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          tag="${{ needs.prepare.outputs.image_tag }}"
+          azure_image="${{ env.AZURE_ACR_NAME }}.azurecr.io/worker:${tag}"
+          azure_latest="${{ env.AZURE_ACR_NAME }}.azurecr.io/worker:latest"
+          echo "image=${azure_image}" >> "${GITHUB_OUTPUT}"
+          echo "latest=${azure_latest}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "tags<<EOF"
+            echo "${azure_image}"
+            echo "${azure_latest}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: app/backend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            GIT_BRANCH=${{ needs.prepare.outputs.branch }}
+            GIT_COMMIT_SHA=${{ needs.prepare.outputs.commit_sha }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+
+  deploy-api:
+    name: Deploy API (Azure)
+    needs:
+      - prepare
+      - terraform
+      - build-api
+    if: ${{ always() && needs.prepare.outputs.deploy_api == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-api.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      url: ${{ steps.url.outputs.url }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to Azure
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+
+      - name: Deploy API to Azure Container Apps
+        run: |
+          # Ensure DeepSeek API key secret exists in the Container App
+          DEEPSEEK_KEY="$(az keyvault secret show --vault-name "${AZURE_KEY_VAULT_NAME}" --name deepseek-api-key --query value -o tsv 2>/dev/null || true)"
+          if [[ -n "${DEEPSEEK_KEY}" ]]; then
+            az containerapp secret set \
+              --name "${AZURE_API_NAME}" \
+              --resource-group "${AZURE_RESOURCE_GROUP}" \
+              --secrets "deepseek-api-key=${DEEPSEEK_KEY}" \
+              --output none
+          fi
+
+          az containerapp update \
+            --name "${AZURE_API_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --image "${{ needs.build-api.outputs.image }}" \
+            --set-env-vars CORS_ORIGINS="${AZURE_FRONTEND_URL:-}" \
+              WORKER_ENABLED="${{ needs.prepare.outputs.worker_enabled == 'enabled' && 'true' || 'false' }}" \
+              WORKER_FALLBACK_TO_SYNC=true \
+              LOG_LEVEL=INFO \
+              LOG_JSON=true \
+              ERROR_LOG_TO_FILE=true \
+              ERROR_LOG_DIR=/tmp/dachjob-error-logs \
+              STORAGE_PROVIDER=azure_blob \
+              LLM_PROVIDER=deepseek \
+              DEEPSEEK_API_KEY=secretref:deepseek-api-key \
+              DEEPSEEK_MODEL_FAST=deepseek-v4-flash \
+              DEEPSEEK_MODEL_QUALITY=deepseek-v4-flash \
+            --output none
+
+      - name: Run Azure migrations
+        if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
+        run: |
+          : "${AZURE_KEY_VAULT_NAME:?AZURE_KEY_VAULT_NAME repository variable is required}"
+          set +x
+          fetch_secret() {
+            az keyvault secret show \
+              --vault-name "${AZURE_KEY_VAULT_NAME}" \
+              --name "$1" \
+              --query value \
+              -o tsv 2>/dev/null || true
+          }
+          export AZURE_DATABASE_URL="$(fetch_secret database-url)"
+          export AZURE_REDIS_URL="$(fetch_secret redis-url)"
+          export AZURE_STORAGE_CONNECTION_STRING="$(fetch_secret azure-storage-connection-string)"
+          [[ -n "${AZURE_DATABASE_URL}" ]] && echo "::add-mask::${AZURE_DATABASE_URL}"
+          [[ -n "${AZURE_REDIS_URL}" ]] && echo "::add-mask::${AZURE_REDIS_URL}"
+          [[ -n "${AZURE_STORAGE_CONNECTION_STRING}" ]] && echo "::add-mask::${AZURE_STORAGE_CONNECTION_STRING}"
+          bash infra/deploy/scripts/run-migrations-azure.sh "${{ needs.build-api.outputs.image }}"
+
+      - name: Capture service URL
+        id: url
+        run: |
+          url="${AZURE_API_URL:-${{ needs.terraform.outputs.api_url }}}"
+          if [[ -z "${url}" ]]; then
+            fqdn="$(az containerapp show --name "${AZURE_API_NAME}" --resource-group "${AZURE_RESOURCE_GROUP}" --query properties.configuration.ingress.fqdn -o tsv)"
+            url="https://${fqdn}"
+          fi
+          echo "url=${url}" >> "${GITHUB_OUTPUT}"
+
+      - name: Health check API
+        run: |
+          for attempt in {1..30}; do
+            if curl -fsS "${{ steps.url.outputs.url }}/api/health"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+
+  deploy-frontend:
+    name: Deploy frontend (Azure)
+    needs:
+      - prepare
+      - terraform
+      - build-frontend
+    if: ${{ always() && needs.prepare.outputs.deploy_frontend == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-frontend.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      url: ${{ steps.url.outputs.url }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to Azure
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+
+      - name: Deploy frontend to Azure Container Apps
+        run: |
+          az containerapp update \
+            --name "${AZURE_FRONTEND_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --image "${{ needs.build-frontend.outputs.image }}" \
+            --set-env-vars NEXT_PUBLIC_API_BASE_URL="${AZURE_API_URL:-}" \
+              INTERNAL_API_BASE_URL="${AZURE_API_URL:-}" \
+            --output none
+
+      - name: Capture service URL
+        id: url
+        run: |
+          url="${AZURE_FRONTEND_URL:-${{ needs.terraform.outputs.frontend_url }}}"
+          if [[ -z "${url}" ]]; then
+            fqdn="$(az containerapp show --name "${AZURE_FRONTEND_NAME}" --resource-group "${AZURE_RESOURCE_GROUP}" --query properties.configuration.ingress.fqdn -o tsv)"
+            url="https://${fqdn}"
+          fi
+          echo "url=${url}" >> "${GITHUB_OUTPUT}"
+
+      - name: Health check frontend
+        run: |
+          for attempt in {1..30}; do
+            if curl -fsS "${{ steps.url.outputs.url }}" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+
+  deploy-worker:
+    name: Deploy worker (Azure)
+    needs:
+      - prepare
+      - terraform
+      - build-worker
+    if: ${{ always() && needs.prepare.outputs.deploy_worker == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-worker.result == 'success' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to Azure
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+
+      - name: Deploy worker to Azure Container Apps
+        run: |
+          az containerapp update \
+            --name "${AZURE_WORKER_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --image "${{ needs.build-worker.outputs.image }}" \
+            --output none
+
+  smoke-test:
+    name: Smoke test
+    needs:
+      - prepare
+      - deploy-api
+      - deploy-frontend
+    if: ${{ always() && needs.deploy-api.result == 'success' && needs.deploy-frontend.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run smoke test
+        run: |
+          SMOKE_TEST_MODE="${{ github.event.inputs.smoke_test_mode || 'minimal' }}" \
+          API_BASE_URL="${{ needs.deploy-api.outputs.url || env.AZURE_API_URL }}" \
+          FRONTEND_URL="${{ needs.deploy-frontend.outputs.url || env.AZURE_FRONTEND_URL }}" \
+          SMOKE_TEST_EMAIL="smoke+azure-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com" \
+          SMOKE_TEST_PASSWORD="${{ secrets.SMOKE_TEST_PASSWORD || 'smoke-test-password-42' }}" \
+          bash infra/deploy/scripts/smoke-test-api.sh
+
+  summary:
+    name: Deployment summary
+    needs:
+      - prepare
+      - terraform
+      - deploy-api
+      - deploy-frontend
+      - deploy-worker
+      - smoke-test
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write summary
+        run: |
+          echo "## Azure Deployment Summary" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Item | Value |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| --- | --- |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Environment | ${{ needs.prepare.outputs.environment || 'dev' }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Branch | ${{ needs.prepare.outputs.branch }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Target | ${{ needs.prepare.outputs.target }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Image tag | ${{ needs.prepare.outputs.image_tag }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Terraform | ${{ needs.terraform.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| API | ${{ needs.deploy-api.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Frontend | ${{ needs.deploy-frontend.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Worker | ${{ needs.deploy-worker.result || 'skipped' }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Smoke test | ${{ needs.smoke-test.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| API URL | ${{ needs.deploy-api.outputs.url || env.AZURE_API_URL }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Frontend URL | ${{ needs.deploy-frontend.outputs.url || env.AZURE_FRONTEND_URL }} |" >> "${GITHUB_STEP_SUMMARY}"

@@ -20,12 +20,72 @@ resource "azurerm_container_app_environment" "this" {
   tags                       = var.tags
 }
 
+locals {
+  database_url                = "postgresql+asyncpg://${var.postgres_administrator_login}:${var.postgres_administrator_password}@${var.postgres_host}:5432/dachjob"
+  redis_url                   = "rediss://:${var.redis_primary_key}@${var.redis_hostname}:6380/0"
+  has_azure_openai_api_key    = nonsensitive(var.azure_openai_api_key != "")
+  has_jwt_secret              = nonsensitive(var.jwt_secret != "")
+  has_secret_key              = nonsensitive(var.secret_key != "")
+  has_resend_api_key          = nonsensitive(var.resend_api_key != "")
+  azure_openai_api_key_secret = "azure-openai-api-key"
+  jwt_secret_name             = "jwt-secret"
+  secret_key_name             = "secret-key"
+  resend_api_key_secret       = "resend-api-key"
+}
+
 resource "azurerm_container_app" "api" {
   name                         = "${var.name_prefix}-api"
   container_app_environment_id = azurerm_container_app_environment.this.id
   resource_group_name          = var.resource_group_name
   revision_mode                = "Single"
   tags                         = var.tags
+
+  secret {
+    name  = "database-url"
+    value = local.database_url
+  }
+
+  secret {
+    name  = "redis-url"
+    value = local.redis_url
+  }
+
+  secret {
+    name  = "azure-storage-connection-string"
+    value = var.storage_connection_string
+  }
+
+  dynamic "secret" {
+    for_each = local.has_azure_openai_api_key ? [1] : []
+    content {
+      name  = local.azure_openai_api_key_secret
+      value = var.azure_openai_api_key
+    }
+  }
+
+  dynamic "secret" {
+    for_each = local.has_jwt_secret ? [1] : []
+    content {
+      name  = local.jwt_secret_name
+      value = var.jwt_secret
+    }
+  }
+
+  dynamic "secret" {
+    for_each = local.has_secret_key ? [1] : []
+    content {
+      name  = local.secret_key_name
+      value = var.secret_key
+    }
+  }
+
+  dynamic "secret" {
+    for_each = local.has_resend_api_key ? [1] : []
+    content {
+      name  = local.resend_api_key_secret
+      value = var.resend_api_key
+    }
+  }
 
   template {
     max_replicas = 10
@@ -41,16 +101,16 @@ resource "azurerm_container_app" "api" {
         value = "production"
       }
       env {
-        name  = "DATABASE_URL"
-        value = "postgresql+asyncpg://${var.postgres_administrator_login}:${var.postgres_administrator_password}@${var.postgres_host}:5432/dachjob"
+        name        = "DATABASE_URL"
+        secret_name = "database-url"
       }
       env {
-        name  = "REDIS_URL"
-        value = "rediss://:${var.redis_primary_key}@${var.redis_hostname}:6380/0"
+        name        = "REDIS_URL"
+        secret_name = "redis-url"
       }
       env {
         name  = "REDIS_ENABLED"
-        value = "true"
+        value = tostring(var.redis_enabled)
       }
       env {
         name  = "STORAGE_PROVIDER"
@@ -61,8 +121,8 @@ resource "azurerm_container_app" "api" {
         value = var.storage_container_name
       }
       env {
-        name  = "AZURE_STORAGE_CONNECTION_STRING"
-        value = var.storage_connection_string
+        name        = "AZURE_STORAGE_CONNECTION_STRING"
+        secret_name = "azure-storage-connection-string"
       }
       env {
         name  = "AZURE_STORAGE_CONTAINER_NAME"
@@ -73,8 +133,64 @@ resource "azurerm_container_app" "api" {
         value = "azure_openai"
       }
       env {
+        name  = "AZURE_OPENAI_ENDPOINT"
+        value = var.azure_openai_endpoint
+      }
+      env {
+        name  = "AZURE_OPENAI_API_VERSION"
+        value = var.azure_openai_api_version
+      }
+      env {
+        name  = "AZURE_OPENAI_MODEL_FAST"
+        value = var.azure_openai_model_fast
+      }
+      env {
+        name  = "AZURE_OPENAI_MODEL_QUALITY"
+        value = var.azure_openai_model_quality
+      }
+      env {
+        name  = "AZURE_OPENAI_MODEL_REASONING"
+        value = var.azure_openai_model_reasoning
+      }
+      env {
+        name  = "RESEND_FROM_EMAIL"
+        value = var.resend_from_email
+      }
+      env {
         name  = "CORS_ORIGINS"
         value = var.cors_origins != "" ? var.cors_origins : "https://${var.name_prefix}-frontend.--placeholder--"
+      }
+
+      dynamic "env" {
+        for_each = local.has_azure_openai_api_key ? [1] : []
+        content {
+          name        = "AZURE_OPENAI_API_KEY"
+          secret_name = local.azure_openai_api_key_secret
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.has_jwt_secret ? [1] : []
+        content {
+          name        = "JWT_SECRET"
+          secret_name = local.jwt_secret_name
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.has_secret_key ? [1] : []
+        content {
+          name        = "SECRET_KEY"
+          secret_name = local.secret_key_name
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.has_resend_api_key ? [1] : []
+        content {
+          name        = "RESEND_API_KEY"
+          secret_name = local.resend_api_key_secret
+        }
       }
 
       liveness_probe {
@@ -177,6 +293,53 @@ resource "azurerm_container_app" "worker" {
   revision_mode                = "Single"
   tags                         = var.tags
 
+  secret {
+    name  = "database-url"
+    value = local.database_url
+  }
+
+  secret {
+    name  = "redis-url"
+    value = local.redis_url
+  }
+
+  secret {
+    name  = "azure-storage-connection-string"
+    value = var.storage_connection_string
+  }
+
+  dynamic "secret" {
+    for_each = local.has_azure_openai_api_key ? [1] : []
+    content {
+      name  = local.azure_openai_api_key_secret
+      value = var.azure_openai_api_key
+    }
+  }
+
+  dynamic "secret" {
+    for_each = local.has_jwt_secret ? [1] : []
+    content {
+      name  = local.jwt_secret_name
+      value = var.jwt_secret
+    }
+  }
+
+  dynamic "secret" {
+    for_each = local.has_secret_key ? [1] : []
+    content {
+      name  = local.secret_key_name
+      value = var.secret_key
+    }
+  }
+
+  dynamic "secret" {
+    for_each = local.has_resend_api_key ? [1] : []
+    content {
+      name  = local.resend_api_key_secret
+      value = var.resend_api_key
+    }
+  }
+
   template {
     max_replicas = 3
     min_replicas = 1
@@ -192,16 +355,16 @@ resource "azurerm_container_app" "worker" {
         value = "production"
       }
       env {
-        name  = "DATABASE_URL"
-        value = "postgresql+asyncpg://${var.postgres_administrator_login}:${var.postgres_administrator_password}@${var.postgres_host}:5432/dachjob"
+        name        = "DATABASE_URL"
+        secret_name = "database-url"
       }
       env {
-        name  = "REDIS_URL"
-        value = "rediss://:${var.redis_primary_key}@${var.redis_hostname}:6380/0"
+        name        = "REDIS_URL"
+        secret_name = "redis-url"
       }
       env {
         name  = "REDIS_ENABLED"
-        value = "true"
+        value = tostring(var.redis_enabled)
       }
       env {
         name  = "STORAGE_PROVIDER"
@@ -212,8 +375,8 @@ resource "azurerm_container_app" "worker" {
         value = var.storage_container_name
       }
       env {
-        name  = "AZURE_STORAGE_CONNECTION_STRING"
-        value = var.storage_connection_string
+        name        = "AZURE_STORAGE_CONNECTION_STRING"
+        secret_name = "azure-storage-connection-string"
       }
       env {
         name  = "AZURE_STORAGE_CONTAINER_NAME"
@@ -222,6 +385,62 @@ resource "azurerm_container_app" "worker" {
       env {
         name  = "LLM_PROVIDER"
         value = "azure_openai"
+      }
+      env {
+        name  = "AZURE_OPENAI_ENDPOINT"
+        value = var.azure_openai_endpoint
+      }
+      env {
+        name  = "AZURE_OPENAI_API_VERSION"
+        value = var.azure_openai_api_version
+      }
+      env {
+        name  = "AZURE_OPENAI_MODEL_FAST"
+        value = var.azure_openai_model_fast
+      }
+      env {
+        name  = "AZURE_OPENAI_MODEL_QUALITY"
+        value = var.azure_openai_model_quality
+      }
+      env {
+        name  = "AZURE_OPENAI_MODEL_REASONING"
+        value = var.azure_openai_model_reasoning
+      }
+      env {
+        name  = "RESEND_FROM_EMAIL"
+        value = var.resend_from_email
+      }
+
+      dynamic "env" {
+        for_each = local.has_azure_openai_api_key ? [1] : []
+        content {
+          name        = "AZURE_OPENAI_API_KEY"
+          secret_name = local.azure_openai_api_key_secret
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.has_jwt_secret ? [1] : []
+        content {
+          name        = "JWT_SECRET"
+          secret_name = local.jwt_secret_name
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.has_secret_key ? [1] : []
+        content {
+          name        = "SECRET_KEY"
+          secret_name = local.secret_key_name
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.has_resend_api_key ? [1] : []
+        content {
+          name        = "RESEND_API_KEY"
+          secret_name = local.resend_api_key_secret
+        }
       }
     }
   }

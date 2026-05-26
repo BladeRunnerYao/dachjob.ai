@@ -4,7 +4,10 @@ set -euo pipefail
 #
 # Deploy to GCP Cloud Run & GKE.
 #
-# Usage: deploy-gcp.sh <target> <api_image> <frontend_image> <worker_image> <image_tag> <run_migrations>
+# Usage: deploy-gcp.sh <target> <api_image> <frontend_image> <worker_image>
+#
+# target: one of api, frontend, worker, all
+# Migrations are handled separately by run-migrations-gcp.sh.
 #
 # Reads env vars:
 #   PROJECT_ID, REGION, GAR_LOCATION, API_SERVICE_NAME, FRONTEND_SERVICE_NAME,
@@ -12,16 +15,23 @@ set -euo pipefail
 #   CLOUD_SQL_CONNECTION_NAME, VPC_CONNECTOR, REDIS_HOST, REDIS_PORT, REDIS_URL,
 #   REDIS_ENABLED, GCS_BUCKET, API_SERVICE_ACCOUNT, FRONTEND_SERVICE_ACCOUNT,
 #   WORKER_SERVICE_ACCOUNT, DEPLOYER_SERVICE_ACCOUNT
+# The caller is responsible for GCP authentication before calling this script.
 #
 
 target="$1"
 api_image="$2"
 frontend_image="$3"
 worker_image="$4"
-run_migrations="$5"
 
 deploy_api() {
   echo "::group::Deploy API to Cloud Run"
+  : "${PROJECT_ID:?PROJECT_ID is required}"
+  : "${REGION:?REGION is required}"
+  : "${API_SERVICE_NAME:?API_SERVICE_NAME is required}"
+  : "${API_SERVICE_ACCOUNT:?API_SERVICE_ACCOUNT is required}"
+  : "${CLOUD_SQL_CONNECTION_NAME:?CLOUD_SQL_CONNECTION_NAME is required}"
+  : "${VPC_CONNECTOR:?VPC_CONNECTOR is required}"
+
   gcloud run deploy "${API_SERVICE_NAME}" \
     --project="${PROJECT_ID}" \
     --region="${REGION}" \
@@ -32,7 +42,7 @@ deploy_api() {
     --add-cloudsql-instances="${CLOUD_SQL_CONNECTION_NAME}" \
     --vpc-connector="${VPC_CONNECTOR}" \
     --vpc-egress=private-ranges-only \
-    --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},REDIS_HOST=${REDIS_HOST},REDIS_PORT=${REDIS_PORT},REDIS_ENABLED=${REDIS_ENABLED},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=vertex_ai,VERTEX_AI_PROJECT_ID=${PROJECT_ID},VERTEX_AI_LOCATION=global,CORS_ORIGINS=${FRONTEND_URL}" \
+    --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},REDIS_HOST=${REDIS_HOST},REDIS_PORT=${REDIS_PORT},REDIS_ENABLED=${REDIS_ENABLED},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=vertex_ai,VERTEX_AI_PROJECT_ID=${PROJECT_ID},VERTEX_AI_LOCATION=global,CORS_ORIGINS=${FRONTEND_URL},STORAGE_PROVIDER=gcs" \
     --update-secrets="DATABASE_PASSWORD=dachjob-dev-db-password:latest,JWT_SECRET=dachjob-dev-jwt-secret-key:latest,SECRET_KEY=dachjob-dev-jwt-secret-key:latest,GEMINI_API_KEY=dachjob-dev-gemini-api-key:latest,RESEND_API_KEY=dachjob-dev-smtp-password:latest,S3_ACCESS_KEY_ID=dachjob-dev-s3-access-key:latest,S3_SECRET_ACCESS_KEY=dachjob-dev-s3-secret-key:latest"
 
   api_url="$(gcloud run services describe "${API_SERVICE_NAME}" --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
@@ -42,6 +52,12 @@ deploy_api() {
 
 deploy_frontend() {
   echo "::group::Deploy frontend to Cloud Run"
+  : "${PROJECT_ID:?PROJECT_ID is required}"
+  : "${REGION:?REGION is required}"
+  : "${FRONTEND_SERVICE_NAME:?FRONTEND_SERVICE_NAME is required}"
+  : "${FRONTEND_SERVICE_ACCOUNT:?FRONTEND_SERVICE_ACCOUNT is required}"
+  : "${API_BASE_URL:?API_BASE_URL is required}"
+
   gcloud run deploy "${FRONTEND_SERVICE_NAME}" \
     --project="${PROJECT_ID}" \
     --region="${REGION}" \
@@ -58,6 +74,13 @@ deploy_frontend() {
 
 deploy_worker() {
   echo "::group::Deploy worker to GKE"
+  : "${PROJECT_ID:?PROJECT_ID is required}"
+  : "${REGION:?REGION is required}"
+  : "${WORKER_SERVICE_ACCOUNT:?WORKER_SERVICE_ACCOUNT is required}"
+  : "${GKE_CLUSTER_NAME:?GKE_CLUSTER_NAME is required}"
+  : "${GKE_NAMESPACE:?GKE_NAMESPACE is required}"
+  : "${CLOUD_SQL_CONNECTION_NAME:?CLOUD_SQL_CONNECTION_NAME is required}"
+
   gcloud iam service-accounts add-iam-policy-binding "${WORKER_SERVICE_ACCOUNT}" \
     --project="${PROJECT_ID}" \
     --role="roles/iam.workloadIdentityUser" \
@@ -89,28 +112,6 @@ deploy_worker() {
   echo "::endgroup::"
 }
 
-run_migrations_fn() {
-  echo "::group::Run database migrations"
-  gcloud run jobs deploy "${MIGRATION_JOB_NAME}" \
-    --project="${PROJECT_ID}" \
-    --region="${REGION}" \
-    --image="${api_image}" \
-    --service-account="${API_SERVICE_ACCOUNT}" \
-    --set-cloudsql-instances="${CLOUD_SQL_CONNECTION_NAME}" \
-    --vpc-connector="${VPC_CONNECTOR}" \
-    --vpc-egress=private-ranges-only \
-    --command=alembic \
-    --args=-c,app/db/migrations/alembic.ini,upgrade,head \
-    --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},REDIS_ENABLED=${REDIS_ENABLED},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=deepseek" \
-    --update-secrets="DATABASE_PASSWORD=dachjob-dev-db-password:latest,JWT_SECRET=dachjob-dev-jwt-secret-key:latest,SECRET_KEY=dachjob-dev-jwt-secret-key:latest,OPENROUTER_API_KEY=dachjob-dev-openrouter-api-key:latest,DEEPSEEK_API_KEY=dachjob-dev-deepseek-api-key:latest"
-
-  gcloud run jobs execute "${MIGRATION_JOB_NAME}" \
-    --project="${PROJECT_ID}" \
-    --region="${REGION}" \
-    --wait
-  echo "::endgroup::"
-}
-
 case "${target}" in
   api)
     deploy_api
@@ -121,19 +122,15 @@ case "${target}" in
   worker)
     deploy_worker
     ;;
-  migrations)
-    run_migrations_fn
-    ;;
   all)
     deploy_api
     deploy_frontend
     deploy_worker
-    if [[ "${run_migrations}" == "true" ]]; then
-      run_migrations_fn
-    fi
     ;;
   *)
     echo "Unknown target: ${target}"
+    echo "Usage: deploy-gcp.sh <target> <api_image> <frontend_image> <worker_image>"
+    echo "  target: api | frontend | worker | all"
     exit 1
     ;;
 esac

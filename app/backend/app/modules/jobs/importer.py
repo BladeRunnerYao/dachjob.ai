@@ -1,9 +1,6 @@
 import html
-import json
 import re
-from dataclasses import dataclass
 from datetime import datetime
-from html.parser import HTMLParser
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
@@ -13,205 +10,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext
 from app.db.models import JobPosting
+from app.modules.jobs.extractor import (
+    ScrapedJob,
+    _find_job_posting_jsonld,
+    _location_from_jsonld,
+    _meta,
+    _normalize_text,
+    _page_title,
+    _parse_datetime,
+    _salary_from_jsonld,
+    _strip_html,
+)
+from app.modules.jobs.fetcher import (
+    _fetch_greenhouse_board_name,
+    _fetch_job_page,
+)
 from app.modules.jobs.repository import create_job, get_job
 from app.modules.matching.service import parse_job_posting
-
-DEFAULT_JOB_REQUEST_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36"
-    )
-}
-
-PLAIN_JOB_REQUEST_HEADERS = {
-    "User-Agent": "python-httpx",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-}
-
-
-class _TextExtractor(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__()
-        self.parts: list[str] = []
-        self._skip_depth = 0
-
-    def handle_starttag(self, tag: str, attrs) -> None:
-        if tag in {"script", "style", "noscript", "svg"}:
-            self._skip_depth += 1
-        if self._skip_depth:
-            return
-        if tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
-            self.parts.append("\n\n")
-        elif tag == "li":
-            self.parts.append("\n- ")
-        elif tag in {"p", "br", "div", "section", "article", "tr"}:
-            self.parts.append("\n")
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag in {"script", "style", "noscript", "svg"} and self._skip_depth:
-            self._skip_depth -= 1
-            return
-        if tag in {
-            "p",
-            "li",
-            "div",
-            "section",
-            "article",
-            "tr",
-            "h1",
-            "h2",
-            "h3",
-            "h4",
-            "h5",
-            "h6",
-        }:
-            self.parts.append("\n")
-
-    def handle_data(self, data: str) -> None:
-        if not self._skip_depth:
-            cleaned = re.sub(r"\s+", " ", data).strip()
-            if cleaned:
-                if (
-                    self.parts
-                    and self.parts[-1]
-                    and not self.parts[-1].endswith((" ", "\n", "- "))
-                    and not cleaned.startswith((",", ".", ";", ":", ")", "]"))
-                ):
-                    self.parts.append(" ")
-                self.parts.append(cleaned)
-
-    def text(self) -> str:
-        return _normalize_text("".join(self.parts))
-
-
-@dataclass
-class ScrapedJob:
-    title: str
-    company: str
-    url: str
-    location: str | None
-    raw_jd: str
-    source: str | None
-    source_job_id: str | None
-    posted_at: datetime | None
-    employment_type: str | None
-    workplace: str | None
-    salary_text: str | None
-    scraped_json: dict
-
-
-def _normalize_text(value: str | None) -> str:
-    if not value:
-        return ""
-    for _ in range(2):
-        next_value = html.unescape(value)
-        if next_value == value:
-            break
-        value = next_value
-    value = re.sub(r"\r\n?", "\n", value)
-    value = re.sub(r"[ \t]+", " ", value)
-    value = re.sub(r"\n[ \t]+", "\n", value)
-    value = re.sub(r"\n\s*\n\s*", "\n\n", value)
-    return value.strip()
-
-
-def _strip_html(value: str | None) -> str:
-    parser = _TextExtractor()
-    decoded = value or ""
-    for _ in range(2):
-        next_value = html.unescape(decoded)
-        if next_value == decoded:
-            break
-        decoded = next_value
-    parser.feed(decoded)
-    return parser.text()
-
-
-def _meta(html_text: str, *names: str) -> str | None:
-    for name in names:
-        patterns = [
-            rf'<meta[^>]+(?:name|property)=["\']{re.escape(name)}["\'][^>]+content=["\']([^"\']+)["\']',
-            rf'<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:name|property)=["\']{re.escape(name)}["\']',
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, html_text, re.IGNORECASE | re.DOTALL)
-            if match:
-                return _normalize_text(match.group(1))
-    return None
-
-
-def _page_title(html_text: str) -> str | None:
-    match = re.search(r"<title[^>]*>(.*?)</title>", html_text, re.IGNORECASE | re.DOTALL)
-    return _normalize_text(match.group(1)) if match else None
-
-
-def _request_headers_for_url(url: str) -> dict[str, str]:
-    host = urlparse(url).netloc.removeprefix("www.")
-    if host == "bmwgroup.jobs":
-        return PLAIN_JOB_REQUEST_HEADERS
-    return DEFAULT_JOB_REQUEST_HEADERS
-
-
-def _fallback_headers_for_url(url: str, current_headers: dict[str, str]) -> dict[str, str] | None:
-    if current_headers == PLAIN_JOB_REQUEST_HEADERS:
-        return None
-    return PLAIN_JOB_REQUEST_HEADERS
-
-
-async def _fetch_job_page(client: httpx.AsyncClient, url: str) -> tuple[httpx.Response, str]:
-    headers = _request_headers_for_url(url)
-    try:
-        return await client.get(url, headers=headers), (
-            "plain" if headers == PLAIN_JOB_REQUEST_HEADERS else "browser"
-        )
-    except httpx.TimeoutException:
-        fallback_headers = _fallback_headers_for_url(url, headers)
-        if not fallback_headers:
-            raise
-        return await client.get(url, headers=fallback_headers), "plain_retry_after_timeout"
-
-
-def _json_ld_objects(html_text: str) -> list[dict]:
-    objects: list[dict] = []
-    scripts = re.findall(
-        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
-        html_text,
-        re.IGNORECASE | re.DOTALL,
-    )
-    for script in scripts:
-        try:
-            loaded = json.loads(html.unescape(script).strip())
-        except json.JSONDecodeError:
-            continue
-        stack = loaded if isinstance(loaded, list) else [loaded]
-        while stack:
-            item = stack.pop(0)
-            if not isinstance(item, dict):
-                continue
-            objects.append(item)
-            graph = item.get("@graph")
-            if isinstance(graph, list):
-                stack.extend(graph)
-    return objects
-
-
-def _find_job_posting_jsonld(html_text: str) -> dict | None:
-    for item in _json_ld_objects(html_text):
-        item_type = item.get("@type")
-        types = item_type if isinstance(item_type, list) else [item_type]
-        if any(str(t).lower() == "jobposting" for t in types):
-            return item
-    return None
-
-
-def _parse_datetime(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    cleaned = value.strip().replace("Z", "+00:00")
-    try:
-        return datetime.fromisoformat(cleaned)
-    except ValueError:
-        return None
 
 
 def _extract_company_from_title(title: str, hostname: str) -> tuple[str, str]:
@@ -467,17 +282,6 @@ def _greenhouse_company_from_board(board: str) -> str:
     return " ".join(word.capitalize() for word in words if word) or board
 
 
-async def _fetch_greenhouse_board_name(client: httpx.AsyncClient, board: str) -> str | None:
-    try:
-        response = await client.get(f"https://boards-api.greenhouse.io/v1/boards/{board}")
-        response.raise_for_status()
-        data = response.json()
-    except Exception:
-        return None
-    name = data.get("name")
-    return _normalize_text(str(name)) if name else None
-
-
 async def _scrape_greenhouse_job(
     client: httpx.AsyncClient,
     requested_url: str,
@@ -553,45 +357,6 @@ async def _scrape_greenhouse_job(
         salary_text=None,
         scraped_json=scraped_json,
     )
-
-
-def _location_from_jsonld(job_json: dict) -> str | None:
-    locations = job_json.get("jobLocation")
-    if not locations:
-        return None
-    if isinstance(locations, dict):
-        locations = [locations]
-    parts: list[str] = []
-    for item in locations if isinstance(locations, list) else []:
-        address = item.get("address") if isinstance(item, dict) else None
-        if not isinstance(address, dict):
-            continue
-        location_parts = [
-            address.get("addressLocality"),
-            address.get("addressRegion"),
-            address.get("addressCountry"),
-        ]
-        location = ", ".join(str(p) for p in location_parts if p)
-        if location:
-            parts.append(location)
-    return "; ".join(parts) if parts else None
-
-
-def _salary_from_jsonld(job_json: dict) -> str | None:
-    salary = job_json.get("baseSalary")
-    if not isinstance(salary, dict):
-        return None
-    currency = salary.get("currency")
-    value = salary.get("value")
-    if isinstance(value, dict):
-        min_value = value.get("minValue")
-        max_value = value.get("maxValue")
-        unit = value.get("unitText")
-        if min_value and max_value:
-            return " ".join(str(p) for p in (currency, f"{min_value}-{max_value}", unit) if p)
-        if value.get("value"):
-            return " ".join(str(p) for p in (currency, value.get("value"), unit) if p)
-    return None
 
 
 def _looks_like_non_job_page(hostname: str, final_url: str, title: str | None) -> bool:

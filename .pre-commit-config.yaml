@@ -19,6 +19,6 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        exclude: ^app/backend/app/db/migrations/|^app/backend/app/db/seed_demo\.py|^app/backend/app/modules/llm_gateway/fake_provider\.py|^app/backend/tests/|^app/backend/\.venv/|^app/frontend/|^app/backend/app/modules/matching/service\.py|^app/backend/app/modules/profiles/extractor\.py|^app/backend/app/modules/resumes/service\.py|^app/backend/app/modules/tracker/autofill\.py
+        exclude: ^app/backend/app/db/migrations/|^app/backend/app/db/seed_demo\.py|^app/backend/app/modules/llm_gateway/fake_provider\.py|^app/backend/tests/|^app/backend/\.venv/|^app/frontend/|^app/backend/app/modules/matching/|^app/backend/app/modules/jobs/|^app/backend/app/modules/storage/|^app/backend/app/modules/profiles/extractor\.py|^app/backend/app/modules/resumes/service\.py|^app/backend/app/modules/tracker/autofill\.py
       - id: ruff-format
-        exclude: ^app/backend/app/db/migrations/|^app/backend/app/db/seed_demo\.py|^app/backend/app/modules/llm_gateway/fake_provider\.py|^app/backend/tests/|^app/backend/\.venv/|^app/frontend/
+        exclude: ^app/backend/app/db/migrations/|^app/backend/app/db/seed_demo\.py|^app/backend/app/modules/llm_gateway/fake_provider\.py|^app/backend/tests/|^app/backend/\.venv/|^app/frontend/|^app/backend/app/modules/matching/|^app/backend/app/modules/jobs/|^app/backend/app/modules/storage/

@@ -21,5 +21,12 @@ build/
 
 # Local change logs (never pushed)
 /ChangeLog/
+# CodeGraph index (local only)
+.codegraph/
+
+# Terraform (never commit real state or plan files)
 .terraform/
 *.tfplan
+*.tfvars
+*.tfstate
+*.tfstate.*

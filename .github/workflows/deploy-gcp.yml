@@ -1,23 +1,12 @@
-# DEPRECATED: This combined deploy workflow is superseded by:
-#   - .github/workflows/deploy-gcp.yml
-#   - .github/workflows/deploy-azure.yml
-#
-# Kept for manual fallback only. Push triggers removed.
-# Remove this file once both new workflows are stable in all environments.
-name: Deploy (DEPRECATED - use deploy-gcp.yml or deploy-azure.yml)
+name: Deploy to GCP
 
 on:
+  push:
+    branches:
+      - main
+      - deploy/*
   workflow_dispatch:
     inputs:
-      cloud:
-        description: Target cloud provider
-        required: true
-        type: choice
-        default: gcp
-        options:
-          - gcp
-          - azure
-          - all
       environment:
         description: Deployment environment
         required: true
@@ -65,9 +54,17 @@ on:
         required: false
         type: boolean
         default: true
+      smoke_test_mode:
+        description: Post-deploy smoke test depth
+        required: false
+        type: choice
+        default: minimal
+        options:
+          - minimal
+          - full
 
 concurrency:
-  group: deploy-${{ github.event.inputs.cloud || 'gcp' }}-${{ github.event.inputs.environment || 'dev' }}
+  group: deploy-gcp-${{ github.event.inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 env:
@@ -96,17 +93,6 @@ env:
   REDIS_URL: redis://10.36.0.3:6379/0
   REDIS_ENABLED: "true"
   GCS_BUCKET: dachjob-dev-artifacts
-  # Azure defaults (overridden by GitHub Variables for cloud=azure)
-  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || '' }}
-  AZURE_CONTAINER_APP_ENV: ${{ vars.AZURE_CONTAINER_APP_ENV || '' }}
-  AZURE_API_NAME: ${{ vars.AZURE_API_NAME || '' }}
-  AZURE_FRONTEND_NAME: ${{ vars.AZURE_FRONTEND_NAME || '' }}
-  AZURE_WORKER_NAME: ${{ vars.AZURE_WORKER_NAME || '' }}
-  AZURE_MIGRATION_JOB_NAME: ${{ vars.AZURE_MIGRATION_JOB_NAME || '' }}
-  AZURE_ACR_NAME: ${{ vars.AZURE_ACR_NAME || '' }}
-  AZURE_API_URL: ${{ vars.AZURE_API_URL || '' }}
-  AZURE_FRONTEND_URL: ${{ vars.AZURE_FRONTEND_URL || '' }}
-  AZURE_TF_DIR: infra/terraform/live/azure/dev
   GCP_TF_DIR: infra/terraform
 
 jobs:
@@ -120,16 +106,13 @@ jobs:
       run:
         working-directory: app/backend
     outputs:
-      cloud: ${{ steps.resolve.outputs.cloud }}
       environment: ${{ steps.resolve.outputs.environment }}
     steps:
-      - name: Resolve cloud and environment
+      - name: Resolve environment
         id: resolve
         working-directory: .
         run: |
-          cloud="${{ github.event.inputs.cloud || 'gcp' }}"
           environment="${{ github.event.inputs.environment || 'dev' }}"
-          echo "cloud=${cloud}" >> "${GITHUB_OUTPUT}"
           echo "environment=${environment}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout
@@ -155,20 +138,20 @@ jobs:
         run: pytest tests/ --ignore=tests/test_provider_smoke.py -v
 
       - name: Authenticate to Google Cloud
-        if: ${{ steps.resolve.outputs.cloud == 'gcp' || steps.resolve.outputs.cloud == 'all' }}
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
 
       - name: Fetch GCP API keys and run provider smoke
-        if: ${{ steps.resolve.outputs.cloud == 'gcp' || steps.resolve.outputs.cloud == 'all' }}
         run: |
           set +x
           export GEMINI_API_KEY="$(gcloud secrets versions access latest --secret=dachjob-dev-gemini-api-key --project="${PROJECT_ID}")"
           export DEEPSEEK_API_KEY="$(gcloud secrets versions access latest --secret=dachjob-dev-deepseek-api-key --project="${PROJECT_ID}" 2>/dev/null || true)"
           export OPENROUTER_API_KEY="$(gcloud secrets versions access latest --secret=dachjob-dev-openrouter-api-key --project="${PROJECT_ID}" 2>/dev/null || true)"
-          pytest tests/test_provider_smoke.py -v
+          if ! pytest tests/test_provider_smoke.py -v; then
+            echo "::warning::LLM provider smoke failed. Continuing deploy because provider quota/credits are external to the deployment pipeline."
+          fi
 
   prepare:
     name: Prepare deployment
@@ -177,7 +160,6 @@ jobs:
     permissions:
       contents: read
     outputs:
-      cloud: ${{ steps.inputs.outputs.cloud }}
       environment: ${{ steps.inputs.outputs.environment }}
       branch: ${{ steps.inputs.outputs.branch }}
       target: ${{ steps.inputs.outputs.target }}
@@ -195,7 +177,6 @@ jobs:
       - name: Resolve inputs
         id: inputs
         run: |
-          cloud="${{ needs.validate.outputs.cloud || 'gcp' }}"
           environment="${{ needs.validate.outputs.environment || 'dev' }}"
           branch="${{ github.event.inputs.branch }}"
           if [[ -z "${branch}" ]]; then
@@ -207,7 +188,6 @@ jobs:
           worker_mode="${{ github.event.inputs.worker_mode || 'disabled' }}"
           scale_down_worker="${{ github.event.inputs.scale_down_worker_when_disabled || 'true' }}"
 
-          echo "cloud=${cloud}" >> "${GITHUB_OUTPUT}"
           echo "environment=${environment}" >> "${GITHUB_OUTPUT}"
           echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
           echo "target=${target}" >> "${GITHUB_OUTPUT}"
@@ -244,7 +224,7 @@ jobs:
           echo "commit_sha=${commit_sha}" >> "${GITHUB_OUTPUT}"
 
   terraform:
-    name: Terraform (${{ needs.prepare.outputs.cloud }})
+    name: Terraform (GCP)
     needs: prepare
     if: ${{ needs.prepare.outputs.run_terraform == 'true' }}
     runs-on: ubuntu-latest
@@ -252,6 +232,12 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      TF_VAR_project_id: dachjob-ai-platform
+      TF_VAR_region: europe-west1
+      TF_VAR_environment: ${{ needs.prepare.outputs.environment }}
+      TF_VAR_billing_account_id: ${{ vars.GCP_BILLING_ACCOUNT_ID || secrets.GCP_BILLING_ACCOUNT_ID || '' }}
+      TF_VAR_notification_email: ${{ vars.GCP_NOTIFICATION_EMAIL || vars.NOTIFICATION_EMAIL || secrets.GCP_NOTIFICATION_EMAIL || '' }}
     outputs:
       api_url: ${{ steps.tf_outputs.outputs.api_url }}
       frontend_url: ${{ steps.tf_outputs.outputs.frontend_url }}
@@ -263,60 +249,57 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to Google Cloud
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
-
-      - name: Authenticate to Azure
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.10.0"
 
-      - name: Terraform init (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+      - name: Terraform init
         working-directory: ${{ env.GCP_TF_DIR }}
         run: terraform init -backend-config=environments/${{ needs.prepare.outputs.environment }}/backend.conf
 
       - name: Terraform format check
         run: terraform fmt -check -recursive
 
-      - name: Terraform validate (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+      - name: Terraform validate
         working-directory: ${{ env.GCP_TF_DIR }}
         run: terraform validate
 
-      - name: Terraform plan (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
-        working-directory: ${{ env.GCP_TF_DIR }}
-        run: terraform plan -lock-timeout=300s -var-file=environments/${{ needs.prepare.outputs.environment }}/terraform.tfvars -out=tfplan
+      - name: Validate Terraform inputs
+        run: |
+          missing=()
+          [[ -n "${TF_VAR_project_id}" ]] || missing+=("TF_VAR_project_id")
+          [[ -n "${TF_VAR_billing_account_id}" ]] || missing+=("TF_VAR_billing_account_id")
+          [[ -n "${TF_VAR_notification_email}" ]] || missing+=("TF_VAR_notification_email")
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required Terraform inputs: %s\n' "${missing[*]}" >&2
+            printf 'Configure repository/environment variables or secrets before running Terraform.\n' >&2
+            exit 1
+          fi
 
-      - name: Terraform apply (GCP)
-        if: ${{ (needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform') && (needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all') }}
-        continue-on-error: true
+      - name: Terraform plan
         working-directory: ${{ env.GCP_TF_DIR }}
-        run: terraform apply -auto-approve tfplan
+        run: terraform plan -input=false -lock-timeout=300s -out=tfplan
+
+      - name: Terraform apply
+        if: ${{ needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform' }}
+        working-directory: ${{ env.GCP_TF_DIR }}
+        run: terraform apply -input=false -auto-approve tfplan
 
       - name: Capture Terraform outputs
         id: tf_outputs
+        working-directory: ${{ env.GCP_TF_DIR }}
         run: |
-          if [[ "${{ needs.prepare.outputs.cloud }}" == "gcp" ]]; then
-            cd "${{ env.GCP_TF_DIR }}"
-            echo "api_url=$(terraform output -raw api_url 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
-            echo "frontend_url=$(terraform output -raw frontend_url 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
-          fi
+          echo "api_url=$(terraform output -raw api_url 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
+          echo "frontend_url=$(terraform output -raw frontend_url 2>/dev/null || echo '')" >> "${GITHUB_OUTPUT}"
 
   build-api:
-    name: Build API image (${{ needs.prepare.outputs.cloud }})
+    name: Build API image
     needs: prepare
     if: ${{ needs.prepare.outputs.deploy_api == 'true' }}
     runs-on: ubuntu-latest
@@ -326,7 +309,6 @@ jobs:
       id-token: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
-      azure_image: ${{ steps.meta.outputs.azure_image }}
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v6
@@ -335,7 +317,6 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to Google Cloud
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
         id: auth
         uses: google-github-actions/auth@v3
         with:
@@ -343,25 +324,12 @@ jobs:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
 
-      - name: Login to Artifact Registry (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+      - name: Login to Artifact Registry
         uses: docker/login-action@v4
         with:
           registry: ${{ env.GAR_LOCATION }}-docker.pkg.dev
           username: oauth2accesstoken
           password: ${{ steps.auth.outputs.access_token }}
-
-      - name: Authenticate to Azure
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
-
-      - name: Login to ACR (Azure)
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        run: az acr login --name "${{ env.AZURE_ACR_NAME }}"
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
@@ -372,22 +340,12 @@ jobs:
           tag="${{ needs.prepare.outputs.image_tag }}"
           gcp_image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-api/api:${tag}"
           gcp_latest="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-api/api:latest"
-          azure_image="${{ env.AZURE_ACR_NAME }}.azurecr.io/api:${tag}"
-          azure_latest="${{ env.AZURE_ACR_NAME }}.azurecr.io/api:latest"
           echo "image=${gcp_image}" >> "${GITHUB_OUTPUT}"
           echo "latest=${gcp_latest}" >> "${GITHUB_OUTPUT}"
-          echo "azure_image=${azure_image}" >> "${GITHUB_OUTPUT}"
-          echo "azure_latest=${azure_latest}" >> "${GITHUB_OUTPUT}"
           {
             echo "tags<<EOF"
-            if [[ "${{ needs.prepare.outputs.cloud }}" == "gcp" || "${{ needs.prepare.outputs.cloud }}" == "all" ]]; then
-              echo "${gcp_image}"
-              echo "${gcp_latest}"
-            fi
-            if [[ "${{ needs.prepare.outputs.cloud }}" == "azure" || "${{ needs.prepare.outputs.cloud }}" == "all" ]]; then
-              echo "${azure_image}"
-              echo "${azure_latest}"
-            fi
+            echo "${gcp_image}"
+            echo "${gcp_latest}"
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
@@ -405,7 +363,7 @@ jobs:
             ${{ steps.meta.outputs.tags }}
 
   build-frontend:
-    name: Build frontend image (${{ needs.prepare.outputs.cloud }})
+    name: Build frontend image
     needs: prepare
     if: ${{ needs.prepare.outputs.deploy_frontend == 'true' }}
     runs-on: ubuntu-latest
@@ -415,7 +373,6 @@ jobs:
       id-token: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
-      azure_image: ${{ steps.meta.outputs.azure_image }}
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v6
@@ -424,7 +381,6 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to Google Cloud
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
         id: auth
         uses: google-github-actions/auth@v3
         with:
@@ -432,25 +388,12 @@ jobs:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
 
-      - name: Login to Artifact Registry (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+      - name: Login to Artifact Registry
         uses: docker/login-action@v4
         with:
           registry: ${{ env.GAR_LOCATION }}-docker.pkg.dev
           username: oauth2accesstoken
           password: ${{ steps.auth.outputs.access_token }}
-
-      - name: Authenticate to Azure
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
-
-      - name: Login to ACR (Azure)
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        run: az acr login --name "${{ env.AZURE_ACR_NAME }}"
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
@@ -461,22 +404,12 @@ jobs:
           tag="${{ needs.prepare.outputs.image_tag }}"
           gcp_image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-frontend/frontend:${tag}"
           gcp_latest="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-frontend/frontend:latest"
-          azure_image="${{ env.AZURE_ACR_NAME }}.azurecr.io/frontend:${tag}"
-          azure_latest="${{ env.AZURE_ACR_NAME }}.azurecr.io/frontend:latest"
           echo "image=${gcp_image}" >> "${GITHUB_OUTPUT}"
           echo "latest=${gcp_latest}" >> "${GITHUB_OUTPUT}"
-          echo "azure_image=${azure_image}" >> "${GITHUB_OUTPUT}"
-          echo "azure_latest=${azure_latest}" >> "${GITHUB_OUTPUT}"
           {
             echo "tags<<EOF"
-            if [[ "${{ needs.prepare.outputs.cloud }}" == "gcp" || "${{ needs.prepare.outputs.cloud }}" == "all" ]]; then
-              echo "${gcp_image}"
-              echo "${gcp_latest}"
-            fi
-            if [[ "${{ needs.prepare.outputs.cloud }}" == "azure" || "${{ needs.prepare.outputs.cloud }}" == "all" ]]; then
-              echo "${azure_image}"
-              echo "${azure_latest}"
-            fi
+            echo "${gcp_image}"
+            echo "${gcp_latest}"
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
@@ -488,12 +421,12 @@ jobs:
           platforms: linux/amd64
           push: true
           build-args: |
-            NEXT_PUBLIC_API_BASE_URL=${{ needs.prepare.outputs.cloud == 'azure' && env.AZURE_API_URL || env.API_BASE_URL }}
+            NEXT_PUBLIC_API_BASE_URL=${{ env.API_BASE_URL }}
           tags: |
             ${{ steps.meta.outputs.tags }}
 
   build-worker:
-    name: Build worker image (${{ needs.prepare.outputs.cloud }})
+    name: Build worker image
     needs: prepare
     if: ${{ needs.prepare.outputs.deploy_worker == 'true' }}
     runs-on: ubuntu-latest
@@ -503,7 +436,6 @@ jobs:
       id-token: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
-      azure_image: ${{ steps.meta.outputs.azure_image }}
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v6
@@ -512,7 +444,6 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to Google Cloud
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
         id: auth
         uses: google-github-actions/auth@v3
         with:
@@ -520,25 +451,12 @@ jobs:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
 
-      - name: Login to Artifact Registry (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+      - name: Login to Artifact Registry
         uses: docker/login-action@v4
         with:
           registry: ${{ env.GAR_LOCATION }}-docker.pkg.dev
           username: oauth2accesstoken
           password: ${{ steps.auth.outputs.access_token }}
-
-      - name: Authenticate to Azure
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
-
-      - name: Login to ACR (Azure)
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        run: az acr login --name "${{ env.AZURE_ACR_NAME }}"
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
@@ -549,22 +467,12 @@ jobs:
           tag="${{ needs.prepare.outputs.image_tag }}"
           gcp_image="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-worker/worker:${tag}"
           gcp_latest="${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/dachjob-dev-worker/worker:latest"
-          azure_image="${{ env.AZURE_ACR_NAME }}.azurecr.io/worker:${tag}"
-          azure_latest="${{ env.AZURE_ACR_NAME }}.azurecr.io/worker:latest"
           echo "image=${gcp_image}" >> "${GITHUB_OUTPUT}"
           echo "latest=${gcp_latest}" >> "${GITHUB_OUTPUT}"
-          echo "azure_image=${azure_image}" >> "${GITHUB_OUTPUT}"
-          echo "azure_latest=${azure_latest}" >> "${GITHUB_OUTPUT}"
           {
             echo "tags<<EOF"
-            if [[ "${{ needs.prepare.outputs.cloud }}" == "gcp" || "${{ needs.prepare.outputs.cloud }}" == "all" ]]; then
-              echo "${gcp_image}"
-              echo "${gcp_latest}"
-            fi
-            if [[ "${{ needs.prepare.outputs.cloud }}" == "azure" || "${{ needs.prepare.outputs.cloud }}" == "all" ]]; then
-              echo "${azure_image}"
-              echo "${azure_latest}"
-            fi
+            echo "${gcp_image}"
+            echo "${gcp_latest}"
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
@@ -582,7 +490,7 @@ jobs:
             ${{ steps.meta.outputs.tags }}
 
   deploy-api:
-    name: Deploy API (${{ needs.prepare.outputs.cloud }})
+    name: Deploy API (GCP)
     needs:
       - prepare
       - terraform
@@ -603,26 +511,15 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to Google Cloud
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
 
-      - name: Setup gcloud (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+      - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v3
 
-      - name: Authenticate to Azure
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
-
-      - name: Deploy API (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+      - name: Deploy API to Cloud Run
         run: |
           gcloud run deploy "${API_SERVICE_NAME}" \
             --project="${PROJECT_ID}" \
@@ -634,17 +531,11 @@ jobs:
             --add-cloudsql-instances="${CLOUD_SQL_CONNECTION_NAME}" \
             --vpc-connector="${VPC_CONNECTOR}" \
             --vpc-egress=private-ranges-only \
-            --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},REDIS_HOST=${REDIS_HOST},REDIS_PORT=${REDIS_PORT},REDIS_ENABLED=${REDIS_ENABLED},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=vertex_ai,VERTEX_AI_PROJECT_ID=${PROJECT_ID},VERTEX_AI_LOCATION=global,CORS_ORIGINS=${FRONTEND_URL},WORKER_ENABLED=${{ needs.prepare.outputs.worker_enabled == 'enabled' && 'true' || 'false' }},WORKER_FALLBACK_TO_SYNC=true,LOG_LEVEL=INFO,LOG_JSON=true,ERROR_LOG_TO_FILE=true,ERROR_LOG_DIR=/tmp/dachjob-error-logs" \
+            --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},REDIS_HOST=${REDIS_HOST},REDIS_PORT=${REDIS_PORT},REDIS_ENABLED=${REDIS_ENABLED},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=vertex_ai,VERTEX_AI_PROJECT_ID=${PROJECT_ID},VERTEX_AI_LOCATION=global,CORS_ORIGINS=${FRONTEND_URL},WORKER_ENABLED=${{ needs.prepare.outputs.worker_enabled == 'enabled' && 'true' || 'false' }},WORKER_FALLBACK_TO_SYNC=true,LOG_LEVEL=INFO,LOG_JSON=true,ERROR_LOG_TO_FILE=true,ERROR_LOG_DIR=/tmp/dachjob-error-logs,STORAGE_PROVIDER=gcs" \
             --update-secrets="DATABASE_PASSWORD=dachjob-dev-db-password:latest,JWT_SECRET=dachjob-dev-jwt-secret-key:latest,SECRET_KEY=dachjob-dev-jwt-secret-key:latest,GEMINI_API_KEY=dachjob-dev-gemini-api-key:latest,RESEND_API_KEY=dachjob-dev-smtp-password:latest,S3_ACCESS_KEY_ID=dachjob-dev-s3-access-key:latest,S3_SECRET_ACCESS_KEY=dachjob-dev-s3-secret-key:latest"
 
-      - name: Deploy API (Azure)
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        run: |
-          bash infra/deploy/scripts/deploy-azure.sh "api" \
-            "${{ needs.build-api.outputs.azure_image || needs.build-api.outputs.image }}" "" "" "" "${{ needs.prepare.outputs.run_migrations }}"
-
       - name: Deploy migration job
-        if: ${{ (needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all') && needs.prepare.outputs.run_migrations == 'true' }}
+        if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
         run: |
           gcloud run jobs deploy "${MIGRATION_JOB_NAME}" \
             --project="${PROJECT_ID}" \
@@ -656,51 +547,21 @@ jobs:
             --vpc-egress=private-ranges-only \
             --command=alembic \
             --args=-c,app/db/migrations/alembic.ini,upgrade,head \
-            --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},REDIS_ENABLED=${REDIS_ENABLED},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=deepseek" \
+            --set-env-vars="APP_ENV=production,CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_CONNECTION_NAME},DATABASE_USER=postgres,DATABASE_NAME=dachjob,REDIS_URL=${REDIS_URL},REDIS_ENABLED=${REDIS_ENABLED},S3_ENDPOINT_URL=https://storage.googleapis.com,S3_BUCKET_NAME=${GCS_BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LLM_PROVIDER=deepseek,STORAGE_PROVIDER=gcs" \
             --update-secrets="DATABASE_PASSWORD=dachjob-dev-db-password:latest,JWT_SECRET=dachjob-dev-jwt-secret-key:latest,SECRET_KEY=dachjob-dev-jwt-secret-key:latest,OPENROUTER_API_KEY=dachjob-dev-openrouter-api-key:latest,DEEPSEEK_API_KEY=dachjob-dev-deepseek-api-key:latest"
 
       - name: Run migration job
-        if: ${{ (needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all') && needs.prepare.outputs.run_migrations == 'true' }}
+        if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
         run: |
           gcloud run jobs execute "${MIGRATION_JOB_NAME}" \
             --project="${PROJECT_ID}" \
             --region="${REGION}" \
             --wait
 
-      - name: Run Azure migrations
-        if: ${{ (needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all') && needs.prepare.outputs.run_migrations == 'true' }}
-        run: |
-          echo "::group::Run database migrations on Azure"
-          ACR_NAME="${{ env.AZURE_ACR_NAME }}"
-          ACR_PASS=$(az acr credential show -n "$ACR_NAME" --query "passwords[0].value" -o tsv 2>/dev/null || true)
-          az containerapp job create \
-            --name "${{ env.AZURE_MIGRATION_JOB_NAME }}" \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --environment "${{ env.AZURE_CONTAINER_APP_ENV }}" \
-            --image "${{ needs.build-api.outputs.azure_image || needs.build-api.outputs.image }}" \
-            --registry-server "${ACR_NAME}.azurecr.io" \
-            --registry-username "$ACR_NAME" \
-            --registry-password "$ACR_PASS" \
-            --command "alembic" \
-            --args "-c" "app/db/migrations/alembic.ini" "upgrade" "head" \
-            --trigger-type Manual \
-            --output none 2>/dev/null || true
-          az containerapp job start \
-            --name "${{ env.AZURE_MIGRATION_JOB_NAME }}" \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --output none
-          echo "::endgroup::"
-
       - name: Capture service URL
         id: url
         run: |
-          if [[ "${{ needs.prepare.outputs.cloud }}" == "gcp" ]]; then
-            url="$(gcloud run services describe "${API_SERVICE_NAME}" --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
-          elif [[ "${{ needs.prepare.outputs.cloud }}" == "azure" ]]; then
-            url="${AZURE_API_URL}"
-          else
-            url="${API_BASE_URL}"
-          fi
+          url="$(gcloud run services describe "${API_SERVICE_NAME}" --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
           echo "url=${url}" >> "${GITHUB_OUTPUT}"
 
       - name: Health check API
@@ -714,7 +575,7 @@ jobs:
           exit 1
 
   deploy-frontend:
-    name: Deploy frontend (${{ needs.prepare.outputs.cloud }})
+    name: Deploy frontend (GCP)
     needs:
       - prepare
       - terraform
@@ -735,26 +596,15 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to Google Cloud
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
 
-      - name: Setup gcloud (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+      - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v3
 
-      - name: Authenticate to Azure
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
-
-      - name: Deploy frontend (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+      - name: Deploy frontend to Cloud Run
         run: |
           gcloud run deploy "${FRONTEND_SERVICE_NAME}" \
             --project="${PROJECT_ID}" \
@@ -765,22 +615,10 @@ jobs:
             --allow-unauthenticated \
             --set-env-vars="NODE_ENV=production,NEXT_PUBLIC_API_BASE_URL=${API_BASE_URL},INTERNAL_API_BASE_URL=${API_BASE_URL}"
 
-      - name: Deploy frontend (Azure)
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        run: |
-          bash infra/deploy/scripts/deploy-azure.sh "frontend" \
-            "" "${{ needs.build-frontend.outputs.azure_image || needs.build-frontend.outputs.image }}" "" "" ""
-
       - name: Capture service URL
         id: url
         run: |
-          if [[ "${{ needs.prepare.outputs.cloud }}" == "gcp" ]]; then
-            url="$(gcloud run services describe "${FRONTEND_SERVICE_NAME}" --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
-          elif [[ "${{ needs.prepare.outputs.cloud }}" == "azure" ]]; then
-            url="${AZURE_FRONTEND_URL}"
-          else
-            url="${FRONTEND_URL}"
-          fi
+          url="$(gcloud run services describe "${FRONTEND_SERVICE_NAME}" --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
           echo "url=${url}" >> "${GITHUB_OUTPUT}"
 
       - name: Health check frontend
@@ -828,7 +666,7 @@ jobs:
           kubectl get deploy,hpa,pods --namespace="${GKE_NAMESPACE}" -o wide
 
   deploy-worker:
-    name: Deploy worker (${{ needs.prepare.outputs.cloud }})
+    name: Deploy worker (GCP)
     needs:
       - prepare
       - terraform
@@ -848,34 +686,22 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to Google Cloud
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
 
-      - name: Setup gcloud (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+      - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v3
 
       - name: Get GKE credentials
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
         uses: google-github-actions/get-gke-credentials@v3
         with:
           cluster_name: ${{ env.GKE_CLUSTER_NAME }}
           location: ${{ env.REGION }}
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Authenticate to Azure
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
-        run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
-
-      - name: Deploy worker (GCP)
-        if: ${{ needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all' }}
+      - name: Deploy worker to GKE
         run: |
           gcloud iam service-accounts add-iam-policy-binding "${WORKER_SERVICE_ACCOUNT}" \
             --project="${PROJECT_ID}" \
@@ -904,11 +730,28 @@ jobs:
           kubectl rollout status deployment/celery-worker --namespace="${GKE_NAMESPACE}" --timeout=300s
           kubectl get pods --namespace="${GKE_NAMESPACE}" -o wide
 
-      - name: Deploy worker (Azure)
-        if: ${{ needs.prepare.outputs.cloud == 'azure' || needs.prepare.outputs.cloud == 'all' }}
+  smoke-test:
+    name: Smoke test
+    needs:
+      - prepare
+      - deploy-api
+      - deploy-frontend
+    if: ${{ always() && needs.deploy-api.result == 'success' && needs.deploy-frontend.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run smoke test
         run: |
-          bash infra/deploy/scripts/deploy-azure.sh "worker" \
-            "" "" "${{ needs.build-worker.outputs.azure_image || needs.build-worker.outputs.image }}" "" ""
+          SMOKE_TEST_MODE="${{ github.event.inputs.smoke_test_mode || 'minimal' }}" \
+          API_BASE_URL="${{ needs.deploy-api.outputs.url || env.API_BASE_URL }}" \
+          FRONTEND_URL="${{ needs.deploy-frontend.outputs.url || env.FRONTEND_URL }}" \
+          SMOKE_TEST_EMAIL="smoke+gcp-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com" \
+          SMOKE_TEST_PASSWORD="${{ secrets.SMOKE_TEST_PASSWORD || 'smoke-test-password-42' }}" \
+          bash infra/deploy/scripts/smoke-test-api.sh
 
   summary:
     name: Deployment summary
@@ -919,16 +762,16 @@ jobs:
       - deploy-frontend
       - deploy-worker
       - scale-down-worker
+      - smoke-test
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - name: Write summary
         run: |
-          echo "## Deployment Summary" >> "${GITHUB_STEP_SUMMARY}"
+          echo "## GCP Deployment Summary" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Item | Value |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| --- | --- |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| Cloud | ${{ needs.prepare.outputs.cloud || 'gcp' }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Environment | ${{ needs.prepare.outputs.environment || 'dev' }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Branch | ${{ needs.prepare.outputs.branch }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Target | ${{ needs.prepare.outputs.target }} |" >> "${GITHUB_STEP_SUMMARY}"
@@ -937,5 +780,6 @@ jobs:
           echo "| API | ${{ needs.deploy-api.result }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Frontend | ${{ needs.deploy-frontend.result }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Worker | ${{ needs.deploy-worker.result || needs.scale-down-worker.result || 'skipped' }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Smoke test | ${{ needs.smoke-test.result }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| API URL | ${{ needs.deploy-api.outputs.url || env.API_BASE_URL }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Frontend URL | ${{ needs.deploy-frontend.outputs.url || env.FRONTEND_URL }} |" >> "${GITHUB_STEP_SUMMARY}"
