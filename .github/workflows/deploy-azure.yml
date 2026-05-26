@@ -229,12 +229,14 @@ jobs:
           jwt_secret="$(fetch_secret jwt-secret)"
           secret_key="$(fetch_secret secret-key)"
           resend_api_key="$(fetch_secret resend-api-key)"
+          deepseek_api_key="$(fetch_secret deepseek-api-key)"
 
           [[ -n "${postgres_password}" ]] && echo "::add-mask::${postgres_password}"
           [[ -n "${azure_openai_api_key}" ]] && echo "::add-mask::${azure_openai_api_key}"
           [[ -n "${jwt_secret}" ]] && echo "::add-mask::${jwt_secret}"
           [[ -n "${secret_key}" ]] && echo "::add-mask::${secret_key}"
           [[ -n "${resend_api_key}" ]] && echo "::add-mask::${resend_api_key}"
+          [[ -n "${deepseek_api_key}" ]] && echo "::add-mask::${deepseek_api_key}"
 
           {
             echo "TF_VAR_postgres_administrator_password<<EOF"
@@ -259,6 +261,9 @@ jobs:
             echo "TF_VAR_azure_openai_model_quality=${{ vars.AZURE_OPENAI_MODEL_QUALITY || 'gpt-4o' }}"
             echo "TF_VAR_azure_openai_model_reasoning=${{ vars.AZURE_OPENAI_MODEL_REASONING || 'o1-mini' }}"
             echo "TF_VAR_resend_from_email=${{ vars.AZURE_RESEND_FROM_EMAIL || vars.RESEND_FROM_EMAIL || 'onboarding@resend.dev' }}"
+            echo "TF_VAR_deepseek_api_key<<EOF"
+            echo "${deepseek_api_key}"
+            echo "EOF"
           } >> "${GITHUB_ENV}"
 
       - name: Setup Terraform
@@ -543,6 +548,16 @@ jobs:
 
       - name: Deploy API to Azure Container Apps
         run: |
+          # Ensure DeepSeek API key secret exists in the Container App
+          DEEPSEEK_KEY="$(az keyvault secret show --vault-name "${AZURE_KEY_VAULT_NAME}" --name deepseek-api-key --query value -o tsv 2>/dev/null || true)"
+          if [[ -n "${DEEPSEEK_KEY}" ]]; then
+            az containerapp secret set \
+              --name "${AZURE_API_NAME}" \
+              --resource-group "${AZURE_RESOURCE_GROUP}" \
+              --secrets "deepseek-api-key=${DEEPSEEK_KEY}" \
+              --output none
+          fi
+
           az containerapp update \
             --name "${AZURE_API_NAME}" \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
@@ -555,6 +570,10 @@ jobs:
               ERROR_LOG_TO_FILE=true \
               ERROR_LOG_DIR=/tmp/dachjob-error-logs \
               STORAGE_PROVIDER=azure_blob \
+              LLM_PROVIDER=deepseek \
+              DEEPSEEK_API_KEY=secretref:deepseek-api-key \
+              DEEPSEEK_MODEL_FAST=deepseek-v4-flash \
+              DEEPSEEK_MODEL_QUALITY=deepseek-v4-flash \
             --output none
 
       - name: Run Azure migrations
