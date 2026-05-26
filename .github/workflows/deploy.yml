@@ -792,6 +792,7 @@ jobs:
       - build-worker
     if: ${{ always() && needs.prepare.outputs.deploy_worker == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-worker.result == 'success' }}
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       contents: read
       id-token: write
