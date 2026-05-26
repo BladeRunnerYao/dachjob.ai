@@ -99,6 +99,9 @@ export default function JobDetailPage() {
       setMatch(m);
       setResume(r);
       setProfile(p);
+    }).catch(() => {
+      // API fetch failed (auth expired or network error)
+    }).finally(() => {
       setLoading(false);
     });
   }, [id]);
