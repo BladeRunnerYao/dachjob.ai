@@ -417,6 +417,21 @@ SKILL_NAME_ALIASES = {
     "genai": "GenAI",
 }
 
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        cleaned = str(item).strip()
+        if not cleaned:
+            continue
+        key = re.sub(r"\s+", " ", cleaned).strip(" .;:").casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(cleaned)
+    return result
+
+
 NON_SKILL_CANDIDATES = {
     "etc",
     "similar",

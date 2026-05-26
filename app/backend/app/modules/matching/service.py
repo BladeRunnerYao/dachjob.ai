@@ -1,26 +1,10 @@
 import logging
-import re
 
 from app.core.auth import TenantContext
 from app.modules.matching.jd_parser import parse_job_posting
 from app.modules.matching.match_scorer import compute_match
 
 __all__ = ["parse_job_posting", "compute_match", "format_raw_jd"]
-
-
-def _dedupe_preserve_order(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for item in items:
-        cleaned = str(item).strip()
-        if not cleaned:
-            continue
-        key = re.sub(r"\s+", " ", cleaned).strip(" .;:").casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        result.append(cleaned)
-    return result
 
 
 async def format_raw_jd(
