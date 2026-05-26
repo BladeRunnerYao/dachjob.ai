@@ -3,8 +3,8 @@
 Add composite indexes on match_reports, resume_artifacts, and evidence_chunks
 to fix N+1 and sequential scan query performance.
 
-Revision ID: 0006
-Revises: 0005
+Revision ID: 0007
+Revises: 0006
 Create Date: 2026-05-25
 """
 
