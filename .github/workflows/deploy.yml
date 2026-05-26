@@ -622,7 +622,7 @@ jobs:
             --update-secrets="DATABASE_PASSWORD=dachjob-dev-db-password:latest,JWT_SECRET=dachjob-dev-jwt-secret-key:latest,SECRET_KEY=dachjob-dev-jwt-secret-key:latest,OPENROUTER_API_KEY=dachjob-dev-openrouter-api-key:latest,DEEPSEEK_API_KEY=dachjob-dev-deepseek-api-key:latest"
 
       - name: Run migration job
-        if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
+        if: ${{ (needs.prepare.outputs.cloud == 'gcp' || needs.prepare.outputs.cloud == 'all') && needs.prepare.outputs.run_migrations == 'true' }}
         run: |
           gcloud run jobs execute "${MIGRATION_JOB_NAME}" \
             --project="${PROJECT_ID}" \
