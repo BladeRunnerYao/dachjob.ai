@@ -210,6 +210,7 @@ jobs:
             -u "${{ vars.AZURE_CLIENT_ID }}" \
             -t "${{ vars.AZURE_TENANT_ID }}" \
             --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+          az account set --subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}"
 
       - name: Load Terraform secrets from Key Vault
         run: |
@@ -265,9 +266,29 @@ jobs:
         with:
           terraform_version: "1.10.0"
 
+      - name: Write Terraform backend config
+        working-directory: ${{ env.AZURE_TF_DIR }}
+        env:
+          TF_BACKEND_RESOURCE_GROUP: ${{ vars.AZURE_TF_BACKEND_RESOURCE_GROUP || '' }}
+          TF_BACKEND_STORAGE_ACCOUNT: ${{ vars.AZURE_TF_BACKEND_STORAGE_ACCOUNT || '' }}
+          TF_BACKEND_CONTAINER: ${{ vars.AZURE_TF_BACKEND_CONTAINER || '' }}
+          TF_BACKEND_KEY: ${{ vars.AZURE_TF_BACKEND_KEY || '' }}
+        run: |
+          : "${TF_BACKEND_RESOURCE_GROUP:?AZURE_TF_BACKEND_RESOURCE_GROUP repository variable is required}"
+          : "${TF_BACKEND_STORAGE_ACCOUNT:?AZURE_TF_BACKEND_STORAGE_ACCOUNT repository variable is required}"
+          : "${TF_BACKEND_CONTAINER:?AZURE_TF_BACKEND_CONTAINER repository variable is required}"
+          : "${TF_BACKEND_KEY:?AZURE_TF_BACKEND_KEY repository variable is required}"
+          cat > backend.generated.conf <<EOF
+          resource_group_name  = "${TF_BACKEND_RESOURCE_GROUP}"
+          storage_account_name = "${TF_BACKEND_STORAGE_ACCOUNT}"
+          container_name       = "${TF_BACKEND_CONTAINER}"
+          key                  = "${TF_BACKEND_KEY}"
+          use_azuread_auth     = true
+          EOF
+
       - name: Terraform init
         working-directory: ${{ env.AZURE_TF_DIR }}
-        run: terraform init -backend-config=backend.conf
+        run: terraform init -backend-config=backend.generated.conf
 
       - name: Terraform format check
         run: terraform fmt -check -recursive
@@ -282,7 +303,7 @@ jobs:
           [[ -n "${TF_VAR_postgres_administrator_password}" ]] || missing+=("TF_VAR_postgres_administrator_password")
           if (( ${#missing[@]} > 0 )); then
             printf 'Missing required Terraform inputs: %s\n' "${missing[*]}" >&2
-            printf 'Set AZURE_POSTGRES_ADMINISTRATOR_PASSWORD as a GitHub environment/repository secret.\n' >&2
+            printf 'Store postgres-administrator-password in Azure Key Vault and ensure AZURE_KEY_VAULT_NAME is configured.\n' >&2
             exit 1
           fi
           if [[ -z "${TF_VAR_azure_openai_endpoint}" || -z "${TF_VAR_azure_openai_api_key}" ]]; then
