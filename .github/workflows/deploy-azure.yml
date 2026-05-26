@@ -267,7 +267,6 @@ jobs:
           terraform_version: "1.10.0"
 
       - name: Write Terraform backend config
-        working-directory: ${{ env.AZURE_TF_DIR }}
         env:
           TF_BACKEND_RESOURCE_GROUP: ${{ vars.AZURE_TF_BACKEND_RESOURCE_GROUP || '' }}
           TF_BACKEND_STORAGE_ACCOUNT: ${{ vars.AZURE_TF_BACKEND_STORAGE_ACCOUNT || '' }}
@@ -278,7 +277,7 @@ jobs:
           : "${TF_BACKEND_STORAGE_ACCOUNT:?AZURE_TF_BACKEND_STORAGE_ACCOUNT repository variable is required}"
           : "${TF_BACKEND_CONTAINER:?AZURE_TF_BACKEND_CONTAINER repository variable is required}"
           : "${TF_BACKEND_KEY:?AZURE_TF_BACKEND_KEY repository variable is required}"
-          cat > backend.generated.conf <<EOF
+          cat > "${RUNNER_TEMP}/backend.azure.conf" <<EOF
           resource_group_name  = "${TF_BACKEND_RESOURCE_GROUP}"
           storage_account_name = "${TF_BACKEND_STORAGE_ACCOUNT}"
           container_name       = "${TF_BACKEND_CONTAINER}"
@@ -288,7 +287,7 @@ jobs:
 
       - name: Terraform init
         working-directory: ${{ env.AZURE_TF_DIR }}
-        run: terraform init -backend-config=backend.generated.conf
+        run: terraform init -backend-config="${RUNNER_TEMP}/backend.azure.conf"
 
       - name: Terraform format check
         run: terraform fmt -check -recursive
