@@ -71,7 +71,6 @@ class RedisCache:
         "jobs:list": 600,
         "job:detail": 300,
         "profile": 600,
-        "evidence": 600,
     }
 
     @staticmethod

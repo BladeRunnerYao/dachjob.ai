@@ -9,14 +9,13 @@ import { JobDescriptionView } from '@/components/jobs/job-description-view';
 import { api } from '@/lib/api/client';
 import type { JobPosting, MatchReport, ResumeArtifact, CandidateProfile } from '@/lib/api/types';
 
-type Tab = 'raw' | 'parsed' | 'match' | 'evidence' | 'cv';
+type Tab = 'raw' | 'parsed' | 'match' | 'cv';
 
 function isSkillInProfile(skill: string, profile: CandidateProfile | null): boolean {
   if (!profile) return false;
   const text = [
     profile.raw_cv_md,
     profile.headline,
-    ...(profile.evidence_chunks || []).map((c) => c.content),
   ].join(' ').toLowerCase();
   return text.includes(skill.toLowerCase());
 }
@@ -159,7 +158,6 @@ export default function JobDetailPage() {
     { key: 'raw', label: 'Raw JD' },
     { key: 'parsed', label: 'Parsed Requirements' },
     { key: 'match', label: 'Match Score' },
-    { key: 'evidence', label: 'Evidence Mapping' },
     { key: 'cv', label: 'Generated CV' },
   ];
 
@@ -433,25 +431,6 @@ export default function JobDetailPage() {
             </Card>
           </div>
         </div>
-      )}
-
-      {tab === 'evidence' && (
-        <Card>
-          <CardContent>
-            <p className="text-sm text-slate-500">Evidence mapping shows which CV evidence chunks support each requirement.</p>
-            <div className="mt-4 space-y-3">
-              {['Python/ML Experience', 'Kubernetes/Infrastructure', 'Team Leadership'].map((req) => (
-                <div key={req} className="rounded-lg border border-slate-200 p-3">
-                  <p className="text-sm font-medium text-slate-900 mb-2">{req}</p>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="green">Matched: e1, e2, e5</Badge>
-                    <Badge variant="yellow">Partial: e3</Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       {tab === 'cv' && (

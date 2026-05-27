@@ -36,14 +36,6 @@ export interface CandidateProfile {
   headline: string;
   location?: string;
   raw_cv_md: string;
-  evidence_chunks?: EvidenceChunk[];
-}
-
-export interface EvidenceChunk {
-  id: string;
-  source_type: string;
-  source_label: string;
-  content: string;
 }
 
 export interface MatchReport {

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext
-from app.db.models import EvidenceChunk, MatchReport
+from app.db.models import MatchReport
 from app.modules.jobs.repository import get_job
 from app.modules.matching.jd_parser import parse_job_posting
 from app.modules.matching.skill_taxonomy import (
@@ -66,16 +66,6 @@ def _dach_score(
     return min(score, 1.0)
 
 
-def _evidence_coverage(evidence_chunks: list, must_have_skills: list[str] | None) -> float:
-    if not must_have_skills:
-        return 0.5
-    if not evidence_chunks:
-        return 0.0
-    combined = " ".join(c.content.lower() for c in evidence_chunks if c.content)
-    matched = sum(1 for s in must_have_skills if s.lower() in combined)
-    return matched / len(must_have_skills)
-
-
 def _extract_text_for_scoring(job) -> str:
     parts = [job.title or "", job.raw_jd or ""]
     if job.parsed_json:
@@ -86,7 +76,7 @@ def _extract_text_for_scoring(job) -> str:
     return " ".join(parts)
 
 
-def _calculate_score(job, profile, evidence_chunks):
+def _calculate_score(job, profile):
     parsed = job.parsed_json or {}
     must_have = parsed.get("must_have_skills") or []
 
@@ -100,8 +90,6 @@ def _calculate_score(job, profile, evidence_chunks):
 
     skill_match = _skill_overlap(must_have, profile_text)
 
-    evidence_strength = _evidence_coverage(evidence_chunks, must_have)
-
     dach_feasibility = _dach_score(
         job.location,
         profile.location,
@@ -114,25 +102,17 @@ def _calculate_score(job, profile, evidence_chunks):
         compensation_fit = 0.6
 
     growth_story_value = 0.5
-    if evidence_chunks:
-        labels = [c.source_label.lower() for c in evidence_chunks if c.source_label]
-        progression_kw = ["senior", "lead", "promot", "advanc", "head of", "manager"]
-        if any(any(kw in label for kw in progression_kw) for label in labels):
-            growth_story_value = 0.7
 
     weights = {
-        "role_relevance": 0.20,
-        "skill_match": 0.25,
-        "evidence_strength": 0.20,
-        "dach_feasibility": 0.15,
-        "compensation_fit": 0.10,
-        "growth_story_value": 0.10,
+        "role_relevance": 0.29,
+        "skill_match": 0.36,
+        "dach_feasibility": 0.21,
+        "compensation_fit": 0.14,
     }
 
     breakdown = {
         "role_relevance": round(role_relevance * 5, 2),
         "skill_match": round(skill_match * 5, 2),
-        "evidence_strength": round(evidence_strength * 5, 2),
         "dach_feasibility": round(dach_feasibility * 5, 2),
         "compensation_fit": round(compensation_fit * 5, 2),
         "growth_story_value": round(growth_story_value * 5, 2),
@@ -141,10 +121,8 @@ def _calculate_score(job, profile, evidence_chunks):
     overall = (
         role_relevance * weights["role_relevance"]
         + skill_match * weights["skill_match"]
-        + evidence_strength * weights["evidence_strength"]
         + dach_feasibility * weights["dach_feasibility"]
         + compensation_fit * weights["compensation_fit"]
-        + growth_story_value * weights["growth_story_value"]
     )
 
     overall_score = overall * 5.0
@@ -208,14 +186,7 @@ async def compute_match(
     if not profile:
         raise AppError("profile_not_found", "Candidate profile not found")
 
-    result = await db.execute(
-        select(EvidenceChunk)
-        .where(EvidenceChunk.profile_id == profile.id)
-        .where(EvidenceChunk.tenant_id == tenant.id)
-    )
-    evidence_chunks = list(result.scalars().all())
-
-    overall_score, recommendation, breakdown, gaps = _calculate_score(job, profile, evidence_chunks)
+    overall_score, recommendation, breakdown, gaps = _calculate_score(job, profile)
 
     from app.modules.llm_gateway.gateway import LLMGateway
 

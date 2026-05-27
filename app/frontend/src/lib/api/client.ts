@@ -133,7 +133,7 @@ export class ApiClient {
   async getProfile(): Promise<CandidateProfile> {
     try {
       const profile = await request<CandidateProfile>('/api/profile');
-      return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
+      return profile;
     } catch {
       if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
       return this.getMockProfile();
@@ -145,7 +145,7 @@ export class ApiClient {
       method: 'POST',
       body: JSON.stringify({ raw_cv_md: rawCvMd }),
     });
-    return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
+    return profile;
   }
 
   async importProfileFromUrl(url: string): Promise<CandidateProfile> {
@@ -153,7 +153,7 @@ export class ApiClient {
       method: 'POST',
       body: JSON.stringify({ url }),
     });
-    return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
+    return profile;
   }
 
   async importProfileFromPdf(file: File): Promise<CandidateProfile> {
@@ -170,7 +170,7 @@ export class ApiClient {
     });
     if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
     const profile = await res.json();
-    return { ...profile, evidence_chunks: profile.evidence_chunks || [] };
+    return profile;
   }
 
   // ── Matching ──────────────────────────────────────────────────
@@ -373,7 +373,6 @@ export class ApiClient {
       { id: 'r1', task: 'match_resume', provider: 'vertex_ai', model: 'google/gemini-2.5-flash', status: 'completed', latency_ms: 3240, created_at: '2026-05-16T09:15:00Z' },
       { id: 'r2', task: 'parse_jd', provider: 'vertex_ai', model: 'google/gemini-2.5-flash-lite', status: 'completed', latency_ms: 890, created_at: '2026-05-16T09:10:00Z' },
       { id: 'r3', task: 'generate_cv', provider: 'gemini', model: 'gemini-2.5-pro', status: 'failed', latency_ms: 15200, created_at: '2026-05-15T14:30:00Z', error_message: 'Token limit exceeded. Consider reducing the input size.' },
-      { id: 'r4', task: 'extract_evidence', provider: 'vertex_ai', model: 'google/gemini-2.5-flash-lite', status: 'completed', latency_ms: 2100, created_at: '2026-05-15T12:00:00Z' },
       { id: 'r5', task: 'match_resume', provider: 'vertex_ai', model: 'google/gemini-2.5-flash', status: 'completed', latency_ms: 4100, created_at: '2026-05-14T16:45:00Z' },
       { id: 'r6', task: 'parse_jd', provider: 'deepseek', model: 'deepseek-v4-flash', status: 'completed', latency_ms: 750, created_at: '2026-05-14T10:20:00Z' },
     ];
@@ -386,14 +385,6 @@ export class ApiClient {
       headline: 'Senior Full-Stack Engineer & AI/ML Specialist',
       location: 'Munich, Germany',
       raw_cv_md: '# Yao Chen\n\n## Experience\n\n### Senior Software Engineer - Tech Corp (2020-Present)\n- Built scalable microservices handling 1M+ requests/day\n- Led ML platform migration to Kubernetes\n\n### ML Engineer - AI Labs (2018-2020)\n- Developed NLP pipelines for document processing\n- Achieved 95% accuracy on entity extraction\n\n## Skills\n- Python, TypeScript, Go\n- Kubernetes, Docker, Terraform\n- TensorFlow, PyTorch\n- AWS, GCP, Azure\n\n## Education\n- M.Sc. Computer Science, TU Munich',
-      evidence_chunks: [
-        { id: 'e1', source_type: 'experience', source_label: 'Tech Corp - Senior Software Engineer', content: 'Built scalable microservices handling 1M+ requests/day' },
-        { id: 'e2', source_type: 'experience', source_label: 'Tech Corp - Senior Software Engineer', content: 'Led ML platform migration to Kubernetes' },
-        { id: 'e3', source_type: 'experience', source_label: 'AI Labs - ML Engineer', content: 'Developed NLP pipelines for document processing' },
-        { id: 'e4', source_type: 'experience', source_label: 'AI Labs - ML Engineer', content: 'Achieved 95% accuracy on entity extraction' },
-        { id: 'e5', source_type: 'skill', source_label: 'Technical Skills', content: 'Python, TypeScript, Go, Kubernetes, Docker, Terraform, TensorFlow, PyTorch, AWS, GCP, Azure' },
-        { id: 'e6', source_type: 'education', source_label: 'TU Munich', content: 'M.Sc. Computer Science, TU Munich' },
-      ],
     };
   }
 

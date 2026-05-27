@@ -1,7 +1,6 @@
 from uuid import UUID
 
 from app.modules.llm_gateway.schemas import (
-    EvidenceSelection,
     FitExplanation,
     GeneratedResume,
     ParsedJobPosting,
@@ -49,12 +48,6 @@ class FakeLLMGateway:
                 ],
                 gaps=["No Kubernetes experience"],
                 explanation="The candidate is a strong match with solid Python experience and fluent German.",
-            )
-        elif task == "evidence_select":
-            return EvidenceSelection(
-                chunk_ids=["chunk-1", "chunk-3"],
-                relevance_scores={"chunk-1": 0.95, "chunk-3": 0.72},
-                selected_for_requirements={"Python experience": ["chunk-1"]},
             )
         elif task == "resume_generate":
             return GeneratedResume(
