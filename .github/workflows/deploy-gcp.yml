@@ -121,7 +121,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.inputs.branch || github.ref_name }}
+          ref: ${{ github.event.inputs.branch || github.event.pull_request.head.ref || github.ref_name }}
           persist-credentials: false
 
       - name: Setup Python
@@ -159,6 +159,7 @@ jobs:
   prepare:
     name: Prepare deployment
     needs: validate
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
