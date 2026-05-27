@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "dachjob.ai Backend API"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.115.0",
+    "fastapi>=0.136.0",
     "uvicorn[standard]",
     "pydantic>=2.0",
     "pydantic-settings",
@@ -28,7 +28,7 @@ dependencies = [
     "google-cloud-storage>=2.0",
     "azure-storage-blob>=12.0",
     "requests>=2.31",
-    "weasyprint>=62.0",
+    "weasyprint>=69.0",
 ]
 
 [project.optional-dependencies]
