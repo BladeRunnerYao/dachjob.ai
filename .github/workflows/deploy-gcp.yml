@@ -745,19 +745,36 @@ jobs:
       - deploy-frontend
     if: ${{ github.event_name != 'pull_request' && always() && needs.deploy-api.result == 'success' && needs.deploy-frontend.result == 'success' }}
     runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           persist-credentials: false
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Fetch test credentials from GCP Secret Manager
+        run: |
+          {
+            echo "SMOKE_TEST_PASSWORD<<EOF"
+            gcloud secrets versions access latest --secret=dachjob-dev-test-ci-password --project="${PROJECT_ID}"
+            echo "EOF"
+          } >> "${GITHUB_ENV}"
+
       - name: Run smoke test
         run: |
-          SMOKE_TEST_MODE="${{ github.event.inputs.smoke_test_mode || 'minimal' }}" \
+          SMOKE_TEST_MODE="${{ github.event.inputs.smoke_test_mode || 'full' }}" \
           API_BASE_URL="${{ needs.deploy-api.outputs.url || env.API_BASE_URL }}" \
           FRONTEND_URL="${{ needs.deploy-frontend.outputs.url || env.FRONTEND_URL }}" \
           SMOKE_TEST_EMAIL="smoke+gcp-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com" \
-          SMOKE_TEST_PASSWORD="${{ secrets.SMOKE_TEST_PASSWORD || 'smoke-test-password-42' }}" \
           bash infra/deploy/scripts/smoke-test-api.sh
 
   summary:

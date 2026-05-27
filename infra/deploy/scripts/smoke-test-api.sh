@@ -172,7 +172,12 @@ run_minimal() {
   frontend_http_code="$(curl -sS -o /dev/null -w "%{http_code}" -L "${frontend_url}")"
   [[ "${frontend_http_code}" =~ ^[23] ]] || fail "Frontend returned HTTP ${frontend_http_code}"
 
-  echo "::notice::Minimal smoke test passed | job_id=${job_id} | token_ok=true | frontend_http=${frontend_http_code}"
+  # 11. Login page
+  info "GET ${frontend_url}/login"
+  login_http_code="$(curl -sS -o /dev/null -w "%{http_code}" -L "${frontend_url}/login")"
+  [[ "${login_http_code}" =~ ^[23] ]] || fail "Login page returned HTTP ${login_http_code}"
+
+  echo "::notice::Minimal smoke test passed | job_id=${job_id} | token_ok=true | frontend_http=${frontend_http_code} | login_http=${login_http_code}"
   echo "SMOKE_PASSED=true" >> "${GITHUB_OUTPUT:-/dev/null}"
 }
 

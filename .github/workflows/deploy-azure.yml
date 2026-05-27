@@ -721,19 +721,37 @@ jobs:
       - deploy-frontend
     if: ${{ github.event_name != 'pull_request' && always() && needs.deploy-api.result == 'success' && needs.deploy-frontend.result == 'success' }}
     runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           persist-credentials: false
 
+      - name: Authenticate to Azure
+        run: |
+          az login --service-principal \
+            -u "${{ vars.AZURE_CLIENT_ID }}" \
+            -t "${{ vars.AZURE_TENANT_ID }}" \
+            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+
+      - name: Fetch test credentials from Azure Key Vault
+        run: |
+          {
+            echo "SMOKE_TEST_PASSWORD<<EOF"
+            az keyvault secret show --vault-name "${AZURE_KEY_VAULT_NAME}" --name test-ci-password --query value -o tsv
+            echo "EOF"
+          } >> "${GITHUB_ENV}"
+
       - name: Run smoke test
         run: |
-          SMOKE_TEST_MODE="${{ github.event.inputs.smoke_test_mode || 'minimal' }}" \
+          SMOKE_TEST_MODE="${{ github.event.inputs.smoke_test_mode || 'full' }}" \
           API_BASE_URL="${{ needs.deploy-api.outputs.url || env.AZURE_API_URL }}" \
           FRONTEND_URL="${{ needs.deploy-frontend.outputs.url || env.AZURE_FRONTEND_URL }}" \
           SMOKE_TEST_EMAIL="smoke+azure-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com" \
-          SMOKE_TEST_PASSWORD="${{ secrets.SMOKE_TEST_PASSWORD || 'smoke-test-password-42' }}" \
           bash infra/deploy/scripts/smoke-test-api.sh
 
   summary:
