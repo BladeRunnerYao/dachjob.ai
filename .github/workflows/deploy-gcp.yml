@@ -763,11 +763,8 @@ jobs:
 
       - name: Fetch test credentials from GCP Secret Manager
         run: |
-          {
-            echo "SMOKE_TEST_PASSWORD<<EOF"
-            gcloud secrets versions access latest --secret=dachjob-dev-test-ci-password --project="${PROJECT_ID}"
-            echo "EOF"
-          } >> "${GITHUB_ENV}"
+          SMOKE_TEST_PASSWORD="$(gcloud secrets versions access latest --secret=dachjob-dev-test-ci-password --project="${PROJECT_ID}" 2>/dev/null || echo '')"
+          echo "SMOKE_TEST_PASSWORD=${SMOKE_TEST_PASSWORD}" >> "${GITHUB_ENV}"
 
       - name: Run smoke test
         run: |
