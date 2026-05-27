@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api/client';
-import type { CandidateProfile, EvidenceChunk } from '@/lib/api/types';
+import type { CandidateProfile } from '@/lib/api/types';
 
 type ImportMode = 'url' | 'pdf' | 'edit';
 
@@ -230,22 +230,6 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <h2 className="text-sm font-semibold text-slate-900">Evidence Chunks ({profile?.evidence_chunks?.length || 0})</h2>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {(profile?.evidence_chunks || []).map((chunk: EvidenceChunk) => (
-                <div key={chunk.id} className="rounded-lg border border-slate-200 p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge>{chunk.source_type}</Badge>
-                    <span className="text-xs text-slate-500">{chunk.source_label}</span>
-                  </div>
-                  <p className="text-sm text-slate-700">{chunk.content}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>

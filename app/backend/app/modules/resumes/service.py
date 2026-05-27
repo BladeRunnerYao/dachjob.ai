@@ -7,24 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext
-from app.db.models import CandidateProfile, EvidenceChunk, MatchReport, ResumeArtifact
+from app.db.models import CandidateProfile, MatchReport, ResumeArtifact
 from app.modules.jobs.repository import get_job
 from app.modules.llm_gateway.gateway import LLMGateway
 from app.modules.storage.service import StorageService
-
-
-async def list_evidence(
-    db: AsyncSession, tenant_id: uuid.UUID, profile_id: uuid.UUID
-) -> list[EvidenceChunk]:
-    result = await db.execute(
-        select(EvidenceChunk)
-        .where(
-            EvidenceChunk.tenant_id == tenant_id,
-            EvidenceChunk.profile_id == profile_id,
-        )
-        .order_by(EvidenceChunk.created_at)
-    )
-    return list(result.scalars().all())
 
 
 async def create_resume_artifact(
@@ -46,104 +32,6 @@ async def create_resume_artifact(
     db.add(artifact)
     await db.flush()
     return artifact
-
-
-def chunk_cv_md(raw_cv_md: str, profile_id: uuid.UUID, tenant_id: uuid.UUID) -> list[dict]:
-    chunks: list[dict] = []
-
-    section_pattern = re.compile(r"^## (.+)$", re.MULTILINE)
-    section_starts = [m.end() for m in section_pattern.finditer(raw_cv_md)]
-    section_names = [m.group(1).strip() for m in section_pattern.finditer(raw_cv_md)]
-
-    if not section_starts:
-        chunks.append(
-            {
-                "source_type": "profile",
-                "source_label": "Full CV",
-                "content": raw_cv_md.strip(),
-                "metadata_json": {"section": "full", "tags": ["cv"]},
-            }
-        )
-        return chunks
-
-    boundaries = [raw_cv_md.index(m.group()) for m in section_pattern.finditer(raw_cv_md)]
-    boundaries.append(len(raw_cv_md))
-
-    for i, name in enumerate(section_names):
-        start = boundaries[i]
-        end = boundaries[i + 1]
-        section_text = raw_cv_md[start:end].strip()
-
-        sub_pattern = re.compile(r"^(?:###\s*|-\s*|\d+\.\s*)(.+)$", re.MULTILINE)
-        sub_starts = [m.start() for m in sub_pattern.finditer(section_text)]
-        sub_names = [m.group(1).strip() for m in sub_pattern.finditer(section_text)]
-
-        if not sub_starts:
-            chunks.append(
-                {
-                    "source_type": "profile",
-                    "source_label": name,
-                    "content": section_text,
-                    "metadata_json": {"section": name, "tags": [name.lower()]},
-                }
-            )
-        else:
-            sub_boundaries = sub_starts + [len(section_text)]
-            for j, sub_name in enumerate(sub_names):
-                sub_start = sub_boundaries[j]
-                sub_end = sub_boundaries[j + 1]
-                sub_content = section_text[sub_start:sub_end].strip()
-                chunks.append(
-                    {
-                        "source_type": "profile",
-                        "source_label": f"{name} / {sub_name}",
-                        "content": sub_content,
-                        "metadata_json": {
-                            "section": name,
-                            "sub_section": sub_name,
-                            "tags": [name.lower(), sub_name.lower()],
-                        },
-                    }
-                )
-
-    return chunks
-
-
-async def retrieve_evidence_for_job(
-    db: AsyncSession, tenant_id: uuid.UUID, profile_id: uuid.UUID, parsed_job: dict
-) -> list[EvidenceChunk]:
-    result = await db.execute(
-        select(EvidenceChunk).where(
-            EvidenceChunk.tenant_id == tenant_id,
-            EvidenceChunk.profile_id == profile_id,
-        )
-    )
-    chunks: list[EvidenceChunk] = list(result.scalars().all())
-
-    terms: set[str] = set()
-    for val in parsed_job.values():
-        if isinstance(val, str):
-            for token in re.split(r"[\s,;./]+", val):
-                t = token.strip().lower()
-                if len(t) > 2:
-                    terms.add(t)
-        elif isinstance(val, list):
-            for item in val:
-                if isinstance(item, str):
-                    for token in re.split(r"[\s,;./]+", item):
-                        t = token.strip().lower()
-                        if len(t) > 2:
-                            terms.add(t)
-
-    scored: list[tuple[int, EvidenceChunk]] = []
-    for chunk in chunks:
-        content_lower = chunk.content.lower()
-        score = sum(1 for term in terms if term in content_lower)
-        if score > 0:
-            scored.append((score, chunk))
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return [c for _, c in scored[:10]]
 
 
 class _ResumeOutput(BaseModel):
@@ -169,24 +57,14 @@ async def generate_resume(
     if not profile:
         raise ValueError("No profile found for the authenticated user")
 
-    evidence_result = await db.execute(
-        select(EvidenceChunk).where(
-            EvidenceChunk.tenant_id == tenant.id,
-            EvidenceChunk.profile_id == profile.id,
-        )
-    )
-    all_chunks: list[EvidenceChunk] = list(evidence_result.scalars().all())
-
     parsed_job = job.parsed_json or {"title": job.title, "company": job.company, "raw": job.raw_jd}
-    relevant = await retrieve_evidence_for_job(db, tenant.id, profile.id, parsed_job)
-    evidence_for_resume = relevant if relevant else all_chunks
 
     html: str | None = None
     provenance: dict[str, Any] = {"method": "template", "job_id": str(job_id)}
 
     try:
         gateway = LLMGateway()
-        messages = _build_llm_prompt(profile, evidence_for_resume, parsed_job)
+        messages = _build_llm_prompt(profile, parsed_job)
         result = await gateway.run_json(
             tenant_id=tenant.id,
             task="resume_generate",
@@ -207,7 +85,7 @@ async def generate_resume(
         pass
 
     if not html:
-        html, prov = _generate_html_resume(profile, evidence_for_resume, parsed_job)
+        html, prov = _generate_html_resume(profile, parsed_job)
         provenance = {**provenance, **prov}
 
     storage = StorageService()
@@ -248,10 +126,9 @@ async def generate_resume(
 
 def _build_llm_prompt(
     profile: CandidateProfile,
-    evidence_chunks: list[EvidenceChunk],
     parsed_job: dict,
 ) -> list[dict]:
-    evidence_text = "\n\n".join(f"[{c.source_label}]\n{c.content}" for c in evidence_chunks)
+    cv_text = profile.raw_cv_md
     system_prompt = (
         "You are a DACH-format resume writer for the German/Swiss/Austrian job market. "
         "Generate a professional resume HTML that is clean, printable, and uses inline CSS. "
@@ -262,7 +139,7 @@ def _build_llm_prompt(
     user_prompt = (
         f"Job requirements:\n{parsed_job}\n\n"
         f"Candidate profile:\nName: {profile.full_name}\nHeadline: {profile.headline}\n\n"
-        f"Evidence chunks:\n{evidence_text}"
+        f"CV:\n{cv_text}"
     )
     return [
         {"role": "system", "content": system_prompt},
@@ -272,7 +149,6 @@ def _build_llm_prompt(
 
 def _generate_html_resume(
     profile: CandidateProfile,
-    evidence_chunks: list[EvidenceChunk],
     parsed_job: dict,
 ) -> tuple[str, list[dict]]:
     job_title = (
@@ -282,38 +158,58 @@ def _generate_html_resume(
     )
     company = parsed_job.get("company", "") if isinstance(parsed_job, dict) else ""
 
+    cv_text = profile.raw_cv_md or ""
+
     summary_parts: list[str] = []
     skills: list[str] = []
     experience_items: list[str] = []
     education_items: list[str] = []
 
-    for c in evidence_chunks:
-        section = (c.metadata_json or {}).get("section", "").lower() if c.metadata_json else ""
-        label = c.source_label.lower()
+    section_pattern = re.compile(r"^## (.+)$", re.MULTILINE)
+    boundaries = []
+    for m in section_pattern.finditer(cv_text):
+        boundaries.append(m.start())
+    boundaries.append(len(cv_text))
 
-        if "summary" in label or "profil" in section or "zusammenfassung" in section:
-            summary_parts.append(c.content)
-        elif "skill" in label or "qualifikation" in section or "kompetenz" in section:
-            skills.append(c.content)
+    section_names = [m.group(1).strip() for m in section_pattern.finditer(cv_text)]
+
+    for i, name in enumerate(section_names):
+        start = boundaries[i]
+        end = boundaries[i + 1] if i + 1 < len(boundaries) else len(cv_text)
+        section_text = cv_text[start:end].strip()
+        name_lower = name.lower()
+
+        content_no_heading = re.sub(
+            r"^##\s+.+$", "", section_text, count=1, flags=re.MULTILINE
+        ).strip()
+
+        if "summary" in name_lower or "profil" in name_lower or "zusammenfassung" in name_lower:
+            summary_parts.append(content_no_heading)
+        elif "skill" in name_lower or "qualifikation" in name_lower or "kompetenz" in name_lower:
+            for line in content_no_heading.split("\n"):
+                line = line.strip().lstrip("-*").strip()
+                if line:
+                    skills.append(line)
         elif (
-            "education" in label
-            or "ausbildung" in section
-            or "bildung" in section
-            or "studium" in section
+            "education" in name_lower
+            or "ausbildung" in name_lower
+            or "bildung" in name_lower
+            or "studium" in name_lower
         ):
-            education_items.append(c.content)
+            for line in content_no_heading.split("\n"):
+                line = line.strip().lstrip("-*").strip()
+                if line:
+                    education_items.append(line)
         elif (
-            "experience" in label
-            or "erfahrung" in section
-            or "berufserfahrung" in section
-            or "career" in label
+            "experience" in name_lower
+            or "erfahrung" in name_lower
+            or "berufserfahrung" in name_lower
+            or "career" in name_lower
         ):
-            experience_items.append(c.content)
-        else:
-            if not summary_parts:
-                summary_parts.append(c.content)
-            else:
-                experience_items.append(c.content)
+            for line in content_no_heading.split("\n"):
+                line = line.strip().lstrip("-*").strip()
+                if line:
+                    experience_items.append(line)
 
     summary_html = f"<p>{summary_parts[0][:500]}</p>" if summary_parts else ""
     skills_html = "".join(f"<li>{s[:200]}</li>" for s in skills[:15]) if skills else ""
@@ -362,13 +258,7 @@ def _generate_html_resume(
 </body>
 </html>"""
 
-    provenance = [
-        {
-            "source": c.source_label,
-            "section": (c.metadata_json or {}).get("section", "") if c.metadata_json else "",
-        }
-        for c in evidence_chunks
-    ]
+    provenance: list[dict] = []
     return html, provenance
 
 

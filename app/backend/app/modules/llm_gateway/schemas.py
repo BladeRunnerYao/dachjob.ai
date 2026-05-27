@@ -27,12 +27,6 @@ class FitExplanation(BaseModel):
     explanation: str
 
 
-class EvidenceSelection(BaseModel):
-    chunk_ids: list[str]
-    relevance_scores: dict[str, float]
-    selected_for_requirements: dict[str, list[str]]
-
-
 class GeneratedResume(BaseModel):
     html_content: str
     provenance: list[dict]

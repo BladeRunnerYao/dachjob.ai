@@ -5,16 +5,6 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
-class EvidenceResponse(BaseModel):
-    id: UUID
-    source_type: str
-    source_label: str
-    content: str
-    metadata_json: Any = None
-
-    model_config = {"from_attributes": True}
-
-
 class ResumeResponse(BaseModel):
     id: UUID
     job_id: UUID

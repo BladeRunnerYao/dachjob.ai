@@ -14,15 +14,8 @@ from app.modules.profiles.extractor import (
     extract_pdf_text,
     fetch_url_content,
 )
-from app.modules.profiles.repository import (
-    create_evidence_chunks,
-    delete_evidence_by_profile,
-    get_profile_by_user,
-    list_evidence_by_profile,
-    upsert_profile,
-)
+from app.modules.profiles.repository import get_profile_by_user, upsert_profile
 from app.modules.profiles.schemas import CVUploadRequest, ProfileResponse, URLImportRequest
-from app.modules.resumes.service import chunk_cv_md
 
 router = APIRouter(prefix="/api/profile", tags=["profiles"])
 
@@ -52,7 +45,6 @@ async def _profile_response(db: AsyncSession, user_id: UUID, profile: Any | None
         profile = await get_profile_by_user(db, user_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    chunks = await list_evidence_by_profile(db, profile.id)
     response = {
         "id": str(profile.id),
         "tenant_id": str(profile.tenant_id),
@@ -62,16 +54,6 @@ async def _profile_response(db: AsyncSession, user_id: UUID, profile: Any | None
         "timezone": profile.timezone,
         "raw_cv_md": profile.raw_cv_md,
         "profile_json": profile.profile_json,
-        "evidence_chunks": [
-            {
-                "id": str(c.id),
-                "source_type": c.source_type,
-                "source_label": c.source_label,
-                "content": c.content,
-                "metadata_json": c.metadata_json,
-            }
-            for c in chunks
-        ],
         "created_at": profile.created_at.isoformat() if profile.created_at else None,
         "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
     }
@@ -122,11 +104,6 @@ async def import_profile_from_url(
     )
     profile.profile_json = {"source_url": body.url}
 
-    await delete_evidence_by_profile(db, profile.id)
-    chunks = chunk_cv_md(cv_md, profile.id, tenant.id)
-    if chunks:
-        await create_evidence_chunks(db, tenant.id, profile.id, chunks)
-
     await _invalidate_profile_cache(tenant.user_id)
     return await _profile_response(db, tenant.user_id)
 
@@ -158,11 +135,6 @@ async def import_profile_from_pdf(
     )
     profile.profile_json = {"source_pdf": file.filename}
 
-    await delete_evidence_by_profile(db, profile.id)
-    chunks = chunk_cv_md(cv_md, profile.id, tenant.id)
-    if chunks:
-        await create_evidence_chunks(db, tenant.id, profile.id, chunks)
-
     await _invalidate_profile_cache(tenant.user_id)
     return await _profile_response(db, tenant.user_id)
 
@@ -180,7 +152,7 @@ async def upload_cv(
     name = name or (existing.full_name if existing else "Unknown")
     headline = headline or (existing.headline if existing else "Unknown")
     location = existing.location if existing else None
-    profile = await upsert_profile(
+    await upsert_profile(
         db,
         tenant.id,
         tenant.user_id,
@@ -189,11 +161,6 @@ async def upload_cv(
         body.raw_cv_md,
         location=location,
     )
-
-    await delete_evidence_by_profile(db, profile.id)
-    chunks = chunk_cv_md(body.raw_cv_md, profile.id, tenant.id)
-    if chunks:
-        await create_evidence_chunks(db, tenant.id, profile.id, chunks)
 
     await _invalidate_profile_cache(tenant.user_id)
     return await _profile_response(db, tenant.user_id)

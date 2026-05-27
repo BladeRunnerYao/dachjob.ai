@@ -25,7 +25,6 @@ class MatchResponse(BaseModel):
 class ScoreBreakdown(BaseModel):
     role_relevance: float = 0.0
     skill_match: float = 0.0
-    evidence_strength: float = 0.0
     dach_feasibility: float = 0.0
     compensation_fit: float = 0.0
     growth_story_value: float = 0.0

@@ -6,7 +6,6 @@ from sqlalchemy import delete, select
 from app.core.security import hash_password
 from app.db.models import (
     CandidateProfile,
-    EvidenceChunk,
     JobPosting,
     MatchReport,
     Membership,
@@ -99,76 +98,7 @@ English (Fluent), German (B2), Mandarin (Native)
             session.add(profile)
             await session.flush()
 
-            chunks = [
-                EvidenceChunk(
-                    id=uuid.uuid4(),
-                    tenant_id=tenant.id,
-                    profile_id=profile.id,
-                    source_type="cv",
-                    source_label="Experience: TechCorp Berlin",
-                    content="Designed and deployed a multi-model LLM serving platform using FastAPI, Ray Serve, and Kubernetes, reducing inference latency by 40%.",
-                    metadata_json={
-                        "section": "experience",
-                        "dates": "2021–Present",
-                        "tags": ["llm", "kubernetes", "fastapi"],
-                    },
-                ),
-                EvidenceChunk(
-                    id=uuid.uuid4(),
-                    tenant_id=tenant.id,
-                    profile_id=profile.id,
-                    source_type="cv",
-                    source_label="Experience: TechCorp Berlin",
-                    content="Built an automated ML pipeline orchestration system with Airflow and MLflow, handling 200+ daily training runs.",
-                    metadata_json={
-                        "section": "experience",
-                        "dates": "2021–Present",
-                        "tags": ["mlops", "airflow", "mlflow"],
-                    },
-                ),
-                EvidenceChunk(
-                    id=uuid.uuid4(),
-                    tenant_id=tenant.id,
-                    profile_id=profile.id,
-                    source_type="cv",
-                    source_label="Experience: TechCorp Berlin",
-                    content="Implemented real-time model monitoring and observability using Prometheus, Grafana, and custom alerting rules.",
-                    metadata_json={
-                        "section": "experience",
-                        "dates": "2021–Present",
-                        "tags": ["monitoring", "prometheus", "grafana"],
-                    },
-                ),
-                EvidenceChunk(
-                    id=uuid.uuid4(),
-                    tenant_id=tenant.id,
-                    profile_id=profile.id,
-                    source_type="cv",
-                    source_label="Experience: DataFlow Munich",
-                    content="Developed a feature store using Redis and PostgreSQL, serving 500+ features to production ML models.",
-                    metadata_json={
-                        "section": "experience",
-                        "dates": "2018–2021",
-                        "tags": ["feature-store", "redis", "postgresql"],
-                    },
-                ),
-                EvidenceChunk(
-                    id=uuid.uuid4(),
-                    tenant_id=tenant.id,
-                    profile_id=profile.id,
-                    source_type="cv",
-                    source_label="Experience: DataFlow Munich",
-                    content="Containerized ML workloads with Docker and Kubernetes, achieving 99.95% uptime for critical inference services.",
-                    metadata_json={
-                        "section": "experience",
-                        "dates": "2018–2021",
-                        "tags": ["docker", "kubernetes", "mlops"],
-                    },
-                ),
-            ]
-            session.add_all(chunks)
-
-        legacy_result = await session.execute(
+            legacy_result = await session.execute(
             select(JobPosting)
             .where(
                 JobPosting.tenant_id == tenant.id,

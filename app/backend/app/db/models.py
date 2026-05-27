@@ -4,7 +4,6 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
-    Float,
     ForeignKey,
     Integer,
     Numeric,
@@ -12,7 +11,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.sql import func
 
 from app.db.session import Base
@@ -61,20 +60,6 @@ class CandidateProfile(Base):
     profile_json = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-
-class EvidenceChunk(Base):
-    __tablename__ = "evidence_chunks"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    profile_id = Column(UUID(as_uuid=True), ForeignKey("candidate_profiles.id"), nullable=False)
-    source_type = Column(Text, nullable=False)
-    source_label = Column(Text, nullable=False)
-    content = Column(Text, nullable=False)
-    metadata_json = Column(JSONB, nullable=True)
-    embedding = Column(ARRAY(Float), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class JobPosting(Base):
