@@ -28,7 +28,7 @@ dependencies = [
     "google-cloud-storage>=2.0",
     "azure-storage-blob>=12.0",
     "requests>=2.31",
-    "weasyprint>=69.0",
+    "weasyprint>=68.0",
 ]
 
 [project.optional-dependencies]
