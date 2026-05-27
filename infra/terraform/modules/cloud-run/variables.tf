@@ -34,6 +34,11 @@ variable "gcs_bucket_name" {
   type = string
 }
 
+variable "cors_origins" {
+  type    = string
+  default = ""
+}
+
 variable "api_service_account_email" {
   type = string
 }

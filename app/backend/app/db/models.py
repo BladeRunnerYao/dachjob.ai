@@ -141,6 +141,7 @@ class ResumeArtifact(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
     job_id = Column(UUID(as_uuid=True), ForeignKey("job_postings.id"), nullable=False)
     match_report_id = Column(UUID(as_uuid=True), ForeignKey("match_reports.id"), nullable=True)
     html_object_key = Column(Text, nullable=False)

@@ -84,6 +84,7 @@ module "cloud-run" {
   cloud_sql_connection_name      = module.cloud-sql.connection_name
   redis_host                     = module.memorystore.host
   gcs_bucket_name                = module.cloud-storage.bucket_name
+  cors_origins                   = var.cors_origins
   api_service_account_email      = module.iam.api_service_account_email
   frontend_service_account_email = module.iam.frontend_service_account_email
   labels                         = local.common_labels

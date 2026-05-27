@@ -127,7 +127,11 @@ export default function JobDetailPage() {
           blobUrls.push(url);
           setHtmlBlobUrl(url);
         }
-      } catch { /* blob fetch failed */ }
+      } catch (err) {
+        if (!cancelled) {
+          setResumeError(err instanceof Error ? err.message : 'Failed to load generated CV');
+        }
+      }
       try {
         if (artifact.has_pdf) {
           const url = await api.getResumePdfUrl(artifact.id);
@@ -135,7 +139,9 @@ export default function JobDetailPage() {
           blobUrls.push(url);
           setPdfBlobUrl(url);
         }
-      } catch { /* blob fetch failed */ }
+      } catch {
+        if (!cancelled) setPdfBlobUrl(null);
+      }
     }
 
     load();

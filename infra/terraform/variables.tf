@@ -96,3 +96,9 @@ variable "domain" {
   type        = string
   default     = ""
 }
+
+variable "cors_origins" {
+  description = "Comma-separated frontend origins allowed to call the API"
+  type        = string
+  default     = ""
+}

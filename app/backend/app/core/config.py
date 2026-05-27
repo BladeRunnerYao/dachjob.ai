@@ -45,7 +45,9 @@ class Settings(BaseSettings):
     openrouter_model_reasoning: str = "deepseek/deepseek-v4-pro"
 
     storage_provider: str = ""
-    storage_bucket_name: str = "dachjob-artifacts"
+    storage_bucket_name: str = ""
+    gcs_bucket: str = ""
+    s3_bucket_name: str = ""
 
     s3_endpoint_url: str = "http://localhost:9000"
     s3_access_key_id: str = "minioadmin"

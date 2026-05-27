@@ -84,6 +84,10 @@ spec:
               value: https://storage.googleapis.com
             - name: S3_BUCKET_NAME
               value: dachjob-dev-artifacts
+            - name: STORAGE_BUCKET_NAME
+              value: dachjob-dev-artifacts
+            - name: STORAGE_PROVIDER
+              value: gcs
             - name: GOOGLE_CLOUD_PROJECT
               value: dachjob-ai-platform
             - name: LLM_PROVIDER

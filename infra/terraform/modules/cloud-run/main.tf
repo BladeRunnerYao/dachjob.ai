@@ -79,6 +79,18 @@ resource "google_cloud_run_v2_service" "api" {
         value = var.gcs_bucket_name
       }
       env {
+        name  = "STORAGE_BUCKET_NAME"
+        value = var.gcs_bucket_name
+      }
+      env {
+        name  = "STORAGE_PROVIDER"
+        value = "gcs"
+      }
+      env {
+        name  = "CORS_ORIGINS"
+        value = var.cors_origins
+      }
+      env {
         name  = "S3_ACCESS_KEY_ID"
         value = ""
       }

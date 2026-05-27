@@ -7,7 +7,12 @@ class StorageService:
     def __init__(self):
         settings = get_settings()
         self._provider = (settings.storage_provider or "").lower()
-        self._bucket_name = settings.storage_bucket_name
+        self._bucket_name = (
+            settings.storage_bucket_name
+            or settings.gcs_bucket
+            or settings.s3_bucket_name
+            or "dachjob-artifacts"
+        )
 
         if not self._provider:
             self._provider = "s3"

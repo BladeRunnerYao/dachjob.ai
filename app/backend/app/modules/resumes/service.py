@@ -5,7 +5,6 @@ from typing import Any
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from weasyprint import HTML
 
 from app.core.auth import TenantContext
 from app.db.models import CandidateProfile, EvidenceChunk, MatchReport, ResumeArtifact
@@ -34,10 +33,12 @@ async def create_resume_artifact(
     job_id: uuid.UUID,
     html_object_key: str,
     provenance: dict | None = None,
+    user_id: uuid.UUID | None = None,
 ) -> ResumeArtifact:
     artifact = ResumeArtifact(
         id=uuid.uuid4(),
         tenant_id=tenant_id,
+        user_id=user_id,
         job_id=job_id,
         html_object_key=html_object_key,
         provenance_json=provenance or {},
@@ -149,6 +150,13 @@ class _ResumeOutput(BaseModel):
     html: str
 
 
+def _profile_query_for_resume(tenant: TenantContext):
+    query = select(CandidateProfile).where(CandidateProfile.tenant_id == tenant.id)
+    if tenant.user_id is not None:
+        query = query.where(CandidateProfile.user_id == tenant.user_id)
+    return query.limit(1)
+
+
 async def generate_resume(
     db: AsyncSession, tenant: TenantContext, job_id: uuid.UUID
 ) -> ResumeArtifact:
@@ -156,12 +164,10 @@ async def generate_resume(
     if not job:
         raise ValueError(f"Job {job_id} not found")
 
-    profile_result = await db.execute(
-        select(CandidateProfile).where(CandidateProfile.tenant_id == tenant.id).limit(1)
-    )
+    profile_result = await db.execute(_profile_query_for_resume(tenant))
     profile = profile_result.scalar_one_or_none()
     if not profile:
-        raise ValueError("No profile found for tenant")
+        raise ValueError("No profile found for the authenticated user")
 
     evidence_result = await db.execute(
         select(EvidenceChunk).where(
@@ -228,6 +234,7 @@ async def generate_resume(
     artifact = ResumeArtifact(
         id=uuid.uuid4(),
         tenant_id=tenant.id,
+        user_id=tenant.user_id,
         job_id=job_id,
         match_report_id=match_report.id if match_report else None,
         html_object_key=html_object_key,
@@ -366,4 +373,6 @@ def _generate_html_resume(
 
 
 def _html_to_pdf(html: str) -> bytes:
+    from weasyprint import HTML
+
     return HTML(string=html).write_pdf()

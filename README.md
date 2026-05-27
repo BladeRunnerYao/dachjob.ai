@@ -1,87 +1,187 @@
 # dachjob.ai
 
-`dachjob.ai` is a local-first, multi-tenant, multi-cloud-ready AI job search platform demo for the German/DACH market.
+AI-assisted job matching and CV generation for technical roles in the DACH market.
 
-The product helps engineers evaluate AI Platform, Data Platform, MLOps, Backend Cloud, and Platform Engineering roles, then generate evidence-grounded tailored CVs using DeepSeek API.
+dachjob.ai imports job descriptions, extracts structured requirements, compares them with a candidate profile, and generates evidence-grounded tailored CV artifacts. The platform is designed to run across cloud providers with interchangeable infrastructure, storage, worker, and LLM backends.
 
-This repository is intended to contain both:
+## Features
 
-- Requirements and implementation plans under `docs/`
-- Project code under `app/` and `infra/`
+- Job import from URLs or pasted job descriptions
+- Structured requirement extraction for skills, seniority, location, and role metadata
+- Candidate profile import from Markdown, URL content, or PDF resume upload
+- Evidence chunking from candidate profiles for requirement-to-CV traceability
+- Match scoring with explanations, gaps, and recommendations
+- Tailored HTML and PDF CV generation
+- Application tracker with generated resume links
+- Background task execution for long-running imports, matching, and resume workflows
+- LLM observability through persisted provider, model, latency, status, and error metadata
+- Multi-cloud deployment paths for Google Cloud and Azure, with AWS-oriented abstractions in the application layer
 
-## Documentation
+## Architecture
 
-Start here:
+```text
+Next.js frontend
+    |
+FastAPI API
+    |
+Postgres + pgvector
+    |
+Redis + Celery worker
+    |
+Object storage for HTML/PDF artifacts
+    |
+LLM gateway: Vertex AI, Gemini API, Azure OpenAI, DeepSeek, OpenRouter
+```
 
-- [Master PRD](docs/requirements/00-master-prd.md)
-- [Parallel Agent Implementation Plan](docs/plans/00-parallel-agent-plan.md)
-- [HTML Documentation Index](docs/index.html)
+### Runtime Components
 
-## MVP Stack
+| Component | Implementation |
+| --- | --- |
+| Frontend | Next.js 16, React 19, Tailwind CSS |
+| API | FastAPI, SQLAlchemy, Alembic |
+| Worker | Celery with Redis broker/backend |
+| Database | PostgreSQL 16 with pgvector |
+| Artifact storage | GCS, Azure Blob Storage, or S3-compatible storage |
+| Resume export | HTML rendering with WeasyPrint PDF generation |
+| LLM access | Provider-ordered gateway with task-specific model tiers |
+| Deployment | Docker, Cloud Run/GKE, Azure Container Apps, Terraform modules |
 
-- Backend: Python, FastAPI, SQLAlchemy, Alembic
-- Worker: Celery, Redis
-- Database: Postgres 16 with pgvector
-- Object storage: MinIO locally, S3-compatible adapter first
-- LLM: DeepSeek API through OpenAI-compatible SDK
-- Frontend: Next.js / React
-- PDF: HTML CV template exported with Playwright
-- Local runtime: Docker Compose
+## Repository Layout
 
-## Local-First Principle
+```text
+app/backend/          FastAPI API, database models, migrations, workers, tests
+app/frontend/         Next.js application
+docs/                 Requirements, plans, and deployment notes
+infra/deploy/         Cloud deployment and migration scripts
+infra/docker/         Docker Compose runtime
+infra/k8s/            Worker manifests
+infra/terraform/      GCP and Azure infrastructure modules
+scripts/              Developer convenience scripts
+```
 
-The first version should run fully on a local machine with Docker Compose. The only external dependency is the DeepSeek API key.
+## Quickstart
 
-The project should not automatically submit job applications. It may prepare forms, CVs, cover notes, and answers, but the user must review and submit manually.
+### Prerequisites
 
-## Local URLs
+- Docker and Docker Compose
+- Python 3.12 for backend development
+- Node.js 26 for frontend development
+- At least one configured LLM provider key or cloud credential
 
-After the Docker Compose stack is running, source the local environment helper to export the ports and print clickable URLs:
+### Run With Docker Compose
+
+```bash
+docker compose -f infra/docker/docker-compose.yml up --build
+```
+
+The default compose stack starts the API, frontend, Postgres, Redis, and MinIO. To print local URLs into your shell:
 
 ```bash
 source scripts/local-env.sh
 ```
 
-It exports `DACHJOB_WEB_URL`, `DACHJOB_JOBS_URL`, `DACHJOB_API_URL`, `DACHJOB_API_HEALTH_URL`, `DACHJOB_API_DOCS_URL`, and MinIO URLs for quick testing from VS Code terminals.
-
-## Local Docker Convention
-
-Use `docker-compose` with `infra/docker/docker-compose.yml` for local builds and runs. The default path should preserve Docker's build cache:
+### Enable Worker Mode
 
 ```bash
-docker-compose -f infra/docker/docker-compose.yml up -d --build
+docker compose -f infra/docker/docker-compose.yml --profile worker --profile redis up --build
 ```
 
-Only add `--no-cache` when explicitly requested.
+Set `WORKER_ENABLED=true` when the API should enqueue long-running workflows to Celery. Leave it false to execute those workflows synchronously in the API process.
 
-The local image and container names are:
+## Configuration
 
-- API: `dachjob-backend-api`
-- Worker: `dachjob-backend-worker` (behind `--profile worker`)
-- Frontend: `dachjob-frontend`
+Core environment variables:
 
-## Worker Mode
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | SQLAlchemy database connection string |
+| `JWT_SECRET` / `SECRET_KEY` | Auth and application signing secrets |
+| `CORS_ORIGINS` | Comma-separated frontend origins allowed to call the API |
+| `REDIS_URL` / `REDIS_ENABLED` | Redis cache, rate limiting, and worker coordination |
+| `WORKER_ENABLED` | Switch between synchronous API execution and Celery background jobs |
+| `STORAGE_PROVIDER` | `gcs`, `azure_blob`, or S3-compatible default |
+| `STORAGE_BUCKET_NAME` | Artifact bucket/container name |
+| `LLM_PROVIDER` | Preferred provider: `vertex_ai`, `gemini`, `azure_openai`, `deepseek`, or `openrouter` |
+| `NEXT_PUBLIC_API_BASE_URL` | Browser-visible API URL for the frontend |
+| `INTERNAL_API_BASE_URL` | Server-side API URL for frontend runtime calls |
 
-The application supports two runtime modes controlled by `WORKER_ENABLED`:
+Provider-specific variables include `VERTEX_AI_PROJECT_ID`, `GEMINI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, and `OPENROUTER_API_KEY`.
 
-- **`WORKER_ENABLED=false`** (default): No worker dependency. API routes execute workflows synchronously.
-  - Run with: `docker compose up`
-  - Redis is still used for caching and rate limiting.
+## Cloud Deployment
 
-- **`WORKER_ENABLED=true`**: API routes enqueue long-running workflows to Celery. The worker executes them asynchronously.
-  - Run with: `docker compose --profile worker --profile redis up`
-  - Requires Redis and worker containers.
+### Google Cloud
 
-### Local Docker Setup
+The GCP path deploys:
 
-Default local command runs API/frontend/postgres/redis/minio without worker:
+- FastAPI API on Cloud Run
+- Next.js frontend on Cloud Run
+- Postgres on Cloud SQL
+- Redis on Memorystore
+- Resume artifacts in Cloud Storage
+- Celery worker on GKE
+- Images in Artifact Registry
+
+Primary entry points:
 
 ```bash
-docker compose -f infra/docker/docker-compose.yml up
+infra/deploy/scripts/deploy-gcp.sh all <api-image> <frontend-image> <worker-image>
+infra/deploy/scripts/run-migrations-gcp.sh <api-image>
 ```
 
-To run with worker:
+### Azure
+
+The Azure path deploys:
+
+- API, frontend, and worker on Azure Container Apps
+- PostgreSQL Flexible Server
+- Azure Cache for Redis
+- Resume artifacts in Azure Blob Storage
+- Images in Azure Container Registry
+- Secrets through Azure Key Vault and Container Apps secrets
+
+Primary entry points:
 
 ```bash
-docker compose -f infra/docker/docker-compose.yml --profile worker --profile redis up
+infra/deploy/scripts/deploy-azure.sh all <api-image> <frontend-image> <worker-image>
+infra/deploy/scripts/run-migrations-azure.sh <api-image>
 ```
+
+## Development
+
+Backend:
+
+```bash
+cd app/backend
+pip install -e ".[dev]"
+pytest tests/ --ignore=tests/test_provider_smoke.py -v
+```
+
+Frontend:
+
+```bash
+cd app/frontend
+npm ci
+npm run lint
+npm run build
+```
+
+Live provider smoke tests are available when credentials are configured:
+
+```bash
+cd app/backend
+pytest tests/test_provider_smoke.py -v
+```
+
+## Documentation
+
+- [Master PRD](docs/requirements/00-master-prd.md)
+- [RAG Resume Generation](docs/requirements/06-rag-resume-generation.md)
+- [GCP Architecture](docs/deployment/gcp-architecture.md)
+- [Terraform Guide](infra/terraform/README.md)
+- [Documentation Index](docs/index.html)
+
+## Operating Notes
+
+- Generated CVs must be grounded in stored candidate evidence.
+- Resume HTML/PDF artifacts are protected API resources and require the authenticated user's bearer token.
+- The platform prepares job materials; users remain responsible for review and submission.

@@ -20,6 +20,13 @@ router = APIRouter(prefix="/api/jobs/{job_id}", tags=["resumes"])
 artifact_router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
 
+def _artifact_owner_filters(tenant: TenantContext):
+    filters = [ResumeArtifact.tenant_id == tenant.id]
+    if tenant.user_id is not None:
+        filters.append(ResumeArtifact.user_id == tenant.user_id)
+    return filters
+
+
 @router.get("/evidence", response_model=list[EvidenceResponse])
 async def get_evidence(
     job_id: UUID,
@@ -76,7 +83,7 @@ async def get_latest_resume(
 ):
     result = await db.execute(
         select(ResumeArtifact)
-        .where(ResumeArtifact.job_id == job_id, ResumeArtifact.tenant_id == tenant.id)
+        .where(ResumeArtifact.job_id == job_id, *_artifact_owner_filters(tenant))
         .order_by(ResumeArtifact.created_at.desc())
         .limit(1)
     )
@@ -91,7 +98,7 @@ async def get_resume_html(
 ):
     result = await db.execute(
         select(ResumeArtifact)
-        .where(ResumeArtifact.id == artifact_id, ResumeArtifact.tenant_id == tenant.id)
+        .where(ResumeArtifact.id == artifact_id, *_artifact_owner_filters(tenant))
         .limit(1)
     )
     artifact = result.scalar_one_or_none()
@@ -115,7 +122,7 @@ async def get_resume_pdf(
 ):
     result = await db.execute(
         select(ResumeArtifact)
-        .where(ResumeArtifact.id == artifact_id, ResumeArtifact.tenant_id == tenant.id)
+        .where(ResumeArtifact.id == artifact_id, *_artifact_owner_filters(tenant))
         .limit(1)
     )
     artifact = result.scalar_one_or_none()

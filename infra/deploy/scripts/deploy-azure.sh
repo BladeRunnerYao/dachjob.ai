@@ -10,7 +10,7 @@ set -euo pipefail
 #
 # Reads env vars:
 #   AZURE_RESOURCE_GROUP, AZURE_CONTAINER_APP_ENV, AZURE_API_NAME,
-#   AZURE_FRONTEND_NAME, AZURE_WORKER_NAME
+#   AZURE_FRONTEND_NAME, AZURE_WORKER_NAME, AZURE_API_URL, AZURE_FRONTEND_URL
 #
 # The caller is responsible for Azure authentication (az login) before calling
 # this script.
@@ -29,7 +29,7 @@ deploy_api() {
     --name "${AZURE_API_NAME}" \
     --resource-group "${AZURE_RESOURCE_GROUP}" \
     --image "${api_image}" \
-    --set-env-vars "CORS_ORIGINS=${AZURE_API_URL:-}" \
+    --set-env-vars "CORS_ORIGINS=${AZURE_FRONTEND_URL:-}" \
     --output none
   echo "::endgroup::"
 }
