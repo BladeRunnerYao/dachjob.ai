@@ -236,13 +236,15 @@ jobs:
       TF_VAR_project_id: dachjob-ai-platform
       TF_VAR_region: europe-west1
       TF_VAR_environment: ${{ needs.prepare.outputs.environment }}
-      TF_VAR_cors_origins: https://dachjob-dev-frontend-qxugiew36a-ew.a.run.app
       TF_VAR_billing_account_id: ${{ vars.GCP_BILLING_ACCOUNT_ID || secrets.GCP_BILLING_ACCOUNT_ID || '' }}
       TF_VAR_notification_email: ${{ vars.GCP_NOTIFICATION_EMAIL || vars.NOTIFICATION_EMAIL || secrets.GCP_NOTIFICATION_EMAIL || '' }}
     outputs:
       api_url: ${{ steps.tf_outputs.outputs.api_url }}
       frontend_url: ${{ steps.tf_outputs.outputs.frontend_url }}
     steps:
+      - name: Set TF_VAR_cors_origins from workflow env
+        run: echo "TF_VAR_cors_origins=${FRONTEND_URL}" >> "$GITHUB_ENV"
+
       - name: Checkout selected branch
         uses: actions/checkout@v6
         with:
