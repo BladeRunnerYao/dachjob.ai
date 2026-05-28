@@ -41,9 +41,9 @@ variable "cors_origins" {
 }
 
 variable "redis_enabled" {
-  description = "Enable Redis at API/worker runtime. Keep false until Azure Redis TLS startup is verified."
+  description = "Enable Redis at API/worker runtime."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "azure_openai_api_key" {
