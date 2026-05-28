@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/api/client';
 import type { JobPosting, MatchReport, ResumeArtifact, CandidateProfile } from '@/lib/api/types';
 
@@ -549,21 +550,11 @@ export default function JobDetailPage() {
               {resume && (
                 <div className="space-y-2">
                   <button
-                    onClick={() => setShowCv(!showCv)}
+                    onClick={() => setShowCv(true)}
                     className="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm text-white hover:bg-slate-700 transition-colors"
                   >
-                    {showCv ? 'Hide CV' : 'Show CV'}
+                    Preview CV
                   </button>
-                  {showCv && pdfBlobUrl && (
-                    <a
-                      href={pdfBlobUrl}
-                      download="resume.pdf"
-                      className="w-full flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                    >
-                      <Download className="h-4 w-4" />
-                      Download PDF
-                    </a>
-                  )}
                   <button
                     onClick={generateResume}
                     disabled={generatingResume}
@@ -830,31 +821,38 @@ export default function JobDetailPage() {
             </Card>
           )}
 
-          {/* ── CV Preview (inline) ──────────────────────────── */}
-          {showCv && htmlBlobUrl && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-slate-900">Tailored CV Preview</h2>
-                  <button
-                    onClick={() => setShowCv(false)}
-                    className="text-xs text-slate-400 hover:text-slate-600"
-                  >
-                    Hide
-                  </button>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="rounded-b-lg overflow-hidden">
-                  <iframe
-                    src={htmlBlobUrl}
-                    className="w-full h-[600px] border-0"
-                    title="Generated CV"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* ── CV Modal ──────────────────────────────────────── */}
+          <Modal
+            open={showCv && !!htmlBlobUrl}
+            onClose={() => setShowCv(false)}
+            title="Tailored CV Preview"
+            size="xl"
+          >
+            <div className="flex items-center justify-end gap-2 px-5 py-2 bg-slate-50 border-b border-slate-200">
+              {pdfBlobUrl && (
+                <a
+                  href={pdfBlobUrl}
+                  download="resume.pdf"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download PDF
+                </a>
+              )}
+              <button
+                onClick={generateResume}
+                disabled={generatingResume}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200 transition-colors disabled:opacity-50"
+              >
+                {generatingResume ? 'Regenerating...' : 'Regenerate'}
+              </button>
+            </div>
+            <iframe
+              src={htmlBlobUrl!}
+              className="w-full h-full min-h-[75vh] border-0"
+              title="Generated CV"
+            />
+          </Modal>
         </div>
       </div>
     </div>
