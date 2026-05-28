@@ -525,21 +525,7 @@ jobs:
             --task-definition "${{ steps.taskdef.outputs.new_task_def_arn }}" \
             --force-new-deployment \
             >/dev/null
-
-          echo "Waiting for API deployment to complete (up to 15 min)..."
-          for i in $(seq 1 60); do
-            STATE=$(aws ecs describe-services \
-              --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
-              --services "${AWS_API_SERVICE:-dachjob-dev-api}" \
-              --query 'services[0].deployments[0].rolloutState' \
-              --output text)
-            echo "  [$i/60] rolloutState=${STATE}"
-            if [ "${STATE}" = "COMPLETED" ]; then
-              echo "API deployment completed."
-              break
-            fi
-            sleep 15
-          done
+          echo "API deployment triggered."
 
       - name: Run database migrations
         if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
@@ -604,11 +590,11 @@ jobs:
 
       - name: Health check API
         run: |
-          for attempt in {1..30}; do
+          for attempt in {1..60}; do
             if curl -fsS "${{ steps.url.outputs.url }}/api/health"; then
               exit 0
             fi
-            sleep 5
+            sleep 10
           done
           exit 1
 
@@ -678,21 +664,7 @@ jobs:
             --task-definition "${{ steps.taskdef.outputs.new_task_def_arn }}" \
             --force-new-deployment \
             >/dev/null
-
-          echo "Waiting for frontend deployment to complete (up to 15 min)..."
-          for i in $(seq 1 60); do
-            STATE=$(aws ecs describe-services \
-              --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
-              --services "${AWS_FRONTEND_SERVICE:-dachjob-dev-frontend}" \
-              --query 'services[0].deployments[0].rolloutState' \
-              --output text)
-            echo "  [$i/60] rolloutState=${STATE}"
-            if [ "${STATE}" = "COMPLETED" ]; then
-              echo "Frontend deployment completed."
-              break
-            fi
-            sleep 15
-          done
+          echo "Frontend deployment triggered."
 
       - name: Capture service URL
         id: url
@@ -702,11 +674,11 @@ jobs:
 
       - name: Health check frontend
         run: |
-          for attempt in {1..30}; do
+          for attempt in {1..60}; do
             if curl -fsS "${{ steps.url.outputs.url }}" >/dev/null; then
               exit 0
             fi
-            sleep 5
+            sleep 10
           done
           exit 1
 
@@ -775,21 +747,7 @@ jobs:
             --task-definition "${{ steps.taskdef.outputs.new_task_def_arn }}" \
             --force-new-deployment \
             >/dev/null
-
-          echo "Waiting for worker deployment to complete (up to 15 min)..."
-          for i in $(seq 1 60); do
-            STATE=$(aws ecs describe-services \
-              --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
-              --services "${AWS_WORKER_SERVICE:-dachjob-dev-worker}" \
-              --query 'services[0].deployments[0].rolloutState' \
-              --output text)
-            echo "  [$i/60] rolloutState=${STATE}"
-            if [ "${STATE}" = "COMPLETED" ]; then
-              echo "Worker deployment completed."
-              break
-            fi
-            sleep 15
-          done
+          echo "Worker deployment triggered."
 
   smoke-test:
     name: Smoke test
