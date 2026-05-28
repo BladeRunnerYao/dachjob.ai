@@ -90,6 +90,18 @@ export class ApiClient {
     });
   }
 
+  async parseJob(jobId: string): Promise<JobPosting> {
+    const result = await request<{ job_id: string; status: string; parsed_json?: Record<string, unknown> } | BackgroundTask>(`/api/jobs/${jobId}/parse`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    if (isBackgroundTaskResponse(result)) {
+      const task = await pollTask(result.id);
+      checkTaskResult(task);
+    }
+    return this.getJob(jobId);
+  }
+
   async importJobs(urlText: string): Promise<JobImportResponse> {
     const urls = Array.from(new Set(
       urlText
@@ -254,10 +266,10 @@ export class ApiClient {
     };
   }
 
-  async createResumeArtifact(jobId: string): Promise<ResumeArtifact> {
+  async createResumeArtifact(jobId: string, confirmedSkills?: string[]): Promise<ResumeArtifact> {
     const result = await request<ResumeArtifact | BackgroundTask>(`/api/jobs/${jobId}/resume`, {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify({ confirmed_skills: confirmedSkills || [] }),
       timeoutMs: this.workerEnabled ? undefined : this.RESUME_GENERATE_TIMEOUT_MS,
     });
     if (isBackgroundTaskResponse(result)) {
