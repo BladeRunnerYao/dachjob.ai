@@ -544,7 +544,7 @@ jobs:
             --output text)"
 
           echo "Running alembic upgrade head as ECS task..."
-          OVERRIDES="$(jq -n --arg cmd "alembic upgrade head" '{
+          OVERRIDES="$(jq -n --arg cmd "alembic -c app/db/migrations/alembic.ini upgrade head" '{
             containerOverrides: [{ name: "api", command: ($cmd | split(" ")) }]
           }')"
 
