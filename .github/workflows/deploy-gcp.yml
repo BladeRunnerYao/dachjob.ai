@@ -687,40 +687,6 @@ jobs:
           done
           exit 1
 
-  scale-down-worker:
-    name: Scale down worker to zero
-    needs:
-      - prepare
-      - terraform
-      - deploy-api
-    if: ${{ always() && needs.prepare.outputs.worker_enabled == 'disabled' && needs.prepare.outputs.scale_down_worker == 'true' && needs.prepare.outputs.deploy_worker != 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
-        with:
-          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
-
-      - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v3
-
-      - name: Get GKE credentials
-        uses: google-github-actions/get-gke-credentials@v3
-        with:
-          cluster_name: ${{ env.GKE_CLUSTER_NAME }}
-          location: ${{ env.REGION }}
-          project_id: ${{ env.PROJECT_ID }}
-
-      - name: Scale down worker deployment
-        run: |
-          kubectl delete hpa celery-worker --namespace="${GKE_NAMESPACE}" --ignore-not-found
-          kubectl scale deployment/celery-worker --namespace="${GKE_NAMESPACE}" --replicas=0
-          kubectl get deploy,hpa,pods --namespace="${GKE_NAMESPACE}" -o wide
-
   deploy-worker:
     name: Deploy worker (GCP)
     needs:
@@ -831,7 +797,6 @@ jobs:
       - deploy-api
       - deploy-frontend
       - deploy-worker
-      - scale-down-worker
       - smoke-test
     if: ${{ always() }}
     runs-on: ubuntu-latest
@@ -849,7 +814,7 @@ jobs:
           echo "| Terraform | ${{ needs.terraform.result }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| API | ${{ needs.deploy-api.result }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Frontend | ${{ needs.deploy-frontend.result }} |" >> "${GITHUB_STEP_SUMMARY}"
-          echo "| Worker | ${{ needs.deploy-worker.result || needs.scale-down-worker.result || 'skipped' }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Worker | ${{ needs.deploy-worker.result || 'skipped' }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Smoke test | ${{ needs.smoke-test.result }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| API URL | ${{ needs.deploy-api.outputs.url || env.API_BASE_URL }} |" >> "${GITHUB_STEP_SUMMARY}"
           echo "| Frontend URL | ${{ needs.deploy-frontend.outputs.url || env.FRONTEND_URL }} |" >> "${GITHUB_STEP_SUMMARY}"
