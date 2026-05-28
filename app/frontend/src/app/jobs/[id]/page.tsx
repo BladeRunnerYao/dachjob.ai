@@ -2,75 +2,218 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { CheckCircle2, Plus, Download } from 'lucide-react';
+import {
+  Building2,
+  CalendarDays,
+  Download,
+  ExternalLink,
+  MapPin,
+  Briefcase,
+  Monitor,
+  Clock,
+  TrendingUp,
+  Sparkles,
+} from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { JobDescriptionView } from '@/components/jobs/job-description-view';
 import { api } from '@/lib/api/client';
-import type { JobPosting, MatchReport, ResumeArtifact, CandidateProfile } from '@/lib/api/types';
+import type { JobPosting, MatchReport, ResumeArtifact } from '@/lib/api/types';
 
-type Tab = 'raw' | 'parsed' | 'match' | 'cv';
+// ── Section parsing (from raw JD — fallback only) ────────────────
 
-function isSkillInProfile(skill: string, profile: CandidateProfile | null): boolean {
-  if (!profile) return false;
-  const text = [
-    profile.raw_cv_md,
-    profile.headline,
-  ].join(' ').toLowerCase();
-  return text.includes(skill.toLowerCase());
+const RESPONSIBILITY_HEADINGS = new Set([
+  'responsibilities',
+  'your responsibilities',
+  "what you'll do",
+  'what you will do',
+  'your tasks',
+  'tasks',
+  'the impact you will have',
+  'aufgaben',
+]);
+
+const QUALIFICATION_HEADINGS = new Set([
+  'requirements',
+  'your profile',
+  'qualifications',
+  'qualification',
+  'skills',
+  'who we are looking for',
+  'must have',
+  'must-haves',
+  'nice to have',
+  'nice-to-have',
+  'preferred qualifications',
+  'what we look for',
+  'your skills',
+  'anforderungen',
+  'profil',
+  'was du mitbringst',
+]);
+
+const ALL_KNOWN_HEADINGS = new Set([
+  'overview', 'job description', 'role summary', 'summary',
+  'about you', 'about the role', 'about us', 'about optiml', 'mission',
+  'benefits', 'what we offer', 'what this role is not',
+  'who we are', 'why work with us', 'diversity is our culture',
+  'seniority level', 'employment type', 'job function', 'industries',
+  'about databricks', 'compliance', 'was wir bieten',
+  ...RESPONSIBILITY_HEADINGS,
+  ...QUALIFICATION_HEADINGS,
+]);
+
+function normalizeLine(line: string) {
+  return line.replace(/\s+/g, ' ').trim();
 }
 
-function SkillGroup({
-  title,
-  skills,
-  profile,
-  ownedSkills,
-  onToggle,
-  missingTone,
-  emptyText,
-}: {
-  title: string;
-  skills: string[];
-  profile: CandidateProfile | null;
-  ownedSkills: Set<string>;
-  onToggle: (skill: string) => void;
-  missingTone: string;
-  emptyText: string;
-}) {
-  const matchedCount = profile ? skills.filter((skill) => isSkillInProfile(skill, profile)).length : 0;
+function cleanMarkdownHeading(line: string) {
+  return normalizeLine(line)
+    .replace(/^#{1,6}\s*/, '')
+    .replace(/\*\*/g, '')
+    .replace(/[?:.]$/, '')
+    .trim();
+}
+
+function isBulletish(line: string) {
+  return /^[-*•]\s+/.test(line) || /^\d+[.)]\s+/.test(line);
+}
+
+function stripBullet(line: string) {
+  return line.replace(/^[-*•]\s+/, '').replace(/^\d+[.)]\s+/, '').trim();
+}
+
+type JDSection = { title: string; items: string[] };
+
+function parseRawJd(raw?: string): JDSection[] {
+  if (!raw?.trim()) return [];
+
+  const lines = raw
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map(normalizeLine)
+    .filter(Boolean);
+
+  const sections: JDSection[] = [];
+  let current: JDSection = { title: '__untitled__', items: [] };
+
+  const pushCurrent = () => {
+    if (current.items.length > 0) {
+      sections.push(current);
+    }
+  };
+
+  for (const line of lines) {
+    const cleaned = cleanMarkdownHeading(line).toLowerCase();
+    if (ALL_KNOWN_HEADINGS.has(cleaned) || cleaned.startsWith('#')) {
+      pushCurrent();
+      current = {
+        title: cleanMarkdownHeading(line),
+        items: [],
+      };
+      continue;
+    }
+    current.items.push(isBulletish(line) ? stripBullet(line) : line);
+  }
+
+  pushCurrent();
+  return sections;
+}
+
+// ── Helpers ─────────────────────────────────────────────────────
+
+function toPercent(score?: number): number | null {
+  if (score == null) return null;
+  return Math.round((Math.min(Math.max(score, 1), 5) / 5) * 100);
+}
+
+function isRespHeading(title: string) {
+  return RESPONSIBILITY_HEADINGS.has(title.toLowerCase());
+}
+
+function isQualHeading(title: string) {
+  return QUALIFICATION_HEADINGS.has(title.toLowerCase());
+}
+
+function isRequiredHeading(title: string) {
+  const lower = title.toLowerCase();
+  return lower === 'requirements'
+    || lower === 'must have'
+    || lower === 'must-haves'
+    || lower === 'your profile'
+    || lower === 'qualifications'
+    || lower === 'qualification'
+    || lower === 'who we are looking for'
+    || lower === 'what we look for'
+    || lower === 'your skills'
+    || lower === 'anforderungen'
+    || lower === 'profil'
+    || lower === 'was du mitbringst';
+}
+
+function isPreferredHeading(title: string) {
+  const lower = title.toLowerCase();
+  return lower === 'nice to have'
+    || lower === 'nice-to-have'
+    || lower === 'preferred qualifications';
+}
+
+// ── Score ring component ────────────────────────────────────────
+
+function ScoreRing({ percent, size = 140 }: { percent: number; size?: number }) {
+  const strokeWidth = 6;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (percent / 100) * circumference;
+
+  const ringColor = percent >= 80 ? '#10b981' : percent >= 60 ? '#f59e0b' : '#ef4444';
+  const textColor = percent >= 80 ? 'text-emerald-600' : percent >= 60 ? 'text-amber-600' : 'text-red-600';
+  const bgColor = percent >= 80 ? 'bg-emerald-50' : percent >= 60 ? 'bg-amber-50' : 'bg-red-50';
+  const borderColor = percent >= 80 ? 'border-emerald-200' : percent >= 60 ? 'border-amber-200' : 'border-red-200';
 
   return (
-    <div className="min-h-40 rounded-lg border border-slate-200 bg-white p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h4 className="text-sm font-semibold text-slate-900">{title}</h4>
-        {profile && <Badge>{matchedCount}/{skills.length} in resume</Badge>}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {skills.map((skill) => {
-          const matched = isSkillInProfile(skill, profile);
-          const owned = ownedSkills.has(skill);
-          return (
-            <button
-              key={skill}
-              type="button"
-              onClick={() => !matched && onToggle(skill)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors ${
-                matched || owned
-                  ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
-                  : `${missingTone} cursor-pointer`
-              }`}
-              title={matched ? 'Found in your resume' : owned ? 'Manually confirmed' : 'Not found in resume - click to confirm'}
-            >
-              {matched || owned ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-              {skill}
-            </button>
-          );
-        })}
-        {skills.length === 0 && <p className="text-sm text-slate-500">{emptyText}</p>}
+    <div className={`flex flex-col items-center rounded-xl border ${borderColor} ${bgColor} p-6`}>
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg className="w-full h-full -rotate-90" viewBox={`0 0 ${size} ${size}`}>
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#e2e8f0"
+            strokeWidth={strokeWidth}
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke={ringColor}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            className="transition-all duration-700 ease-out"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className={`text-3xl font-bold ${textColor}`}>{percent}%</span>
+          <span className="text-xs text-slate-500 mt-0.5">Match</span>
+        </div>
       </div>
     </div>
   );
 }
+
+// ── Read structured lists from parsed_json ──────────────────────
+
+function readStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+  }
+  return [];
+}
+
+// ── Main page ───────────────────────────────────────────────────
 
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -80,26 +223,23 @@ export default function JobDetailPage() {
   const [htmlBlobUrl, setHtmlBlobUrl] = useState<string | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [parsing, setParsing] = useState(false);
   const [matching, setMatching] = useState(false);
   const [generatingResume, setGeneratingResume] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
-  const [profile, setProfile] = useState<CandidateProfile | null>(null);
-  const [ownedSkills, setOwnedSkills] = useState<Set<string>>(new Set());
-  const [tab, setTab] = useState<Tab>('raw');
+  const [showCv, setShowCv] = useState(false);
 
   useEffect(() => {
     Promise.all([
       api.getJob(id),
       api.getLatestMatchReport(id),
       api.getLatestResumeArtifact(id),
-      api.getProfile(),
-    ]).then(([j, m, r, p]) => {
+    ]).then(([j, m, r]) => {
       setJob(j);
       setMatch(m);
       setResume(r);
-      setProfile(p);
     }).catch(() => {
-      // API fetch failed (auth expired or network error)
+      // auth expired or network error
     }).finally(() => {
       setLoading(false);
     });
@@ -128,7 +268,7 @@ export default function JobDetailPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setResumeError(err instanceof Error ? err.message : 'Failed to load generated CV');
+          setResumeError(err instanceof Error ? err.message : 'Failed to load CV');
         }
       }
       try {
@@ -144,42 +284,47 @@ export default function JobDetailPage() {
     }
 
     load();
-
     return () => {
       cancelled = true;
       blobUrls.forEach((u) => URL.revokeObjectURL(u));
     };
   }, [resume]);
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
-  if (!job) return <p className="text-sm text-red-500">Job not found</p>;
+  if (loading) return <p className="text-sm text-slate-500 p-8">Loading...</p>;
+  if (!job) return <p className="text-sm text-red-500 p-8">Job not found</p>;
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'raw', label: 'Raw JD' },
-    { key: 'parsed', label: 'Parsed Requirements' },
-    { key: 'match', label: 'Match Score' },
-    { key: 'cv', label: 'Generated CV' },
-  ];
+  // ── Parsed data from backend ──────────────────────────────────
+  const parsed = (job.parsed_json || {}) as Record<string, unknown>;
 
-  const barColor = (val: number) => {
-    if (val >= 4) return 'bg-emerald-500';
-    if (val >= 3) return 'bg-amber-500';
-    return 'bg-red-500';
+  // Structured fields from LLM parser (primary source)
+  const parsedResponsibilities: string[] = readStringList(parsed.responsibilities);
+  const parsedRequiredQuals: string[] = readStringList(parsed.required_qualifications);
+  const parsedPreferredQuals: string[] = readStringList(parsed.preferred_qualifications);
+  const hasStructuredSections = parsedResponsibilities.length > 0 || parsedRequiredQuals.length > 0 || parsedPreferredQuals.length > 0;
+
+  // Fallback: parse raw_jd for sections when no structured data
+  const allSections = parseRawJd(job.raw_jd);
+  const respSections = allSections.filter((s) => isRespHeading(s.title));
+  const qualSections = allSections.filter((s) => isQualHeading(s.title));
+
+  // ── Skills from parsed_json ────────────────────────────────────
+  const mustHaveSkills = readStringList(parsed.must_have_skills);
+  const niceToHaveSkills = readStringList(parsed.nice_to_have_skills);
+  const hasParsedSkills = mustHaveSkills.length > 0 || niceToHaveSkills.length > 0;
+
+  // ── Match score ────────────────────────────────────────────────
+  const matchPercent = toPercent(match?.overall_score ?? job.score);
+
+  // ── Actions ────────────────────────────────────────────────────
+  const runParse = async () => {
+    setParsing(true);
+    try {
+      const updated = await api.parseJob(id);
+      setJob(updated);
+    } finally {
+      setParsing(false);
+    }
   };
-
-  const parsed = job.parsed_json || {};
-  const skills = (
-    (parsed.must_have_skills as string[] | undefined)
-    || (parsed.skills as string[] | undefined)
-    || job.skills?.filter((skill) => skill.category === 'must_have').map((skill) => skill.name)
-    || []
-  );
-  const niceSkills = (
-    (parsed.nice_to_have_skills as string[] | undefined)
-    || job.skills?.filter((skill) => skill.category === 'nice_to_have').map((skill) => skill.name)
-    || []
-  );
-  const years = parsed.experience_years || parsed.years_exp;
 
   const runMatch = async () => {
     setMatching(true);
@@ -193,22 +338,13 @@ export default function JobDetailPage() {
     }
   };
 
-  const toggleSkill = (skill: string) => {
-    setOwnedSkills((prev) => {
-      const next = new Set(prev);
-      if (next.has(skill)) next.delete(skill);
-      else next.add(skill);
-      return next;
-    });
-  };
-
   const generateResume = async () => {
     setGeneratingResume(true);
     setResumeError(null);
     try {
       const artifact = await api.createResumeArtifact(id);
       setResume(artifact);
-      setTab('cv');
+      setShowCv(true);
     } catch (err) {
       setResumeError(err instanceof Error ? err.message : 'Failed to generate CV');
     } finally {
@@ -217,272 +353,398 @@ export default function JobDetailPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* ── Header ──────────────────────────────────────────── */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">{job.title}</h1>
-        <p className="text-sm text-slate-500">{job.company}{job.location ? ` · ${job.location}` : ''}</p>
-        <div className="flex flex-wrap gap-2 mt-2">
-          {job.score != null && (
-            <Badge variant={job.score >= 4.2 ? 'green' : job.score >= 3.6 ? 'yellow' : 'red'}>
-              Score: {job.score}
-            </Badge>
+        <h1 className="text-2xl font-bold text-slate-900 leading-tight">{job.title}</h1>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-slate-600">
+          <span className="flex items-center gap-1.5 font-medium text-slate-800">
+            <Building2 className="h-4 w-4 text-slate-400" />
+            {job.company}
+          </span>
+          {job.location && (
+            <span className="flex items-center gap-1.5">
+              <span className="text-slate-300">·</span>
+              <MapPin className="h-3.5 w-3.5 text-slate-400" />
+              {job.location}
+            </span>
           )}
-          {job.recommendation && (
-            <Badge variant={job.recommendation === 'apply' ? 'green' : job.recommendation === 'maybe' ? 'yellow' : 'red'}>
-              {job.recommendation}
-            </Badge>
+          {job.employment_type && (
+            <span className="flex items-center gap-1.5">
+              <span className="text-slate-300">·</span>
+              <Briefcase className="h-3.5 w-3.5 text-slate-400" />
+              {job.employment_type}
+            </span>
           )}
-          <Badge>{job.status}</Badge>
-          {job.posted_at && <Badge>Posted: {new Date(job.posted_at).toLocaleDateString()}</Badge>}
-          {job.employment_type && <Badge>{job.employment_type}</Badge>}
-          {job.workplace && <Badge>{job.workplace}</Badge>}
+          {job.workplace && (
+            <span className="flex items-center gap-1.5">
+              <span className="text-slate-300">·</span>
+              <Monitor className="h-3.5 w-3.5 text-slate-400" />
+              {job.workplace}
+            </span>
+          )}
+          {job.posted_at && (
+            <span className="flex items-center gap-1.5">
+              <span className="text-slate-300">·</span>
+              <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
+              Posted {new Date(job.posted_at).toLocaleDateString()}
+            </span>
+          )}
+          {!job.parsed_json && (
+            <span className="flex items-center gap-1.5">
+              <span className="text-slate-300">·</span>
+              <Badge variant="yellow" className="text-xs">Not parsed</Badge>
+            </span>
+          )}
         </div>
+        {job.salary_text && (
+          <p className="mt-2 text-sm text-slate-500">{job.salary_text}</p>
+        )}
       </div>
 
-      <div className="flex gap-1 border-b border-slate-200">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              tab === t.key
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'raw' && (
-        <JobDescriptionView job={job} />
-      )}
-
-      {tab === 'parsed' && (
-        <div className="space-y-4">
-          {job.parsed_json ? (
-            <>
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold">Skills</h3>
-                    <Badge>{skills.length + niceSkills.length} total</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <SkillGroup
-                      title="Hard Requirements"
-                      skills={skills}
-                      profile={profile}
-                      ownedSkills={ownedSkills}
-                      onToggle={toggleSkill}
-                      missingTone="border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                      emptyText="No hard requirements parsed yet."
-                    />
-                    <SkillGroup
-                      title="Nice to Have"
-                      skills={niceSkills}
-                      profile={profile}
-                      ownedSkills={ownedSkills}
-                      onToggle={toggleSkill}
-                      missingTone="border-slate-300 bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      emptyText="No nice-to-have skills parsed yet."
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-              {years && (
-                <Card>
-                  <CardHeader><h3 className="text-sm font-semibold">Years Experience Required</h3></CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-slate-700">{String(years)}+ years</p>
-                  </CardContent>
-                </Card>
-              )}
-
-              {profile && (
-                <Card>
-                  <CardHeader><h3 className="text-sm font-semibold">Generate CV</h3></CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-sm text-slate-500">
-                      {ownedSkills.size > 0
-                        ? `${skills.filter((s) => isSkillInProfile(s, profile) || ownedSkills.has(s)).length} skills selected (${ownedSkills.size} manually confirmed).`
-                        : `Verifying skills against your resume...`}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        onClick={generateResume}
-                        disabled={generatingResume}
-                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {generatingResume ? 'Generating...' : 'Generate CV'}
-                      </button>
-                      {ownedSkills.size > 0 && (
-                        <span className="text-xs text-slate-400">
-                          ({ownedSkills.size} manually confirmed skill{ownedSkills.size > 1 ? 's' : ''})
-                        </span>
-                      )}
-                    </div>
-                    {resumeError && (
-                      <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
-                        {resumeError}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-            </>
+      {/* ── Two-column body ──────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
+        {/* ── Left sidebar ───────────────────────────────────── */}
+        <aside className="space-y-4">
+          {/* Match Score */}
+          {matchPercent != null ? (
+            <ScoreRing percent={matchPercent} />
           ) : (
-            <p className="text-sm text-slate-500">No parsed data available.</p>
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-6">
+                <TrendingUp className="h-8 w-8 text-slate-300" />
+                <p className="text-sm text-slate-500 text-center">No match score yet</p>
+                <button
+                  onClick={runMatch}
+                  disabled={matching}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50 w-full"
+                >
+                  {matching ? 'Analyzing...' : 'Run Match'}
+                </button>
+              </CardContent>
+            </Card>
           )}
-        </div>
-      )}
 
-      {tab === 'match' && !match && (
-        <Card>
-          <CardContent className="flex items-center justify-between py-4">
-            <div>
-              <p className="text-sm font-medium text-slate-900">No match report yet</p>
-              <p className="text-xs text-slate-500">The parsed job data is already cached in the database.</p>
+          {matchPercent != null && match && (
+            <div className="text-center">
+              <Badge variant={match.overall_score >= 4.2 ? 'green' : match.overall_score >= 3.6 ? 'yellow' : 'red'}>
+                {match.recommendation === 'apply' ? 'Recommended' : match.recommendation === 'maybe' ? 'Consider' : 'Not Recommended'}
+              </Badge>
+              <button
+                onClick={runMatch}
+                disabled={matching}
+                className="mt-3 text-xs text-slate-400 hover:text-blue-600 underline"
+              >
+                {matching ? 'Refreshing...' : 'Refresh match'}
+              </button>
             </div>
-            <button
-              onClick={runMatch}
-              disabled={matching}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {matching ? 'Analyzing...' : 'Run Match'}
-            </button>
-          </CardContent>
-        </Card>
-      )}
+          )}
 
-      {tab === 'match' && match && (
-        <div className="space-y-6">
-          <div className="flex justify-end">
-            <button
-              onClick={runMatch}
-              disabled={matching}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-            >
-              {matching ? 'Analyzing...' : 'Refresh Match'}
-            </button>
-          </div>
+          {/* Company card */}
           <Card>
-            <CardHeader><h3 className="text-sm font-semibold">Overall Score</h3></CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center justify-center w-24 h-24 rounded-full border-4 border-blue-600">
-                  <span className="text-2xl font-bold text-blue-600">{match.overall_score}</span>
-                </div>
-                <div>
-                  <Badge variant={match.overall_score >= 4.2 ? 'green' : match.overall_score >= 3.6 ? 'yellow' : 'red'}>
-                    {match.recommendation}
-                  </Badge>
-                </div>
-              </div>
+            <CardHeader>
+              <h3 className="text-sm font-semibold text-slate-900">Company</h3>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p className="font-medium text-slate-800">{job.company}</p>
+              {job.location && (
+                <p className="flex items-center gap-1.5 text-slate-600">
+                  <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                  {job.location}
+                </p>
+              )}
+              {job.employment_type && (
+                <p className="flex items-center gap-1.5 text-slate-600">
+                  <Briefcase className="h-3.5 w-3.5 text-slate-400" />
+                  {job.employment_type}
+                </p>
+              )}
+              {job.workplace && (
+                <p className="flex items-center gap-1.5 text-slate-600">
+                  <Monitor className="h-3.5 w-3.5 text-slate-400" />
+                  {job.workplace}
+                </p>
+              )}
+              {job.posted_at && (
+                <p className="flex items-center gap-1.5 text-slate-600">
+                  <Clock className="h-3.5 w-3.5 text-slate-400" />
+                  {new Date(job.posted_at).toLocaleDateString()}
+                </p>
+              )}
+              {job.url && (
+                <a
+                  href={job.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 text-blue-600 hover:underline pt-1"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View original
+                </a>
+              )}
             </CardContent>
           </Card>
 
+          {/* Parse / CV generation card */}
           <Card>
-            <CardHeader><h3 className="text-sm font-semibold">Breakdown</h3></CardHeader>
-            <CardContent className="space-y-3">
-              {Object.entries(match.breakdown).map(([key, val]) => (
-                <div key={key}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-slate-600 capitalize">{key.replace('_', ' ')}</span>
-                    <span className="font-medium text-slate-900">{val}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-200">
-                    <div className={`h-2 rounded-full ${barColor(val)}`} style={{ width: `${(val / 5) * 100}%` }} />
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader><h3 className="text-sm font-semibold text-emerald-700">Top Reasons</h3></CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  {match.top_reasons.map((r, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
-                      <span className="text-emerald-500 mt-0.5">+</span>
-                      {r}
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><h3 className="text-sm font-semibold text-red-700">Gaps</h3></CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  {match.gaps.map((g, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
-                      <span className="text-red-500 mt-0.5">-</span>
-                      {g}
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {tab === 'cv' && (
-        <div className="space-y-4">
-          <Card>
-            <CardContent className="flex items-center justify-between py-4">
-              <div>
-                <p className="text-sm font-medium text-slate-900">Tailored Resume</p>
-                <p className="text-xs text-slate-500">Tailored to match skills confirmed in your Parsed Requirements tab</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {pdfBlobUrl && (
-                  <a
-                    href={pdfBlobUrl}
-                    download="resume.pdf"
-                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 inline-flex items-center gap-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    PDF
-                  </a>
-                )}
+            <CardContent className="py-4 space-y-3">
+              {!job.parsed_json && (
+                <button
+                  onClick={runParse}
+                  disabled={parsing}
+                  className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {parsing ? 'Parsing...' : 'Parse Job Details'}
+                </button>
+              )}
+              {job.parsed_json && !job.parsed_json.responsibilities && (
+                <button
+                  onClick={runParse}
+                  disabled={parsing}
+                  className="w-full rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {parsing ? 'Re-parsing...' : 'Re-parse for sections'}
+                </button>
+              )}
+              {!resume && !generatingResume && (
                 <button
                   onClick={generateResume}
-                  disabled={generatingResume}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                  className="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm text-white hover:bg-slate-700 transition-colors"
                 >
-                  {generatingResume ? 'Generating...' : resume ? 'Regenerate CV' : 'Generate CV'}
+                  Generate Tailored CV
                 </button>
-              </div>
+              )}
+              {generatingResume && (
+                <button disabled className="w-full rounded-lg bg-slate-400 px-4 py-2 text-sm text-white">
+                  Generating...
+                </button>
+              )}
+              {resume && (
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setShowCv(!showCv)}
+                    className="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm text-white hover:bg-slate-700 transition-colors"
+                  >
+                    {showCv ? 'Hide CV' : 'Show CV'}
+                  </button>
+                  {showCv && pdfBlobUrl && (
+                    <a
+                      href={pdfBlobUrl}
+                      download="resume.pdf"
+                      className="w-full flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <Download className="h-4 w-4" />
+                      Download PDF
+                    </a>
+                  )}
+                  <button
+                    onClick={generateResume}
+                    disabled={generatingResume}
+                    className="w-full text-xs text-slate-400 hover:text-blue-600 underline"
+                  >
+                    Regenerate CV
+                  </button>
+                </div>
+              )}
             </CardContent>
           </Card>
+
           {resumeError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-              <p className="text-sm text-red-700">{resumeError}</p>
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="text-xs text-red-700">{resumeError}</p>
             </div>
           )}
-          {htmlBlobUrl && (
-            <div className="rounded-lg border border-slate-200 overflow-hidden">
-              <iframe
-                src={htmlBlobUrl}
-                className="w-full h-[600px]"
-                title="Generated CV"
-              />
-            </div>
+        </aside>
+
+        {/* ── Main content ───────────────────────────────────── */}
+        <div className="space-y-6 min-w-0">
+          {/* ── Responsibilities ─────────────────────────────── */}
+          {(parsedResponsibilities.length > 0 || respSections.length > 0) && (
+            <Card>
+              <CardHeader>
+                <h2 className="text-base font-semibold text-slate-900">Responsibilities</h2>
+              </CardHeader>
+              <CardContent>
+                {parsedResponsibilities.length > 0 ? (
+                  <ul className="space-y-2 pl-5 text-sm leading-6 text-slate-700">
+                    {parsedResponsibilities.map((item, i) => (
+                      <li key={i} className="list-disc pl-1">{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="space-y-6">
+                    {respSections.map((section) => (
+                      <div key={section.title}>
+                        {respSections.length > 1 && (
+                          <h3 className="text-sm font-medium text-slate-700 mb-2">{section.title}</h3>
+                        )}
+                        <ul className="space-y-2 pl-5 text-sm leading-6 text-slate-700">
+                          {section.items.map((item, i) => (
+                            <li key={i} className="list-disc pl-1">{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
-          {!htmlBlobUrl && !resumeError && (
-            <div className="flex items-center justify-center h-48 rounded-lg border border-dashed border-slate-300">
-              <p className="text-sm text-slate-400">Click &quot;Generate CV&quot; to preview your tailored resume</p>
-            </div>
+
+          {/* Fallback: no responsibilities */}
+          {parsedResponsibilities.length === 0 && respSections.length === 0 && !hasStructuredSections && allSections.length === 0 && (
+            <Card>
+              <CardContent className="py-8 text-center text-sm text-slate-400">
+                No job description content available. Import a job URL or paste a job description to get started.
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── Qualifications ───────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <h2 className="text-base font-semibold text-slate-900">Qualifications</h2>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {/* Skills tags */}
+              {hasParsedSkills && (
+                <div className="space-y-3">
+                  {mustHaveSkills.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Required Skills</h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {mustHaveSkills.map((skill) => (
+                          <Badge key={skill} variant="blue" className="text-xs">{skill}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {niceToHaveSkills.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Preferred Skills</h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {niceToHaveSkills.map((skill) => (
+                          <Badge key={skill} className="text-xs">{skill}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {parsed.experience_years != null && (
+                    <p className="text-sm text-slate-600">
+                      <span className="font-medium">{String(parsed.experience_years)}+ years</span> of experience required
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Structured qualifications from LLM */}
+              {parsedRequiredQuals.length > 0 && (
+                <div>
+                  {hasParsedSkills && <hr className="border-slate-200 mb-5" />}
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Required</h4>
+                  <ul className="space-y-2 pl-5 text-sm leading-6 text-slate-700">
+                    {parsedRequiredQuals.map((item, i) => (
+                      <li key={i} className="list-disc pl-1">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {parsedPreferredQuals.length > 0 && (
+                <div>
+                  {(hasParsedSkills || parsedRequiredQuals.length > 0) && <hr className="border-slate-200 mb-5" />}
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Preferred</h4>
+                  <ul className="space-y-2 pl-5 text-sm leading-6 text-slate-700">
+                    {parsedPreferredQuals.map((item, i) => (
+                      <li key={i} className="list-disc pl-1">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Fallback: qualification sections from raw JD parsing */}
+              {!hasStructuredSections && qualSections.length > 0 && (
+                <div className="space-y-5">
+                  {hasParsedSkills && <hr className="border-slate-200" />}
+                  {qualSections.map((section) => {
+                    const isRequired = isRequiredHeading(section.title);
+                    const isPreferred = isPreferredHeading(section.title);
+                    const label = isRequired ? 'Required' : isPreferred ? 'Preferred' : undefined;
+
+                    return (
+                      <div key={section.title}>
+                        {label && (
+                          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{label}</h4>
+                        )}
+                        <ul className="space-y-2 pl-5 text-sm leading-6 text-slate-700">
+                          {section.items.map((item, i) => (
+                            <li key={i} className="list-disc pl-1">{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* No qualifications found */}
+              {!hasParsedSkills && !hasStructuredSections && qualSections.length === 0 && (
+                <p className="text-sm text-slate-400 text-center py-4">
+                  No qualification details extracted yet. Click &quot;Parse Job Details&quot; to extract requirements.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Untitled / plain text sections that don't fit Resp or Qual (fallback only) */}
+          {!hasStructuredSections && allSections.filter((s) =>
+            s.title === '__untitled__' || (!isRespHeading(s.title) && !isQualHeading(s.title))
+          ).length > 0 && (
+            <Card>
+              <CardHeader>
+                <h2 className="text-base font-semibold text-slate-900">Job Description</h2>
+              </CardHeader>
+              <CardContent className="text-sm leading-6 text-slate-700 space-y-3">
+                {allSections
+                  .filter((s) => s.title === '__untitled__' || (!isRespHeading(s.title) && !isQualHeading(s.title)))
+                  .map((section, si) =>
+                    section.items.map((item, ii) => (
+                      <p key={`${si}-${ii}`}>{item}</p>
+                    ))
+                  )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── CV Preview (inline) ──────────────────────────── */}
+          {showCv && htmlBlobUrl && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-base font-semibold text-slate-900">Tailored CV Preview</h2>
+                  <button
+                    onClick={() => setShowCv(false)}
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    Hide
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="rounded-b-lg overflow-hidden">
+                  <iframe
+                    src={htmlBlobUrl}
+                    className="w-full h-[600px] border-0"
+                    title="Generated CV"
+                  />
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
