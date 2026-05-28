@@ -66,11 +66,11 @@ resource "aws_db_instance" "this" {
   db_subnet_group_name   = aws_db_subnet_group.this.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  publicly_accessible    = false
-  skip_final_snapshot    = var.skip_final_snapshot
+  publicly_accessible     = false
+  skip_final_snapshot     = var.skip_final_snapshot
   backup_retention_period = var.backup_retention_period
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   # Enable IAM database auth (like GCP Cloud SQL IAM auth)
   iam_database_authentication_enabled = var.iam_db_auth

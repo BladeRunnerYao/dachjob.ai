@@ -6,9 +6,9 @@
 # Region: eu-west-1 (Ireland) — closest to GCP europe-west1 / Azure westeurope
 
 locals {
-  region          = var.region
-  az_count        = 2
-  secret_arns     = concat(
+  region   = var.region
+  az_count = 2
+  secret_arns = concat(
     [module.secrets_manager.db_password_secret_arn],
     values(module.secrets_manager.app_secret_arns),
   )
@@ -113,11 +113,11 @@ module "secrets_manager" {
 module "ecs" {
   source = "../../../modules/aws/ecs"
 
-  name_prefix    = var.name_prefix
-  aws_region     = var.region
-  vpc_id         = module.networking.vpc_id
-  environment    = var.environment
-  github_repo    = var.github_repo
+  name_prefix = var.name_prefix
+  aws_region  = var.region
+  vpc_id      = module.networking.vpc_id
+  environment = var.environment
+  github_repo = var.github_repo
 
   # Subnets
   public_subnet_ids  = module.networking.public_subnet_ids
@@ -132,22 +132,22 @@ module "ecs" {
   worker_image   = "${module.ecr.worker_repo_url}:${var.worker_image_tag}"
 
   # Resource allocation
-  api_cpu               = var.api_cpu
-  api_memory            = var.api_memory
-  frontend_cpu          = var.frontend_cpu
-  frontend_memory       = var.frontend_memory
-  worker_cpu            = var.worker_cpu
-  worker_memory         = var.worker_memory
-  api_desired_count     = var.api_desired_count
+  api_cpu                = var.api_cpu
+  api_memory             = var.api_memory
+  frontend_cpu           = var.frontend_cpu
+  frontend_memory        = var.frontend_memory
+  worker_cpu             = var.worker_cpu
+  worker_memory          = var.worker_memory
+  api_desired_count      = var.api_desired_count
   frontend_desired_count = var.frontend_desired_count
-  worker_desired_count  = var.worker_desired_count
-  worker_enabled        = var.worker_enabled
+  worker_desired_count   = var.worker_desired_count
+  worker_enabled         = var.worker_enabled
 
   # Infrastructure
-  redis_enabled   = var.redis_enabled
-  redis_url       = "${module.elasticache.redis_url}"
-  database_url    = local.database_url
-  secret_arns     = local.secret_arns
+  redis_enabled = var.redis_enabled
+  redis_url     = module.elasticache.redis_url
+  database_url  = local.database_url
+  secret_arns   = local.secret_arns
 
   # S3
   artifacts_bucket_name = module.s3.artifacts_bucket_name
