@@ -5,19 +5,21 @@ import { useParams } from 'next/navigation';
 import {
   Building2,
   CalendarDays,
+  CheckCircle2,
   Download,
   ExternalLink,
   MapPin,
   Briefcase,
   Monitor,
   Clock,
+  Plus,
   TrendingUp,
   Sparkles,
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api/client';
-import type { JobPosting, MatchReport, ResumeArtifact } from '@/lib/api/types';
+import type { JobPosting, MatchReport, ResumeArtifact, CandidateProfile } from '@/lib/api/types';
 
 // ── Section parsing (from raw JD — fallback only) ────────────────
 
@@ -213,6 +215,15 @@ function readStringList(value: unknown): string[] {
   return [];
 }
 
+function isSkillInProfile(skill: string, profile: CandidateProfile | null): boolean {
+  if (!profile) return false;
+  const text = [
+    profile.raw_cv_md,
+    profile.headline,
+  ].join(' ').toLowerCase();
+  return text.includes(skill.toLowerCase());
+}
+
 // ── Main page ───────────────────────────────────────────────────
 
 export default function JobDetailPage() {
@@ -228,16 +239,20 @@ export default function JobDetailPage() {
   const [generatingResume, setGeneratingResume] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
   const [showCv, setShowCv] = useState(false);
+  const [profile, setProfile] = useState<CandidateProfile | null>(null);
+  const [ownedSkills, setOwnedSkills] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     Promise.all([
       api.getJob(id),
       api.getLatestMatchReport(id),
       api.getLatestResumeArtifact(id),
-    ]).then(([j, m, r]) => {
+      api.getProfile(),
+    ]).then(([j, m, r, p]) => {
       setJob(j);
       setMatch(m);
       setResume(r);
+      setProfile(p);
     }).catch(() => {
       // auth expired or network error
     }).finally(() => {
@@ -338,11 +353,21 @@ export default function JobDetailPage() {
     }
   };
 
+  const toggleSkill = (skill: string) => {
+    setOwnedSkills((prev) => {
+      const next = new Set(prev);
+      if (next.has(skill)) next.delete(skill);
+      else next.add(skill);
+      return next;
+    });
+  };
+
   const generateResume = async () => {
     setGeneratingResume(true);
     setResumeError(null);
     try {
-      const artifact = await api.createResumeArtifact(id);
+      const confirmedSkills = Array.from(ownedSkills);
+      const artifact = await api.createResumeArtifact(id, confirmedSkills);
       setResume(artifact);
       setShowCv(true);
     } catch (err) {
@@ -611,29 +636,116 @@ export default function JobDetailPage() {
               {/* Skills tags */}
               {hasParsedSkills && (
                 <div className="space-y-3">
-                  {mustHaveSkills.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Required Skills</h4>
-                      <div className="flex flex-wrap gap-1.5">
-                        {mustHaveSkills.map((skill) => (
-                          <Badge key={skill} variant="blue" className="text-xs">{skill}</Badge>
-                        ))}
+                  {mustHaveSkills.length > 0 && (() => {
+                    const matchCount = profile
+                      ? mustHaveSkills.filter((s) => isSkillInProfile(s, profile)).length
+                      : 0;
+                    const ownedCount = mustHaveSkills.filter((s) => ownedSkills.has(s)).length;
+                    return (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Required Skills</h4>
+                          {profile && (
+                            <Badge variant="green" className="text-xs">
+                              {matchCount + ownedCount}/{mustHaveSkills.length} matched
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {mustHaveSkills.map((skill) => {
+                            const matched = isSkillInProfile(skill, profile);
+                            const owned = ownedSkills.has(skill);
+                            const isActive = matched || owned;
+                            return (
+                              <button
+                                key={skill}
+                                type="button"
+                                onClick={() => !matched && toggleSkill(skill)}
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                                  isActive
+                                    ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
+                                    : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer'
+                                }`}
+                                title={
+                                  matched
+                                    ? 'Found in your resume'
+                                    : owned
+                                      ? 'Manually confirmed'
+                                      : 'Click to confirm you have this skill'
+                                }
+                              >
+                                {isActive ? (
+                                  <CheckCircle2 className="h-3 w-3" />
+                                ) : (
+                                  <Plus className="h-3 w-3" />
+                                )}
+                                {skill}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {niceToHaveSkills.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Preferred Skills</h4>
-                      <div className="flex flex-wrap gap-1.5">
-                        {niceToHaveSkills.map((skill) => (
-                          <Badge key={skill} className="text-xs">{skill}</Badge>
-                        ))}
+                    );
+                  })()}
+                  {niceToHaveSkills.length > 0 && (() => {
+                    const matchCount = profile
+                      ? niceToHaveSkills.filter((s) => isSkillInProfile(s, profile)).length
+                      : 0;
+                    const ownedCount = niceToHaveSkills.filter((s) => ownedSkills.has(s)).length;
+                    return (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Preferred Skills</h4>
+                          {profile && (
+                            <Badge variant="green" className="text-xs">
+                              {matchCount + ownedCount}/{niceToHaveSkills.length} matched
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {niceToHaveSkills.map((skill) => {
+                            const matched = isSkillInProfile(skill, profile);
+                            const owned = ownedSkills.has(skill);
+                            const isActive = matched || owned;
+                            return (
+                              <button
+                                key={skill}
+                                type="button"
+                                onClick={() => !matched && toggleSkill(skill)}
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                                  isActive
+                                    ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
+                                    : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer'
+                                }`}
+                                title={
+                                  matched
+                                    ? 'Found in your resume'
+                                    : owned
+                                      ? 'Manually confirmed'
+                                      : 'Click to confirm you have this skill'
+                                }
+                              >
+                                {isActive ? (
+                                  <CheckCircle2 className="h-3 w-3" />
+                                ) : (
+                                  <Plus className="h-3 w-3" />
+                                )}
+                                {skill}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                   {parsed.experience_years != null && (
                     <p className="text-sm text-slate-600">
                       <span className="font-medium">{String(parsed.experience_years)}+ years</span> of experience required
+                    </p>
+                  )}
+                  {ownedSkills.size > 0 && (
+                    <p className="text-xs text-slate-400">
+                      {ownedSkills.size} skill{ownedSkills.size > 1 ? 's' : ''} manually confirmed — these will be emphasized in your generated CV.
                     </p>
                   )}
                 </div>

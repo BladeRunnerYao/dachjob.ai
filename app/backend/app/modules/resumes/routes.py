@@ -11,7 +11,7 @@ from app.core.tenant import get_tenant_context
 from app.db.models import ResumeArtifact
 from app.db.session import get_db
 from app.modules.background_tasks.execution import run_or_enqueue
-from app.modules.resumes.schemas import ResumeResponse
+from app.modules.resumes.schemas import GenerateResumeRequest, ResumeResponse
 from app.modules.resumes.service import generate_resume
 from app.modules.storage.service import StorageService
 
@@ -29,10 +29,12 @@ def _artifact_owner_filters(tenant: TenantContext):
 @router.post("/resume", status_code=201)
 async def create_resume(
     job_id: UUID,
+    body: GenerateResumeRequest = GenerateResumeRequest(),
     tenant: TenantContext = Depends(get_tenant_context),
     db: AsyncSession = Depends(get_db),
 ):
     settings = get_settings()
+    confirmed_skills = body.confirmed_skills or []
     if settings.worker_enabled:
         mode, result = await run_or_enqueue(
             db,
@@ -43,11 +45,14 @@ async def create_resume(
                 "tenant_slug": tenant.slug,
                 "user_id": str(tenant.user_id) if tenant.user_id else None,
                 "job_id": str(job_id),
+                "confirmed_skills": confirmed_skills,
             },
             celery_task=__import__(
                 "app.workers.tasks", fromlist=["generate_resume_task"]
             ).generate_resume_task,
-            sync_runner=lambda: generate_resume(db, tenant, job_id),
+            sync_runner=lambda: generate_resume(
+                db, tenant, job_id, confirmed_skills=confirmed_skills
+            ),
             result_serializer=lambda r: {
                 "resume_artifact_id": str(r.id),
                 "html_object_key": r.html_object_key,
@@ -58,7 +63,7 @@ async def create_resume(
             return result
         artifact = result
     else:
-        artifact = await generate_resume(db, tenant, job_id)
+        artifact = await generate_resume(db, tenant, job_id, confirmed_skills=confirmed_skills)
     return artifact
 
 

@@ -46,7 +46,10 @@ def _profile_query_for_resume(tenant: TenantContext):
 
 
 async def generate_resume(
-    db: AsyncSession, tenant: TenantContext, job_id: uuid.UUID
+    db: AsyncSession,
+    tenant: TenantContext,
+    job_id: uuid.UUID,
+    confirmed_skills: list[str] | None = None,
 ) -> ResumeArtifact:
     job = await get_job(db, job_id, tenant.id)
     if not job:
@@ -64,7 +67,7 @@ async def generate_resume(
 
     try:
         gateway = LLMGateway()
-        messages = _build_llm_prompt(profile, parsed_job)
+        messages = _build_llm_prompt(profile, parsed_job, confirmed_skills)
         result = await gateway.run_json(
             tenant_id=tenant.id,
             task="resume_generate",
@@ -127,6 +130,7 @@ async def generate_resume(
 def _build_llm_prompt(
     profile: CandidateProfile,
     parsed_job: dict,
+    confirmed_skills: list[str] | None = None,
 ) -> list[dict]:
     cv_text = profile.raw_cv_md
     system_prompt = (
@@ -136,10 +140,18 @@ def _build_llm_prompt(
         "Berufserfahrung (Professional Experience), Skills/Qualifikationen, Education/Ausbildung. "
         'Respond with valid JSON matching the schema: {"html": "<html>...</html>"}.'
     )
+    confirmed_note = ""
+    if confirmed_skills:
+        confirmed_note = (
+            "\n\nIMPORTANT: The candidate has manually confirmed they possess the following skills. "
+            f"Make sure these are prominently featured in the Skills section and woven into the Professional Summary: "
+            f"{', '.join(confirmed_skills)}"
+        )
     user_prompt = (
         f"Job requirements:\n{parsed_job}\n\n"
         f"Candidate profile:\nName: {profile.full_name}\nHeadline: {profile.headline}\n\n"
         f"CV:\n{cv_text}"
+        f"{confirmed_note}"
     )
     return [
         {"role": "system", "content": system_prompt},

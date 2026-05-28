@@ -18,4 +18,4 @@ class ResumeResponse(BaseModel):
 
 
 class GenerateResumeRequest(BaseModel):
-    pass
+    confirmed_skills: list[str] | None = None
