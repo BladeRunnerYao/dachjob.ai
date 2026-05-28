@@ -107,6 +107,29 @@ Core environment variables:
 
 Provider-specific variables include `VERTEX_AI_PROJECT_ID`, `GEMINI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, and `OPENROUTER_API_KEY`.
 
+## Multi-Cloud Architecture
+
+Every layer of the stack has been designed to run on either Google Cloud or Azure, with the same application code and interchangeable backends.
+
+| Concern | Google Cloud | Azure |
+| --- | --- | --- |
+| **API compute** | Cloud Run (serverless) | Azure Container Apps |
+| **Frontend compute** | Cloud Run (serverless) | Azure Container Apps |
+| **Worker compute** | GKE Autopilot (Kubernetes) | Azure Container Apps |
+| **Database** | Cloud SQL — PostgreSQL 16 + `pgvector` | PostgreSQL Flexible Server + `vector` extension |
+| **Cache & broker** | Memorystore (Redis 7.0) | Azure Cache for Redis |
+| **Object storage** | Cloud Storage (GCS) — S3-compatible | Azure Blob Storage |
+| **Container registry** | Artifact Registry (Docker) | Azure Container Registry |
+| **Secrets** | Secret Manager | Key Vault |
+| **LLM inference** | Vertex AI · Gemini API | Azure OpenAI Service |
+| **Monitoring & logging** | Cloud Monitoring · Cloud Logging | Application Insights · Log Analytics |
+| **Networking** | VPC · Serverless VPC Connector | Virtual Network · Private DNS Zones |
+| **IAM / workload identity** | Service Accounts · Workload Identity Federation | Managed Identity · Azure AD OIDC |
+| **Database migrations** | Cloud Run Jobs | Azure Container Apps Jobs |
+| **Terraform state** | Cloud Storage bucket | Azure Storage container |
+
+The application layer uses the same abstractions regardless of provider: `STORAGE_PROVIDER` selects between GCS, Azure Blob, or S3-compatible storage, and the LLM gateway transparently fails over across Vertex AI, Gemini, Azure OpenAI, DeepSeek, and OpenRouter.
+
 ## Cloud Deployment
 
 ### Google Cloud
