@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext
+from app.core.errors import AppError
 from app.db.models import MatchReport
 from app.modules.jobs.repository import get_job
 from app.modules.matching.jd_parser import parse_job_posting
@@ -175,7 +176,6 @@ async def compute_match(
 ) -> MatchReport:
     job = await get_job(db, job_id, tenant.id)
     if not job:
-        from app.core.errors import AppError
 
         raise AppError("job_not_found", "Job posting not found", status_code=404)
 
