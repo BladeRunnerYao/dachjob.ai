@@ -85,20 +85,20 @@ export default function JobsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Jobs</h1>
           <p className="text-sm text-slate-500 mt-1">{total} job postings</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 shrink-0"
         >
           Add Job
         </button>
       </div>
 
-      <div className="flex gap-2 flex-wrap items-center">
+      <div className="flex gap-2 items-center overflow-x-auto -mx-4 px-4 pb-1">
         {(['all', 'apply', 'maybe', 'skip'] as FilterKey[]).map((f) => (
           <button
             key={f}

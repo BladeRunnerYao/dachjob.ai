@@ -25,12 +25,17 @@ const statusColors: Record<string, BadgeVariant> = {
 
 const statusOptions = ['Evaluated', 'Applied', 'Responded', 'Interview', 'Offer', 'Rejected', 'Discarded', 'SKIP'];
 
+function toPercent(score: number): number {
+  return Math.round((Math.min(Math.max(score, 1), 5) / 5) * 100);
+}
+
 export function TrackerTable({ applications, onStatusChange }: TrackerTableProps) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   return (
     <Card>
       <CardContent className="p-0">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
@@ -48,11 +53,14 @@ export function TrackerTable({ applications, onStatusChange }: TrackerTableProps
                 <td className="px-4 py-3 font-medium text-slate-900">{app.job_title}</td>
                 <td className="px-4 py-3 text-slate-600">{app.company}</td>
                 <td className="px-4 py-3">
-                  {app.score != null && (
-                    <Badge variant={app.score >= 4.2 ? 'green' : app.score >= 3.6 ? 'yellow' : 'red'}>
-                      {app.score}
-                    </Badge>
-                  )}
+                  {app.score != null && (() => {
+                    const pct = toPercent(app.score);
+                    return (
+                      <Badge variant={pct >= 84 ? 'green' : pct >= 72 ? 'yellow' : 'red'}>
+                        {pct}%
+                      </Badge>
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3 relative">
                   <button
@@ -83,6 +91,7 @@ export function TrackerTable({ applications, onStatusChange }: TrackerTableProps
             ))}
           </tbody>
         </table>
+        </div>
       </CardContent>
     </Card>
   );

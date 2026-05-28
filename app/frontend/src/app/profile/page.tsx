@@ -78,7 +78,7 @@ export default function ProfilePage() {
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
 
   const tabClass = (mode: ImportMode) =>
-    `px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+    `shrink-0 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
       importMode === mode
         ? 'bg-white text-slate-900 border border-b-0 border-slate-300'
         : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
@@ -91,7 +91,7 @@ export default function ProfilePage() {
         <p className="text-sm text-slate-500 mt-1">Import your CV from a URL, PDF, or edit directly</p>
       </div>
 
-      <div className="flex gap-1 border-b border-slate-300">
+      <div className="flex gap-1 border-b border-slate-300 overflow-x-auto">
         <button onClick={() => setImportMode('url')} className={tabClass('url')}>
           Import from URL
         </button>

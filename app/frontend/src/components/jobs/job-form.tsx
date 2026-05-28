@@ -21,7 +21,7 @@ export function JobForm({ onClose, onSave, saving = false, error }: JobFormProps
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl">
+      <div className="w-full max-w-lg sm:max-w-2xl mx-4 rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">Add Job</h2>
           <button onClick={onClose} disabled={saving} className="text-sm text-slate-500 hover:text-slate-700 disabled:opacity-50">Close</button>

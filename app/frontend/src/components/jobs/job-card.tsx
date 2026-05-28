@@ -7,9 +7,13 @@ interface JobCardProps {
   job: JobPosting;
 }
 
-function scoreBadge(score: number) {
-  if (score >= 4.2) return 'green';
-  if (score >= 3.6) return 'yellow';
+function toPercent(score: number): number {
+  return Math.round((Math.min(Math.max(score, 1), 5) / 5) * 100);
+}
+
+function scoreBadge(percent: number) {
+  if (percent >= 84) return 'green';
+  if (percent >= 72) return 'yellow';
   return 'red';
 }
 
@@ -29,9 +33,9 @@ export function JobCard({ job }: JobCardProps) {
             <p className="text-xs text-slate-500">{job.company}{job.location ? ` · ${job.location}` : ''}</p>
           </div>
           <div className="flex items-center gap-2 ml-4 shrink-0">
-            {job.score != null && <Badge variant={scoreBadge(job.score)}>{job.score}</Badge>}
+            {job.score != null && <Badge variant={scoreBadge(toPercent(job.score))}>{toPercent(job.score)}%</Badge>}
             {job.recommendation && <Badge variant={recBadge(job.recommendation)}>{job.recommendation}</Badge>}
-            <span className="text-xs text-slate-400">{new Date(job.created_at).toLocaleDateString()}</span>
+            <span className="text-xs text-slate-400 hidden sm:inline">{new Date(job.created_at).toLocaleDateString()}</span>
           </div>
         </CardContent>
       </Card>
