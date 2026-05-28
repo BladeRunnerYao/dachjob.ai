@@ -60,26 +60,14 @@ if (( ${#env_args[@]} > 0 )); then
   env_flags=(--env-vars "${env_args[@]}")
 fi
 
-if [[ "${job_exists}" == "true" ]]; then
-  if (( ${#secret_args[@]} > 0 )); then
-    az containerapp job secret set \
-      --name "${AZURE_MIGRATION_JOB_NAME}" \
-      --resource-group "${AZURE_RESOURCE_GROUP}" \
-      --secrets "${secret_args[@]}" \
-      --output none
-  fi
-
-  # Keep command/args immutable on update. Azure CLI can misparse job args that
-  # begin with "-"; the job is created once with the Alembic command and later
-  # deployments only need to refresh image and secrets. Environment variables
-  # are set at job creation time and cannot be updated via `az containerapp job
-  # update` without a full YAML template replacement.
-  az containerapp job update \
+  # Always delete and recreate the migration job to avoid Azure CLI
+  # misparsing command args on update (known issue with args beginning
+  # with "-").
+  az containerapp job delete \
     --name "${AZURE_MIGRATION_JOB_NAME}" \
     --resource-group "${AZURE_RESOURCE_GROUP}" \
-    --image "${api_image}" \
-    --output none
-else
+    --yes 2>/dev/null || true
+
   if [[ -z "${AZURE_DATABASE_URL:-}" ]]; then
     echo "::error::AZURE_DATABASE_URL is required when creating the Azure migration job."
     exit 1
@@ -99,13 +87,14 @@ else
     --registry-server "${AZURE_ACR_NAME}.azurecr.io" \
     --registry-username "${AZURE_ACR_NAME}" \
     --registry-password "${ACR_PASS}" \
-    --command "alembic" \
-    --args "-c" "app/db/migrations/alembic.ini" "upgrade" "head" \
     --trigger-type Manual \
+    --replica-timeout 300 \
+    --replica-retry-limit 0 \
+    --command alembic \
+    --args="--config=app/db/migrations/alembic.ini" --args="upgrade" --args="head" \
     "${secret_flags[@]}" \
     "${env_flags[@]}" \
     --output none
-fi
 
 az containerapp job start \
   --name "${AZURE_MIGRATION_JOB_NAME}" \
