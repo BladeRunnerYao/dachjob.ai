@@ -87,9 +87,11 @@ fi
     --registry-server "${AZURE_ACR_NAME}.azurecr.io" \
     --registry-username "${AZURE_ACR_NAME}" \
     --registry-password "${ACR_PASS}" \
-    --command "alembic" \
-    --args="-c app/db/migrations/alembic.ini upgrade head" \
     --trigger-type Manual \
+    --replica-timeout 300 \
+    --replica-retry-limit 0 \
+    --command alembic \
+    --args="--config=app/db/migrations/alembic.ini" --args="upgrade" --args="head" \
     "${secret_flags[@]}" \
     "${env_flags[@]}" \
     --output none
