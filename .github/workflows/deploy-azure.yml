@@ -626,6 +626,7 @@ jobs:
             --set-env-vars CORS_ORIGINS="${AZURE_FRONTEND_URL:-}" \
               WORKER_ENABLED="${{ needs.prepare.outputs.worker_enabled == 'enabled' && 'true' || 'false' }}" \
               WORKER_FALLBACK_TO_SYNC=true \
+              REDIS_ENABLED=true \
               LOG_LEVEL=INFO \
               LOG_JSON=true \
               ERROR_LOG_TO_FILE=true \
