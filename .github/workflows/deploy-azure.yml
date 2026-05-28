@@ -411,6 +411,20 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.tags }}
 
+      - name: Clean old ACR images (keep last 3)
+        if: success()
+        run: |
+          set +e
+          repo="api"
+          az acr manifest list-metadata --registry "${{ env.AZURE_ACR_NAME }}" --name "${repo}" \
+            --orderby time_desc -o json --top 200 | \
+            jq -r '.[3:][] | .tags[0] // empty' | \
+            while read -r tag; do
+            [[ -z "${tag}" ]] && continue
+            az acr repository delete --name "${{ env.AZURE_ACR_NAME }}" \
+              --image "${repo}:${tag}" --yes 2>/dev/null || true
+          done
+
   build-frontend:
     name: Build frontend image
     needs: prepare
@@ -471,6 +485,20 @@ jobs:
             NEXT_PUBLIC_API_BASE_URL=${{ env.AZURE_API_URL }}
           tags: |
             ${{ steps.meta.outputs.tags }}
+
+      - name: Clean old ACR images (keep last 3)
+        if: success()
+        run: |
+          set +e
+          repo="frontend"
+          az acr manifest list-metadata --registry "${{ env.AZURE_ACR_NAME }}" --name "${repo}" \
+            --orderby time_desc -o json --top 200 | \
+            jq -r '.[3:][] | .tags[0] // empty' | \
+            while read -r tag; do
+            [[ -z "${tag}" ]] && continue
+            az acr repository delete --name "${{ env.AZURE_ACR_NAME }}" \
+              --image "${repo}:${tag}" --yes 2>/dev/null || true
+          done
 
   build-worker:
     name: Build worker image
@@ -533,6 +561,20 @@ jobs:
             GIT_COMMIT_SHA=${{ needs.prepare.outputs.commit_sha }}
           tags: |
             ${{ steps.meta.outputs.tags }}
+
+      - name: Clean old ACR images (keep last 3)
+        if: success()
+        run: |
+          set +e
+          repo="worker"
+          az acr manifest list-metadata --registry "${{ env.AZURE_ACR_NAME }}" --name "${repo}" \
+            --orderby time_desc -o json --top 200 | \
+            jq -r '.[3:][] | .tags[0] // empty' | \
+            while read -r tag; do
+            [[ -z "${tag}" ]] && continue
+            az acr repository delete --name "${{ env.AZURE_ACR_NAME }}" \
+              --image "${repo}:${tag}" --yes 2>/dev/null || true
+          done
 
   deploy-api:
     name: Deploy API (Azure)

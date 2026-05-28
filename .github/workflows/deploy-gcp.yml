@@ -369,6 +369,24 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.tags }}
 
+      - name: Clean old Artifact Registry images (keep last 3)
+        if: success()
+        run: |
+          set +e
+          repo="dachjob-dev-api"
+          location="${{ env.GAR_LOCATION }}"
+          project="${{ env.PROJECT_ID }}"
+
+          gcloud artifacts docker images list \
+            "${location}-docker.pkg.dev/${project}/${repo}" \
+            --include-tags --format 'value(version)' --sort-by "~create_time" \
+            --limit 100 | tail -n +4 | while read -r digest; do
+            [[ -z "${digest}" ]] && continue
+            gcloud artifacts docker images delete \
+              "${location}-docker.pkg.dev/${project}/${repo}@${digest}" \
+              --quiet --delete-tags 2>/dev/null || true
+          done
+
   build-frontend:
     name: Build frontend image
     needs: prepare
@@ -431,6 +449,24 @@ jobs:
             NEXT_PUBLIC_API_BASE_URL=${{ env.API_BASE_URL }}
           tags: |
             ${{ steps.meta.outputs.tags }}
+
+      - name: Clean old Artifact Registry images (keep last 3)
+        if: success()
+        run: |
+          set +e
+          repo="dachjob-dev-frontend"
+          location="${{ env.GAR_LOCATION }}"
+          project="${{ env.PROJECT_ID }}"
+
+          gcloud artifacts docker images list \
+            "${location}-docker.pkg.dev/${project}/${repo}" \
+            --include-tags --format 'value(version)' --sort-by "~create_time" \
+            --limit 100 | tail -n +4 | while read -r digest; do
+            [[ -z "${digest}" ]] && continue
+            gcloud artifacts docker images delete \
+              "${location}-docker.pkg.dev/${project}/${repo}@${digest}" \
+              --quiet --delete-tags 2>/dev/null || true
+          done
 
   build-worker:
     name: Build worker image
@@ -495,6 +531,24 @@ jobs:
             GIT_COMMIT_SHA=${{ needs.prepare.outputs.commit_sha }}
           tags: |
             ${{ steps.meta.outputs.tags }}
+
+      - name: Clean old Artifact Registry images (keep last 3)
+        if: success()
+        run: |
+          set +e
+          repo="dachjob-dev-worker"
+          location="${{ env.GAR_LOCATION }}"
+          project="${{ env.PROJECT_ID }}"
+
+          gcloud artifacts docker images list \
+            "${location}-docker.pkg.dev/${project}/${repo}" \
+            --include-tags --format 'value(version)' --sort-by "~create_time" \
+            --limit 100 | tail -n +4 | while read -r digest; do
+            [[ -z "${digest}" ]] && continue
+            gcloud artifacts docker images delete \
+              "${location}-docker.pkg.dev/${project}/${repo}@${digest}" \
+              --quiet --delete-tags 2>/dev/null || true
+          done
 
   deploy-api:
     name: Deploy API (GCP)
