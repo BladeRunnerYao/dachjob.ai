@@ -526,10 +526,20 @@ jobs:
             --force-new-deployment \
             >/dev/null
 
-          echo "Waiting for API deployment to stabilize..."
-          aws ecs wait services-stable \
-            --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
-            --services "${AWS_API_SERVICE:-dachjob-dev-api}"
+          echo "Waiting for API deployment to complete (up to 15 min)..."
+          for i in $(seq 1 60); do
+            STATE=$(aws ecs describe-services \
+              --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
+              --services "${AWS_API_SERVICE:-dachjob-dev-api}" \
+              --query 'services[0].deployments[0].rolloutState' \
+              --output text)
+            echo "  [$i/60] rolloutState=${STATE}"
+            if [ "${STATE}" = "COMPLETED" ]; then
+              echo "API deployment completed."
+              break
+            fi
+            sleep 15
+          done
 
       - name: Run database migrations
         if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
@@ -669,10 +679,20 @@ jobs:
             --force-new-deployment \
             >/dev/null
 
-          echo "Waiting for frontend deployment to stabilize..."
-          aws ecs wait services-stable \
-            --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
-            --services "${AWS_FRONTEND_SERVICE:-dachjob-dev-frontend}"
+          echo "Waiting for frontend deployment to complete (up to 15 min)..."
+          for i in $(seq 1 60); do
+            STATE=$(aws ecs describe-services \
+              --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
+              --services "${AWS_FRONTEND_SERVICE:-dachjob-dev-frontend}" \
+              --query 'services[0].deployments[0].rolloutState' \
+              --output text)
+            echo "  [$i/60] rolloutState=${STATE}"
+            if [ "${STATE}" = "COMPLETED" ]; then
+              echo "Frontend deployment completed."
+              break
+            fi
+            sleep 15
+          done
 
       - name: Capture service URL
         id: url
@@ -756,10 +776,20 @@ jobs:
             --force-new-deployment \
             >/dev/null
 
-          echo "Waiting for worker deployment to stabilize..."
-          aws ecs wait services-stable \
-            --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
-            --services "${AWS_WORKER_SERVICE:-dachjob-dev-worker}"
+          echo "Waiting for worker deployment to complete (up to 15 min)..."
+          for i in $(seq 1 60); do
+            STATE=$(aws ecs describe-services \
+              --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
+              --services "${AWS_WORKER_SERVICE:-dachjob-dev-worker}" \
+              --query 'services[0].deployments[0].rolloutState' \
+              --output text)
+            echo "  [$i/60] rolloutState=${STATE}"
+            if [ "${STATE}" = "COMPLETED" ]; then
+              echo "Worker deployment completed."
+              break
+            fi
+            sleep 15
+          done
 
   smoke-test:
     name: Smoke test
