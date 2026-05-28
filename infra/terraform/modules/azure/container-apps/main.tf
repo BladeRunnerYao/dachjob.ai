@@ -344,7 +344,7 @@ resource "azurerm_container_app" "worker" {
 
   template {
     max_replicas = 3
-    min_replicas = 1
+    min_replicas = 0
 
     container {
       name   = "worker"
