@@ -4,6 +4,7 @@ ENV PYTHONPATH=/app
 RUN groupadd --system app && useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
     libpango-1.0-0 \
     libpangoft2-1.0-0 \
     libpangocairo-1.0-0 \

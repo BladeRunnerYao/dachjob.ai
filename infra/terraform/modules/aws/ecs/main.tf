@@ -310,13 +310,6 @@ resource "aws_ecs_task_definition" "api" {
           "awslogs-stream-prefix" = "api"
         }
       }
-      healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
-        interval    = 30
-        timeout     = 10
-        retries     = 3
-        startPeriod = 60
-      }
     }
   ])
 
@@ -351,13 +344,6 @@ resource "aws_ecs_task_definition" "frontend" {
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "frontend"
         }
-      }
-      healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:3000/ || exit 1"]
-        interval    = 30
-        timeout     = 10
-        retries     = 3
-        startPeriod = 60
       }
     }
   ])
