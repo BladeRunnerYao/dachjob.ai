@@ -88,7 +88,7 @@ fi
     --registry-username "${AZURE_ACR_NAME}" \
     --registry-password "${ACR_PASS}" \
     --command "alembic" \
-    --args "-c" "app/db/migrations/alembic.ini" "upgrade" "head" \
+    --args="-c app/db/migrations/alembic.ini upgrade head" \
     --trigger-type Manual \
     "${secret_flags[@]}" \
     "${env_flags[@]}" \
