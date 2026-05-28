@@ -1,0 +1,16 @@
+name_prefix = "dachjob-dev"
+region      = "eu-west-1"
+environment = "dev"
+
+# Database password — set via TF_VAR_db_password or leave empty to auto-generate
+# db_password = "your-secure-password-here"
+
+api_image_tag      = "latest"
+frontend_image_tag = "latest"
+worker_image_tag   = "latest"
+
+tags = {
+  environment = "dev"
+  managed_by  = "terraform"
+  project     = "dachjob"
+}

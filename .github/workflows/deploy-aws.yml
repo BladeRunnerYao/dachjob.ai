@@ -1,0 +1,837 @@
+name: Deploy to AWS
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        type: choice
+        default: dev
+        options:
+          - dev
+          - staging
+          - prod
+      branch:
+        description: Optional branch override. Leave empty to deploy the selected workflow branch.
+        required: false
+        default: ""
+      target:
+        description: Deployment target
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - api
+          - frontend
+          - worker
+          - terraform
+      terraform_apply:
+        description: Apply Terraform after plan
+        required: false
+        type: boolean
+        default: false
+      run_migrations:
+        description: Run database migrations after API deploy
+        required: false
+        type: boolean
+        default: true
+      worker_mode:
+        description: Worker mode for this deploy
+        required: true
+        type: choice
+        default: disabled
+        options:
+          - disabled
+          - enabled
+      smoke_test_mode:
+        description: Post-deploy smoke test depth
+        required: false
+        type: choice
+        default: minimal
+        options:
+          - minimal
+          - full
+
+concurrency:
+  group: deploy-aws-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  AWS_REGION: eu-west-1
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID || '' }}
+  AWS_ECS_CLUSTER: ${{ vars.AWS_ECS_CLUSTER || '' }}
+  AWS_API_SERVICE: ${{ vars.AWS_API_SERVICE || '' }}
+  AWS_FRONTEND_SERVICE: ${{ vars.AWS_FRONTEND_SERVICE || '' }}
+  AWS_WORKER_SERVICE: ${{ vars.AWS_WORKER_SERVICE || '' }}
+  AWS_API_URL: ${{ vars.AWS_API_URL || '' }}
+  AWS_FRONTEND_URL: ${{ vars.AWS_FRONTEND_URL || '' }}
+  AWS_TF_DIR: infra/terraform/live/aws/dev
+  TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD || '' }}
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: app/backend
+    outputs:
+      environment: ${{ steps.resolve.outputs.environment }}
+    steps:
+      - name: Resolve environment
+        id: resolve
+        working-directory: .
+        run: |
+          environment="${{ github.event.inputs.environment || 'dev' }}"
+          echo "environment=${environment}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.branch || github.event.pull_request.head.ref || github.ref_name }}
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+      - name: Run unit tests
+        run: pytest tests/ --ignore=tests/test_provider_smoke.py -v
+
+  prepare:
+    name: Prepare deployment
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      environment: ${{ steps.inputs.outputs.environment }}
+      branch: ${{ steps.inputs.outputs.branch }}
+      target: ${{ steps.inputs.outputs.target }}
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+      commit_sha: ${{ steps.tag.outputs.commit_sha }}
+      deploy_api: ${{ steps.inputs.outputs.deploy_api }}
+      deploy_frontend: ${{ steps.inputs.outputs.deploy_frontend }}
+      deploy_worker: ${{ steps.inputs.outputs.deploy_worker }}
+      run_terraform: ${{ steps.inputs.outputs.run_terraform }}
+      terraform_apply: ${{ steps.inputs.outputs.terraform_apply }}
+      run_migrations: ${{ steps.inputs.outputs.run_migrations }}
+      worker_enabled: ${{ steps.inputs.outputs.worker_enabled }}
+    steps:
+      - name: Resolve inputs
+        id: inputs
+        run: |
+          environment="${{ needs.validate.outputs.environment || 'dev' }}"
+          branch="${{ github.event.inputs.branch || github.event.pull_request.head.ref || github.ref_name }}"
+          target="${{ github.event.inputs.target || 'all' }}"
+          terraform_apply="${{ github.event.inputs.terraform_apply || 'false' }}"
+          run_migrations="${{ github.event.inputs.run_migrations || 'true' }}"
+          worker_mode="${{ github.event.inputs.worker_mode || 'disabled' }}"
+
+          echo "environment=${environment}" >> "${GITHUB_OUTPUT}"
+          echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
+          echo "target=${target}" >> "${GITHUB_OUTPUT}"
+          echo "terraform_apply=${terraform_apply}" >> "${GITHUB_OUTPUT}"
+          echo "run_migrations=${run_migrations}" >> "${GITHUB_OUTPUT}"
+          echo "worker_enabled=${worker_mode}" >> "${GITHUB_OUTPUT}"
+
+          [[ "${target}" == "all" || "${target}" == "api" ]] && echo "deploy_api=true" >> "${GITHUB_OUTPUT}" || echo "deploy_api=false" >> "${GITHUB_OUTPUT}"
+          [[ "${target}" == "all" || "${target}" == "frontend" ]] && echo "deploy_frontend=true" >> "${GITHUB_OUTPUT}" || echo "deploy_frontend=false" >> "${GITHUB_OUTPUT}"
+          if [[ "${worker_mode}" == "disabled" && "${target}" == "worker" ]]; then
+            echo "Error: target=worker requires worker_mode=enabled" >&2
+            exit 1
+          fi
+          if [[ "${worker_mode}" == "enabled" && ("${target}" == "all" || "${target}" == "worker") ]]; then
+            echo "deploy_worker=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "deploy_worker=false" >> "${GITHUB_OUTPUT}"
+          fi
+          [[ "${target}" == "all" || "${target}" == "terraform" ]] && echo "run_terraform=true" >> "${GITHUB_OUTPUT}" || echo "run_terraform=false" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.inputs.outputs.branch }}
+          persist-credentials: false
+
+      - name: Create image tag
+        id: tag
+        run: |
+          commit_sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          echo "image_tag=${short_sha}-${GITHUB_RUN_NUMBER}" >> "${GITHUB_OUTPUT}"
+          echo "commit_sha=${commit_sha}" >> "${GITHUB_OUTPUT}"
+
+  terraform:
+    name: Terraform (AWS)
+    needs: prepare
+    if: ${{ needs.prepare.outputs.run_terraform == 'true' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      api_url: ${{ steps.tf_outputs.outputs.api_url }}
+      frontend_url: ${{ steps.tf_outputs.outputs.frontend_url }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
+          role-session-name: github-terraform-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.10.0"
+
+      - name: Write Terraform backend config
+        env:
+          TF_BACKEND_BUCKET: ${{ vars.AWS_TF_BACKEND_BUCKET || '' }}
+          TF_BACKEND_KEY: ${{ vars.AWS_TF_BACKEND_KEY || '' }}
+          TF_BACKEND_DYNAMODB_TABLE: ${{ vars.AWS_TF_BACKEND_DYNAMODB_TABLE || '' }}
+        run: |
+          : "${TF_BACKEND_BUCKET:?AWS_TF_BACKEND_BUCKET repository variable is required}"
+          : "${TF_BACKEND_KEY:?AWS_TF_BACKEND_KEY repository variable is required}"
+          : "${TF_BACKEND_DYNAMODB_TABLE:?AWS_TF_BACKEND_DYNAMODB_TABLE repository variable is required}"
+          cat > "${RUNNER_TEMP}/backend.aws.conf" <<EOF
+          bucket         = "${TF_BACKEND_BUCKET}"
+          key            = "${TF_BACKEND_KEY}"
+          region         = "${AWS_REGION}"
+          encrypt        = true
+          dynamodb_table = "${TF_BACKEND_DYNAMODB_TABLE}"
+          EOF
+
+      - name: Terraform init
+        working-directory: ${{ env.AWS_TF_DIR }}
+        run: terraform init -backend-config="${RUNNER_TEMP}/backend.aws.conf"
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate
+        working-directory: ${{ env.AWS_TF_DIR }}
+        run: terraform validate
+
+      - name: Terraform plan
+        working-directory: ${{ env.AWS_TF_DIR }}
+        run: terraform plan -input=false -lock-timeout=300s -out=tfplan
+
+      - name: Terraform apply
+        if: ${{ needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform' }}
+        working-directory: ${{ env.AWS_TF_DIR }}
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Capture Terraform outputs
+        id: tf_outputs
+        working-directory: ${{ env.AWS_TF_DIR }}
+        run: |
+          api_url="${AWS_API_URL:-}"
+          frontend_url="${AWS_FRONTEND_URL:-}"
+
+          if terraform output -json > "${RUNNER_TEMP}/aws-tf-outputs.json" 2>/dev/null; then
+            tf_api_url="$(jq -r '.api_url.value // ""' "${RUNNER_TEMP}/aws-tf-outputs.json")"
+            tf_frontend_url="$(jq -r '.frontend_url.value // ""' "${RUNNER_TEMP}/aws-tf-outputs.json")"
+            [[ -n "${tf_api_url}" ]] && api_url="${tf_api_url}"
+            [[ -n "${tf_frontend_url}" ]] && frontend_url="${tf_frontend_url}"
+          else
+            echo "::notice::Terraform state outputs are not available yet; falling back to repository URL variables."
+          fi
+
+          echo "api_url=${api_url}" >> "${GITHUB_OUTPUT}"
+          echo "frontend_url=${frontend_url}" >> "${GITHUB_OUTPUT}"
+
+  build-api:
+    name: Build API image
+    needs: prepare
+    if: ${{ needs.prepare.outputs.deploy_api == 'true' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          role-session-name: github-build-api-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          tag="${{ needs.prepare.outputs.image_tag }}"
+          repo="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${AWS_REGION}.amazonaws.com/dachjob-dev-api"
+          aws_image="${repo}:${tag}"
+          aws_latest="${repo}:latest"
+          echo "image=${aws_image}" >> "${GITHUB_OUTPUT}"
+          echo "latest=${aws_latest}" >> "${GITHUB_OUTPUT}"
+          echo "repo=${repo}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "tags<<EOF"
+            echo "${aws_image}"
+            echo "${aws_latest}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: app/backend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            GIT_BRANCH=${{ needs.prepare.outputs.branch }}
+            GIT_COMMIT_SHA=${{ needs.prepare.outputs.commit_sha }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+
+  build-frontend:
+    name: Build frontend image
+    needs: prepare
+    if: ${{ needs.prepare.outputs.deploy_frontend == 'true' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          role-session-name: github-build-frontend-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          tag="${{ needs.prepare.outputs.image_tag }}"
+          repo="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${AWS_REGION}.amazonaws.com/dachjob-dev-frontend"
+          aws_image="${repo}:${tag}"
+          aws_latest="${repo}:latest"
+          echo "image=${aws_image}" >> "${GITHUB_OUTPUT}"
+          echo "latest=${aws_latest}" >> "${GITHUB_OUTPUT}"
+          echo "repo=${repo}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "tags<<EOF"
+            echo "${aws_image}"
+            echo "${aws_latest}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: app/frontend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ env.AWS_API_URL }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+
+  build-worker:
+    name: Build worker image
+    needs: prepare
+    if: ${{ needs.prepare.outputs.deploy_worker == 'true' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          role-session-name: github-build-worker-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          tag="${{ needs.prepare.outputs.image_tag }}"
+          repo="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${AWS_REGION}.amazonaws.com/dachjob-dev-worker"
+          aws_image="${repo}:${tag}"
+          aws_latest="${repo}:latest"
+          echo "image=${aws_image}" >> "${GITHUB_OUTPUT}"
+          echo "latest=${aws_latest}" >> "${GITHUB_OUTPUT}"
+          echo "repo=${repo}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "tags<<EOF"
+            echo "${aws_image}"
+            echo "${aws_latest}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: app/backend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            GIT_BRANCH=${{ needs.prepare.outputs.branch }}
+            GIT_COMMIT_SHA=${{ needs.prepare.outputs.commit_sha }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+
+  deploy-api:
+    name: Deploy API (AWS)
+    needs:
+      - prepare
+      - terraform
+      - build-api
+    if: ${{ always() && needs.prepare.outputs.deploy_api == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-api.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      url: ${{ steps.url.outputs.url }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          role-session-name: github-deploy-api-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update API task definition
+        id: taskdef
+        run: |
+          CLUSTER="${AWS_ECS_CLUSTER:-dachjob-dev-cluster}"
+          SERVICE="${AWS_API_SERVICE:-dachjob-dev-api}"
+          IMAGE="${{ needs.build-api.outputs.image }}"
+          WORKER_ENABLED="${{ needs.prepare.outputs.worker_enabled == 'enabled' && 'true' || 'false' }}"
+
+          # Fetch current task definition
+          TASK_DEF_ARN="$(aws ecs describe-services \
+            --cluster "${CLUSTER}" \
+            --services "${SERVICE}" \
+            --query 'services[0].taskDefinition' \
+            --output text)"
+
+          TASK_DEF="$(aws ecs describe-task-definition \
+            --task-definition "${TASK_DEF_ARN}" \
+            --query 'taskDefinition' \
+            --output json)"
+
+          # Update image and environment variables
+          NEW_TASK_DEF="$(echo "${TASK_DEF}" | jq \
+            --arg IMAGE "${IMAGE}" \
+            --arg WORKER_ENABLED "${WORKER_ENABLED}" \
+            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) |
+             .containerDefinitions[0].image = $IMAGE |
+             (.containerDefinitions[0].environment[] | select(.name == "WORKER_ENABLED")).value = $WORKER_ENABLED')"
+
+          NEW_TASK_DEF_ARN="$(aws ecs register-task-definition \
+            --cli-input-json "${NEW_TASK_DEF}" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)"
+
+          echo "new_task_def_arn=${NEW_TASK_DEF_ARN}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy API to ECS
+        run: |
+          aws ecs update-service \
+            --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
+            --service "${AWS_API_SERVICE:-dachjob-dev-api}" \
+            --task-definition "${{ steps.taskdef.outputs.new_task_def_arn }}" \
+            --force-new-deployment \
+            --output none
+
+          echo "Waiting for API deployment to stabilize..."
+          aws ecs wait services-stable \
+            --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
+            --services "${AWS_API_SERVICE:-dachjob-dev-api}"
+
+      - name: Run database migrations
+        if: ${{ needs.prepare.outputs.run_migrations == 'true' }}
+        run: |
+          CLUSTER="${AWS_ECS_CLUSTER:-dachjob-dev-cluster}"
+          TASK_DEF_ARN="${{ steps.taskdef.outputs.new_task_def_arn }}"
+          SUBNETS="$(aws ecs describe-services \
+            --cluster "${CLUSTER}" \
+            --services "${AWS_API_SERVICE:-dachjob-dev-api}" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.subnets' \
+            --output text | tr '\t' ',')"
+          SG="$(aws ecs describe-services \
+            --cluster "${CLUSTER}" \
+            --services "${AWS_API_SERVICE:-dachjob-dev-api}" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.securityGroups[0]' \
+            --output text)"
+
+          echo "Running alembic upgrade head as ECS task..."
+          OVERRIDES="$(jq -n --arg cmd "alembic upgrade head" '{
+            containerOverrides: [{ name: "api", command: ($cmd | split(" ")) }]
+          }')"
+
+          TASK_ARN="$(aws ecs run-task \
+            --cluster "${CLUSTER}" \
+            --task-definition "${TASK_DEF_ARN}" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SG}],assignPublicIp=DISABLED}" \
+            --overrides "${OVERRIDES}" \
+            --query 'tasks[0].taskArn' \
+            --output text)"
+
+          echo "Migration task: ${TASK_ARN}"
+          aws ecs wait tasks-stopped \
+            --cluster "${CLUSTER}" \
+            --tasks "${TASK_ARN}"
+
+          EXIT_CODE="$(aws ecs describe-tasks \
+            --cluster "${CLUSTER}" \
+            --tasks "${TASK_ARN}" \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)"
+
+          if [[ "${EXIT_CODE}" != "0" ]]; then
+            echo "Migrations failed with exit code ${EXIT_CODE}"
+            exit 1
+          fi
+          echo "Migrations completed successfully."
+
+      - name: Capture service URL
+        id: url
+        run: |
+          url="${AWS_API_URL:-${{ needs.terraform.outputs.api_url }}}"
+          if [[ -z "${url}" ]]; then
+            alb_dns="$(aws ecs describe-services \
+              --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
+              --services "${AWS_API_SERVICE:-dachjob-dev-api}" \
+              --query 'services[0].loadBalancers[0].targetGroupArn' \
+              --output text)"
+            url="http://${alb_dns:-unknown}"
+          fi
+          echo "url=${url}" >> "${GITHUB_OUTPUT}"
+
+      - name: Health check API
+        run: |
+          for attempt in {1..30}; do
+            if curl -fsS "${{ steps.url.outputs.url }}/api/health"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+
+  deploy-frontend:
+    name: Deploy frontend (AWS)
+    needs:
+      - prepare
+      - terraform
+      - build-frontend
+    if: ${{ always() && needs.prepare.outputs.deploy_frontend == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-frontend.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      url: ${{ steps.url.outputs.url }}
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          role-session-name: github-deploy-frontend-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update frontend task definition
+        id: taskdef
+        run: |
+          CLUSTER="${AWS_ECS_CLUSTER:-dachjob-dev-cluster}"
+          SERVICE="${AWS_FRONTEND_SERVICE:-dachjob-dev-frontend}"
+          IMAGE="${{ needs.build-frontend.outputs.image }}"
+
+          TASK_DEF_ARN="$(aws ecs describe-services \
+            --cluster "${CLUSTER}" \
+            --services "${SERVICE}" \
+            --query 'services[0].taskDefinition' \
+            --output text)"
+
+          TASK_DEF="$(aws ecs describe-task-definition \
+            --task-definition "${TASK_DEF_ARN}" \
+            --query 'taskDefinition' \
+            --output json)"
+
+          NEW_TASK_DEF="$(echo "${TASK_DEF}" | jq \
+            --arg IMAGE "${IMAGE}" \
+            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) |
+             .containerDefinitions[0].image = $IMAGE')"
+
+          NEW_TASK_DEF_ARN="$(aws ecs register-task-definition \
+            --cli-input-json "${NEW_TASK_DEF}" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)"
+
+          echo "new_task_def_arn=${NEW_TASK_DEF_ARN}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy frontend to ECS
+        run: |
+          aws ecs update-service \
+            --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
+            --service "${AWS_FRONTEND_SERVICE:-dachjob-dev-frontend}" \
+            --task-definition "${{ steps.taskdef.outputs.new_task_def_arn }}" \
+            --force-new-deployment \
+            --output none
+
+          echo "Waiting for frontend deployment to stabilize..."
+          aws ecs wait services-stable \
+            --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
+            --services "${AWS_FRONTEND_SERVICE:-dachjob-dev-frontend}"
+
+      - name: Capture service URL
+        id: url
+        run: |
+          url="${AWS_FRONTEND_URL:-${{ needs.terraform.outputs.frontend_url }}}"
+          echo "url=${url}" >> "${GITHUB_OUTPUT}"
+
+      - name: Health check frontend
+        run: |
+          for attempt in {1..30}; do
+            if curl -fsS "${{ steps.url.outputs.url }}" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+
+  deploy-worker:
+    name: Deploy worker (AWS)
+    needs:
+      - prepare
+      - terraform
+      - build-worker
+    if: ${{ always() && needs.prepare.outputs.deploy_worker == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-worker.result == 'success' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          persist-credentials: false
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          role-session-name: github-deploy-worker-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update worker task definition
+        id: taskdef
+        run: |
+          CLUSTER="${AWS_ECS_CLUSTER:-dachjob-dev-cluster}"
+          SERVICE="${AWS_WORKER_SERVICE:-dachjob-dev-worker}"
+          IMAGE="${{ needs.build-worker.outputs.image }}"
+
+          TASK_DEF_ARN="$(aws ecs describe-services \
+            --cluster "${CLUSTER}" \
+            --services "${SERVICE}" \
+            --query 'services[0].taskDefinition' \
+            --output text)"
+
+          TASK_DEF="$(aws ecs describe-task-definition \
+            --task-definition "${TASK_DEF_ARN}" \
+            --query 'taskDefinition' \
+            --output json)"
+
+          NEW_TASK_DEF="$(echo "${TASK_DEF}" | jq \
+            --arg IMAGE "${IMAGE}" \
+            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) |
+             .containerDefinitions[0].image = $IMAGE')"
+
+          NEW_TASK_DEF_ARN="$(aws ecs register-task-definition \
+            --cli-input-json "${NEW_TASK_DEF}" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)"
+
+          echo "new_task_def_arn=${NEW_TASK_DEF_ARN}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy worker to ECS
+        run: |
+          aws ecs update-service \
+            --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
+            --service "${AWS_WORKER_SERVICE:-dachjob-dev-worker}" \
+            --task-definition "${{ steps.taskdef.outputs.new_task_def_arn }}" \
+            --force-new-deployment \
+            --output none
+
+          echo "Waiting for worker deployment to stabilize..."
+          aws ecs wait services-stable \
+            --cluster "${AWS_ECS_CLUSTER:-dachjob-dev-cluster}" \
+            --services "${AWS_WORKER_SERVICE:-dachjob-dev-worker}"
+
+  smoke-test:
+    name: Smoke test
+    needs:
+      - prepare
+      - deploy-api
+      - deploy-frontend
+    if: ${{ always() && needs.deploy-api.result == 'success' && needs.deploy-frontend.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          role-session-name: github-smoke-test-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Fetch test credentials from AWS Secrets Manager
+        run: |
+          SECRET_NAME="dachjob-dev-test-ci-password"
+          SMOKE_TEST_PASSWORD="$(aws secretsmanager get-secret-value \
+            --secret-id "${SECRET_NAME}" \
+            --query SecretString \
+            --output text 2>/dev/null || true)"
+          if [[ -n "${SMOKE_TEST_PASSWORD}" ]]; then
+            echo "::add-mask::${SMOKE_TEST_PASSWORD}"
+            echo "SMOKE_TEST_PASSWORD=${SMOKE_TEST_PASSWORD}" >> "${GITHUB_ENV}"
+          fi
+
+      - name: Run smoke test
+        run: |
+          SMOKE_TEST_MODE="${{ github.event.inputs.smoke_test_mode || 'full' }}" \
+          API_BASE_URL="${{ needs.deploy-api.outputs.url || env.AWS_API_URL }}" \
+          FRONTEND_URL="${{ needs.deploy-frontend.outputs.url || env.AWS_FRONTEND_URL }}" \
+          SMOKE_TEST_EMAIL="smoke+aws-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com" \
+          bash infra/deploy/scripts/smoke-test-api.sh
+
+  summary:
+    name: Deployment summary
+    needs:
+      - prepare
+      - terraform
+      - deploy-api
+      - deploy-frontend
+      - deploy-worker
+      - smoke-test
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write summary
+        run: |
+          echo "## AWS Deployment Summary" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Item | Value |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| --- | --- |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Environment | ${{ needs.prepare.outputs.environment || 'dev' }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Branch | ${{ needs.prepare.outputs.branch }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Target | ${{ needs.prepare.outputs.target }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Image tag | ${{ needs.prepare.outputs.image_tag }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Terraform | ${{ needs.terraform.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| API | ${{ needs.deploy-api.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Frontend | ${{ needs.deploy-frontend.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Worker | ${{ needs.deploy-worker.result || 'skipped' }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Smoke test | ${{ needs.smoke-test.result }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| API URL | ${{ needs.deploy-api.outputs.url || env.AWS_API_URL }} |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Frontend URL | ${{ needs.deploy-frontend.outputs.url || env.AWS_FRONTEND_URL }} |" >> "${GITHUB_STEP_SUMMARY}"
