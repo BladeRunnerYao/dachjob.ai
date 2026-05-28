@@ -524,7 +524,7 @@ jobs:
             --service "${AWS_API_SERVICE:-dachjob-dev-api}" \
             --task-definition "${{ steps.taskdef.outputs.new_task_def_arn }}" \
             --force-new-deployment \
-            --output none
+            >/dev/null
 
           echo "Waiting for API deployment to stabilize..."
           aws ecs wait services-stable \
@@ -667,7 +667,7 @@ jobs:
             --service "${AWS_FRONTEND_SERVICE:-dachjob-dev-frontend}" \
             --task-definition "${{ steps.taskdef.outputs.new_task_def_arn }}" \
             --force-new-deployment \
-            --output none
+            >/dev/null
 
           echo "Waiting for frontend deployment to stabilize..."
           aws ecs wait services-stable \
@@ -754,7 +754,7 @@ jobs:
             --service "${AWS_WORKER_SERVICE:-dachjob-dev-worker}" \
             --task-definition "${{ steps.taskdef.outputs.new_task_def_arn }}" \
             --force-new-deployment \
-            --output none
+            >/dev/null
 
           echo "Waiting for worker deployment to stabilize..."
           aws ecs wait services-stable \
