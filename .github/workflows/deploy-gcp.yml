@@ -177,10 +177,7 @@ jobs:
         id: inputs
         run: |
           environment="${{ needs.validate.outputs.environment || 'dev' }}"
-          branch="${{ github.event.inputs.branch }}"
-          if [[ -z "${branch}" ]]; then
-            branch="${GITHUB_REF_NAME}"
-          fi
+          branch="${{ github.event.inputs.branch || github.event.pull_request.head.ref || github.ref_name }}"
           target="${{ github.event.inputs.target || 'all' }}"
           terraform_apply="${{ github.event.inputs.terraform_apply || 'false' }}"
           run_migrations="${{ github.event.inputs.run_migrations || 'true' }}"
