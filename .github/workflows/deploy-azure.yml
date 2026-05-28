@@ -210,10 +210,13 @@ jobs:
 
       - name: Authenticate to Azure
         run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+          for i in 1 2 3; do
+            az login --service-principal \
+              -u "${{ vars.AZURE_CLIENT_ID }}" \
+              -t "${{ vars.AZURE_TENANT_ID }}" \
+              --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)" \
+              && break || { echo "az login attempt $i failed, retrying..."; sleep 5; }
+          done
           az account set --subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}"
 
       - name: Load Terraform secrets from Key Vault
@@ -366,10 +369,13 @@ jobs:
 
       - name: Authenticate to Azure
         run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+          for i in 1 2 3; do
+            az login --service-principal \
+              -u "${{ vars.AZURE_CLIENT_ID }}" \
+              -t "${{ vars.AZURE_TENANT_ID }}" \
+              --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)" \
+              && break || { echo "az login attempt $i failed, retrying..."; sleep 5; }
+          done
 
       - name: Login to ACR
         run: az acr login --name "${{ env.AZURE_ACR_NAME }}"
@@ -425,10 +431,13 @@ jobs:
 
       - name: Authenticate to Azure
         run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+          for i in 1 2 3; do
+            az login --service-principal \
+              -u "${{ vars.AZURE_CLIENT_ID }}" \
+              -t "${{ vars.AZURE_TENANT_ID }}" \
+              --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)" \
+              && break || { echo "az login attempt $i failed, retrying..."; sleep 5; }
+          done
 
       - name: Login to ACR
         run: az acr login --name "${{ env.AZURE_ACR_NAME }}"
@@ -483,10 +492,13 @@ jobs:
 
       - name: Authenticate to Azure
         run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+          for i in 1 2 3; do
+            az login --service-principal \
+              -u "${{ vars.AZURE_CLIENT_ID }}" \
+              -t "${{ vars.AZURE_TENANT_ID }}" \
+              --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)" \
+              && break || { echo "az login attempt $i failed, retrying..."; sleep 5; }
+          done
 
       - name: Login to ACR
         run: az acr login --name "${{ env.AZURE_ACR_NAME }}"
@@ -545,10 +557,13 @@ jobs:
 
       - name: Authenticate to Azure
         run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+          for i in 1 2 3; do
+            az login --service-principal \
+              -u "${{ vars.AZURE_CLIENT_ID }}" \
+              -t "${{ vars.AZURE_TENANT_ID }}" \
+              --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)" \
+              && break || { echo "az login attempt $i failed, retrying..."; sleep 5; }
+          done
 
       - name: Deploy API to Azure Container Apps
         run: |
@@ -643,10 +658,13 @@ jobs:
 
       - name: Authenticate to Azure
         run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+          for i in 1 2 3; do
+            az login --service-principal \
+              -u "${{ vars.AZURE_CLIENT_ID }}" \
+              -t "${{ vars.AZURE_TENANT_ID }}" \
+              --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)" \
+              && break || { echo "az login attempt $i failed, retrying..."; sleep 5; }
+          done
 
       - name: Deploy frontend to Azure Container Apps
         run: |
@@ -700,10 +718,13 @@ jobs:
 
       - name: Authenticate to Azure
         run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+          for i in 1 2 3; do
+            az login --service-principal \
+              -u "${{ vars.AZURE_CLIENT_ID }}" \
+              -t "${{ vars.AZURE_TENANT_ID }}" \
+              --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)" \
+              && break || { echo "az login attempt $i failed, retrying..."; sleep 5; }
+          done
 
       - name: Deploy worker to Azure Container Apps
         run: |
@@ -733,10 +754,13 @@ jobs:
 
       - name: Authenticate to Azure
         run: |
-          az login --service-principal \
-            -u "${{ vars.AZURE_CLIENT_ID }}" \
-            -t "${{ vars.AZURE_TENANT_ID }}" \
-            --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)"
+          for i in 1 2 3; do
+            az login --service-principal \
+              -u "${{ vars.AZURE_CLIENT_ID }}" \
+              -t "${{ vars.AZURE_TENANT_ID }}" \
+              --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)" \
+              && break || { echo "az login attempt $i failed, retrying..."; sleep 5; }
+          done
 
       - name: Fetch test credentials from Azure Key Vault
         run: |
