@@ -89,6 +89,7 @@ resource "azurerm_container_app" "api" {
 
   template {
     max_replicas = 10
+    min_replicas = 1
 
     container {
       name   = "api"
@@ -239,6 +240,7 @@ resource "azurerm_container_app" "frontend" {
 
   template {
     max_replicas = 10
+    min_replicas = 1
 
     container {
       name   = "frontend"
