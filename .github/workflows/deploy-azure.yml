@@ -775,6 +775,8 @@ jobs:
             --name "${AZURE_WORKER_NAME}" \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --image "${{ needs.build-worker.outputs.image }}" \
+            --min-replicas 1 \
+            --max-replicas 3 \
             --output none
 
   smoke-test:
