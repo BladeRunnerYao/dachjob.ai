@@ -8,6 +8,8 @@ Instructions for AI coding assistants working on this project.
 
 2. **Never merge without explicit permission.** After creating a PR, do not merge it yourself. Present the PR link and wait for the user to explicitly request a merge.
 
+3. **Monitor CI and fix failures.** After pushing changes or creating a PR, actively watch both workflow runs (deploy-azure.yml and deploy-gcp.yml). If any job fails, investigate and fix the issue. Keep fixing until all jobs are green. Deploy failures on main are your responsibility to resolve.
+
 ## General Guidelines
 
 - Use `git worktree` for changes — create a feature branch from main in a separate worktree, make changes there, then PR back to main.

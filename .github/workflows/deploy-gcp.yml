@@ -2,12 +2,7 @@ name: Deploy to GCP
 
 on:
   push:
-    branches:
-      - main
-      - deploy/*
   pull_request:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       environment:
@@ -159,7 +154,7 @@ jobs:
   prepare:
     name: Prepare deployment
     needs: validate
-    if: ${{ github.event_name != 'pull_request' }}
+
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -230,7 +225,7 @@ jobs:
   terraform:
     name: Terraform (GCP)
     needs: prepare
-    if: ${{ github.event_name != 'pull_request' && needs.prepare.outputs.run_terraform == 'true' }}
+    if: ${{ needs.prepare.outputs.run_terraform == 'true' }}
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -308,7 +303,7 @@ jobs:
   build-api:
     name: Build API image
     needs: prepare
-    if: ${{ github.event_name != 'pull_request' && needs.prepare.outputs.deploy_api == 'true' }}
+    if: ${{ needs.prepare.outputs.deploy_api == 'true' }}
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -390,7 +385,7 @@ jobs:
   build-frontend:
     name: Build frontend image
     needs: prepare
-    if: ${{ github.event_name != 'pull_request' && needs.prepare.outputs.deploy_frontend == 'true' }}
+    if: ${{ needs.prepare.outputs.deploy_frontend == 'true' }}
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -471,7 +466,7 @@ jobs:
   build-worker:
     name: Build worker image
     needs: prepare
-    if: ${{ github.event_name != 'pull_request' && needs.prepare.outputs.deploy_worker == 'true' }}
+    if: ${{ needs.prepare.outputs.deploy_worker == 'true' }}
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -556,7 +551,7 @@ jobs:
       - prepare
       - terraform
       - build-api
-    if: ${{ github.event_name != 'pull_request' && always() && needs.prepare.outputs.deploy_api == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-api.result == 'success' }}
+    if: ${{ always() && needs.prepare.outputs.deploy_api == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-api.result == 'success' }}
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -641,7 +636,7 @@ jobs:
       - prepare
       - terraform
       - build-frontend
-    if: ${{ github.event_name != 'pull_request' && always() && needs.prepare.outputs.deploy_frontend == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-frontend.result == 'success' }}
+    if: ${{ always() && needs.prepare.outputs.deploy_frontend == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-frontend.result == 'success' }}
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -698,7 +693,7 @@ jobs:
       - prepare
       - terraform
       - deploy-api
-    if: ${{ github.event_name != 'pull_request' && always() && needs.prepare.outputs.worker_enabled == 'disabled' && needs.prepare.outputs.scale_down_worker == 'true' && needs.prepare.outputs.deploy_worker != 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') }}
+    if: ${{ always() && needs.prepare.outputs.worker_enabled == 'disabled' && needs.prepare.outputs.scale_down_worker == 'true' && needs.prepare.outputs.deploy_worker != 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -732,7 +727,7 @@ jobs:
       - prepare
       - terraform
       - build-worker
-    if: ${{ github.event_name != 'pull_request' && always() && needs.prepare.outputs.deploy_worker == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-worker.result == 'success' }}
+    if: ${{ always() && needs.prepare.outputs.deploy_worker == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-worker.result == 'success' }}
     runs-on: ubuntu-latest
     continue-on-error: true
     environment: dev
@@ -797,7 +792,7 @@ jobs:
       - prepare
       - deploy-api
       - deploy-frontend
-    if: ${{ github.event_name != 'pull_request' && always() && needs.deploy-api.result == 'success' && needs.deploy-frontend.result == 'success' }}
+    if: ${{ always() && needs.deploy-api.result == 'success' && needs.deploy-frontend.result == 'success' }}
     runs-on: ubuntu-latest
     environment: dev
     permissions:
@@ -838,7 +833,7 @@ jobs:
       - deploy-worker
       - scale-down-worker
       - smoke-test
-    if: ${{ github.event_name != 'pull_request' && always() }}
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - name: Write summary
