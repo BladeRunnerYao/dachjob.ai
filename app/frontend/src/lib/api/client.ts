@@ -266,10 +266,10 @@ export class ApiClient {
     };
   }
 
-  async createResumeArtifact(jobId: string): Promise<ResumeArtifact> {
+  async createResumeArtifact(jobId: string, confirmedSkills?: string[]): Promise<ResumeArtifact> {
     const result = await request<ResumeArtifact | BackgroundTask>(`/api/jobs/${jobId}/resume`, {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify({ confirmed_skills: confirmedSkills || [] }),
       timeoutMs: this.workerEnabled ? undefined : this.RESUME_GENERATE_TIMEOUT_MS,
     });
     if (isBackgroundTaskResponse(result)) {
