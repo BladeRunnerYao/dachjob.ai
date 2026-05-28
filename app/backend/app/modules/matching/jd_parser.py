@@ -349,6 +349,9 @@ def _deterministic_parse(job):
         "skills": must_have + nice_to_have,
         "language_requirements": lang_reqs,
         "dach_signals": dach_signals,
+        "responsibilities": [],
+        "required_qualifications": [],
+        "preferred_qualifications": [],
         "raw_preview": job.raw_jd[:500] if job.raw_jd else "",
     }
 
@@ -370,9 +373,19 @@ def _jd_extract_messages(job) -> list[dict]:
                 "title, company, location, work_model (remote/hybrid/onsite), "
                 "language_requirements (list), must_have_skills (list), "
                 "nice_to_have_skills (list), "
+                "responsibilities (list of strings — extract each responsibility as a separate sentence), "
+                "required_qualifications (list of strings — extract each required qualification as a separate sentence), "
+                "preferred_qualifications (list of strings — extract each preferred/nice-to-have qualification as a separate sentence), "
                 "salary_range (string or null), seniority (string or null), "
                 "work_authorization (object or null with status, label, detail, evidence), "
                 "dach_signals (object with location/country/language/work_authorization keys)\n\n"
+                "Responsibility and qualification extraction rules:\n"
+                "- Extract the full text of each responsibility or qualification as a separate string in the list — do not summarize or truncate.\n"
+                "- Include the complete sentence or bullet point, preserving the original wording.\n"
+                "- Responsibilities come from sections like 'Responsibilities', 'Your Responsibilities', 'What You'll Do', 'Your Tasks'.\n"
+                "- Required qualifications come from sections like 'Requirements', 'Qualifications', 'Must Have', 'Your Profile', 'What We Look For'.\n"
+                "- Preferred qualifications come from sections like 'Nice to Have', 'Preferred Qualifications', 'Bonus', 'Extras'.\n"
+                "- If no explicit separation between required and preferred qualifications exists, put all qualification items in required_qualifications.\n\n"
                 "Skill extraction rules:\n"
                 "- Extract as many explicit atomic skills/capabilities as the posting contains, not only broad summary sentences.\n"
                 "- Include programming languages, frameworks, databases, protocols, cloud services, infrastructure practices, security controls, testing/release practices, domain capabilities, collaboration requirements, and operational responsibilities.\n"
