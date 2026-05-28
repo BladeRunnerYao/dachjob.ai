@@ -434,7 +434,9 @@ export default function JobDetailPage() {
         <aside className="space-y-4">
           {/* Match Score */}
           {matchPercent != null ? (
-            <ScoreRing percent={matchPercent} />
+            <div className="flex justify-center">
+              <ScoreRing percent={matchPercent} />
+            </div>
           ) : (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-6">

@@ -7,9 +7,13 @@ interface RecentJobsProps {
   jobs: JobPosting[];
 }
 
-function scoreBadge(score: number) {
-  if (score >= 4.2) return 'green';
-  if (score >= 3.6) return 'yellow';
+function toPercent(score: number): number {
+  return Math.round((Math.min(Math.max(score, 1), 5) / 5) * 100);
+}
+
+function scoreBadge(percent: number) {
+  if (percent >= 84) return 'green';
+  if (percent >= 72) return 'yellow';
   return 'red';
 }
 
@@ -26,6 +30,7 @@ export function RecentJobs({ jobs }: RecentJobsProps) {
         <h2 className="text-sm font-semibold text-slate-900">Recent Jobs</h2>
       </CardHeader>
       <CardContent className="p-0">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
@@ -49,7 +54,7 @@ export function RecentJobs({ jobs }: RecentJobsProps) {
                   {job.score == null ? (
                     <span className="text-xs text-slate-400">Pending</span>
                   ) : (
-                    <Badge variant={scoreBadge(job.score)}>{job.score}</Badge>
+                    <Badge variant={scoreBadge(toPercent(job.score))}>{toPercent(job.score)}%</Badge>
                   )}
                 </td>
                 <td className="px-4 py-2.5">
@@ -64,6 +69,7 @@ export function RecentJobs({ jobs }: RecentJobsProps) {
             ))}
           </tbody>
         </table>
+        </div>
       </CardContent>
     </Card>
   );

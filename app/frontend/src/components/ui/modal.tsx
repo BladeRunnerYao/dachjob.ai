@@ -34,10 +34,10 @@ export function Modal({ open, onClose, title, children, size = 'lg' }: ModalProp
 
   const sizeClass =
     size === 'full'
-      ? 'w-[95vw] h-[95vh]'
+      ? 'w-[95vw] max-w-7xl h-[95vh]'
       : size === 'xl'
-        ? 'w-[90vw] max-w-5xl max-h-[90vh]'
-        : 'w-[85vw] max-w-3xl max-h-[85vh]';
+        ? 'w-full mx-4 max-w-5xl max-h-[90vh]'
+        : 'w-full mx-4 max-w-3xl max-h-[85vh]';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
