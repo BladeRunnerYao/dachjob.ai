@@ -19,7 +19,7 @@ locals {
     [module.secrets_manager.db_password_secret_arn],
     values(module.secrets_manager.app_secret_arns),
   )
-  db_password = var.db_password != "" ? var.db_password : one(data.aws_secretsmanager_secret_version.db_password[*].secret_string)
+  db_password  = var.db_password != "" ? var.db_password : one(data.aws_secretsmanager_secret_version.db_password[*].secret_string)
   database_url = "postgresql+asyncpg://${module.rds.db_username}:${local.db_password}@${module.rds.address}:${module.rds.port}/${module.rds.db_name}?sslmode=require"
 }
 
