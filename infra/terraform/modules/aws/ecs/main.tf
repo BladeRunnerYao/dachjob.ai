@@ -281,12 +281,13 @@ resource "aws_ecs_task_definition" "api" {
       }]
       environment = [
         { name = "ENVIRONMENT", value = var.environment },
+        { name = "APP_ENV", value = var.environment },
         { name = "LOG_LEVEL", value = var.log_level },
         { name = "LOG_JSON", value = "true" },
         { name = "ERROR_LOG_TO_FILE", value = "true" },
         { name = "ERROR_LOG_DIR", value = "/tmp/dachjob-error-logs" },
         { name = "STORAGE_PROVIDER", value = "s3" },
-        { name = "S3_BUCKET", value = var.artifacts_bucket_name },
+        { name = "S3_BUCKET_NAME", value = var.artifacts_bucket_name },
         { name = "AWS_REGION", value = var.aws_region },
         { name = "WORKER_ENABLED", value = var.worker_enabled },
         { name = "WORKER_FALLBACK_TO_SYNC", value = "true" },
@@ -366,10 +367,11 @@ resource "aws_ecs_task_definition" "worker" {
       command = ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
       environment = [
         { name = "ENVIRONMENT", value = var.environment },
+        { name = "APP_ENV", value = var.environment },
         { name = "LOG_LEVEL", value = var.log_level },
         { name = "LOG_JSON", value = "true" },
         { name = "STORAGE_PROVIDER", value = "s3" },
-        { name = "S3_BUCKET", value = var.artifacts_bucket_name },
+        { name = "S3_BUCKET_NAME", value = var.artifacts_bucket_name },
         { name = "AWS_REGION", value = var.aws_region },
         { name = "REDIS_URL", value = var.redis_url },
         { name = "REDIS_ENABLED", value = "true" },

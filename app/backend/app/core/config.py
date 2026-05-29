@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     s3_endpoint_url: str = "http://localhost:9000"
     s3_access_key_id: str = "minioadmin"
     s3_secret_access_key: str = "minioadmin"
+    aws_region: str = ""
 
     azure_storage_connection_string: str = ""
     azure_storage_container_name: str = ""

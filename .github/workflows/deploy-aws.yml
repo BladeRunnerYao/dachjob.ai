@@ -66,7 +66,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   AWS_REGION: eu-west-1
   AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID || '' }}
   AWS_ECS_CLUSTER: ${{ vars.AWS_ECS_CLUSTER || '' }}
@@ -206,7 +205,7 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to AWS via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
           role-session-name: github-terraform-${{ github.run_id }}
@@ -292,7 +291,7 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to AWS via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           role-session-name: github-build-api-${{ github.run_id }}
@@ -355,7 +354,7 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to AWS via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           role-session-name: github-build-frontend-${{ github.run_id }}
@@ -415,7 +414,7 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to AWS via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           role-session-name: github-build-worker-${{ github.run_id }}
@@ -482,7 +481,7 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to AWS via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           role-session-name: github-deploy-api-${{ github.run_id }}
@@ -669,7 +668,7 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to AWS via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           role-session-name: github-deploy-frontend-${{ github.run_id }}
@@ -788,7 +787,7 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to AWS via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           role-session-name: github-deploy-worker-${{ github.run_id }}
@@ -853,7 +852,7 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate to AWS via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           role-session-name: github-smoke-test-${{ github.run_id }}

@@ -34,14 +34,22 @@ class StorageService:
         import boto3
         from botocore.config import Config
 
-        self._s3_client = boto3.client(
-            "s3",
-            endpoint_url=settings.s3_endpoint_url,
-            aws_access_key_id=settings.s3_access_key_id,
-            aws_secret_access_key=settings.s3_secret_access_key,
-            config=Config(signature_version="s3v4"),
-            region_name="us-east-1",
+        kwargs: dict = {
+            "config": Config(signature_version="s3v4"),
+            "region_name": settings.aws_region or "eu-west-1",
+        }
+
+        # Use explicit endpoint/creds only for local development (MinIO)
+        use_local = (
+            settings.app_env == "local"
+            or (settings.s3_endpoint_url and "localhost" in settings.s3_endpoint_url)
         )
+        if use_local:
+            kwargs["endpoint_url"] = settings.s3_endpoint_url
+            kwargs["aws_access_key_id"] = settings.s3_access_key_id
+            kwargs["aws_secret_access_key"] = settings.s3_secret_access_key
+
+        self._s3_client = boto3.client("s3", **kwargs)
 
     def _init_azure_blob(self, settings) -> None:
         from azure.storage.blob import BlobServiceClient
