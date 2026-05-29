@@ -5,13 +5,6 @@
 #
 # Region: eu-west-1 (Ireland) — closest to GCP europe-west1 / Azure westeurope
 
-# Read DB password from Secrets Manager on subsequent applies
-# (skipped on first apply when var.db_password is set via TF_VAR_db_password)
-data "aws_secretsmanager_secret_version" "db_password" {
-  count     = var.db_password == "" ? 1 : 0
-  secret_id = module.secrets_manager.db_password_secret_name
-}
-
 locals {
   region   = var.region
   az_count = 2
@@ -19,7 +12,7 @@ locals {
     [module.secrets_manager.db_password_secret_arn],
     values(module.secrets_manager.app_secret_arns),
   )
-  db_password  = var.db_password != "" ? var.db_password : one(data.aws_secretsmanager_secret_version.db_password[*].secret_string)
+  db_password  = module.secrets_manager.db_password_value
   database_url = "postgresql+asyncpg://${module.rds.db_username}:${local.db_password}@${module.rds.address}:${module.rds.port}/${module.rds.db_name}?ssl=require"
 }
 
@@ -78,7 +71,7 @@ module "rds" {
   vpc_id                = module.networking.vpc_id
   private_subnet_ids    = module.networking.private_subnet_ids
   ecs_security_group_id = aws_security_group.ecs_tasks.id
-  db_password           = var.db_password
+  db_password           = local.db_password
   tags                  = var.tags
 }
 
