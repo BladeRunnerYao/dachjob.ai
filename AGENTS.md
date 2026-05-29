@@ -30,3 +30,53 @@ Instructions for AI coding assistants working on this project.
 | Secrets | Secret Manager | Key Vault | Secrets Manager |
 | CI Auth | WIF | Azure AD OIDC | IAM OIDC |
 | Terraform State | GCS bucket | Azure Storage blob | S3 bucket + DynamoDB lock |
+
+## AWS Details
+
+Full reference: `docs/aws-setup.md`
+
+**Authentication** — use the `dachjob-admin` IAM profile (AdministratorAccess):
+```bash
+export AWS_PROFILE=dachjob-admin
+aws sts get-caller-identity
+```
+
+| Item | Value |
+|---|---|
+| Account ID | `755545427549` |
+| Region | `eu-west-1` (Ireland) |
+| ECS Cluster | `dachjob-dev-cluster` |
+
+**Endpoints:**
+
+| Service | URL |
+|---|---|
+| ALB (HTTP) | `dachjob-dev-alb-1730467011.eu-west-1.elb.amazonaws.com` |
+| CloudFront (HTTPS) | `d3ktpumdo7sly4.cloudfront.net` |
+| API (public) | `https://d3ktpumdo7sly4.cloudfront.net/api/health` |
+| Frontend (public) | `https://d3ktpumdo7sly4.cloudfront.net` |
+| RDS | `dachjob-dev-postgres-b682.cfsmow8y4er3.eu-west-1.rds.amazonaws.com:5432` |
+| ElastiCache | `dachjob-dev-redis.k1t1ty.0001.euw1.cache.amazonaws.com:6379` |
+
+**ECS Services:**
+
+| Service | Desired count |
+|---|---|
+| `dachjob-dev-api` | 1 |
+| `dachjob-dev-frontend` | 1 |
+| `dachjob-dev-worker` | 0 (disabled) |
+
+**Terraform State:**
+- Bucket: `dachjob-dev-terraform-state` (S3, versioned, encrypted)
+- Lock table: `dachjob-dev-terraform-lock` (DynamoDB)
+- Config: `infra/terraform/live/aws/dev/`
+
+**Password reset** — use the workflow dispatch input `reset_password_for` (calls the API forgot-password → reset-password flow). Or manually via curl:
+```bash
+# 1. Get reset token
+curl -sS -X POST "${API_URL}/api/auth/forgot-password" \
+  -H "Content-Type: application/json" -d '{"email":"user@example.com"}'
+# 2. Extract token from reset_link, then:
+curl -sS -X POST "${API_URL}/api/auth/reset-password" \
+  -H "Content-Type: application/json" -d '{"token":"...","new_password":"NewPass123!"}'
+```
