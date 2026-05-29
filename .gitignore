@@ -30,3 +30,4 @@ build/
 *.tfvars
 *.tfstate
 *.tfstate.*
+**/backend.conf
