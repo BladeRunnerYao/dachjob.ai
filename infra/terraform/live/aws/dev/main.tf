@@ -163,7 +163,7 @@ module "ecs" {
   cloudfront_domain = var.cloudfront_domain
 
   # Application config (allow ALB + local dev)
-  cors_origins      = var.cors_origins != "" ? var.cors_origins : "http://${var.name_prefix}-alb-*.elb.amazonaws.com,http://localhost:3000"
+  cors_origins      = var.cors_origins != "" ? var.cors_origins : "https://${var.cloudfront_domain},http://localhost:3000"
   llm_provider      = var.llm_provider
   resend_from_email = var.resend_from_email
 
