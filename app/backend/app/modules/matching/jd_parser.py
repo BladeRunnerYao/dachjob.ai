@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import TenantContext
 from app.modules.jobs.repository import sync_job_skills
 from app.modules.matching.skill_taxonomy import (
-    _dedupe_preserve_order,
     DACH_CITIES,
     DACH_COUNTRIES,
     GERMAN_KEYWORDS,
@@ -26,6 +25,7 @@ from app.modules.matching.skill_taxonomy import (
     SWISS_LOCATION_KEYWORDS,
     VISA_SPONSORSHIP_WARNING_PATTERNS,
     WORK_MODEL_KEYWORDS,
+    _dedupe_preserve_order,
 )
 
 

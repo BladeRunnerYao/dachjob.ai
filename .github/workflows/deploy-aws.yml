@@ -2,7 +2,8 @@ name: Deploy to AWS
 
 on:
   push:
-  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       environment:
@@ -55,11 +56,6 @@ on:
         options:
           - minimal
           - full
-      reset_password_for:
-        description: "Reset password for an email address (e.g., tiyao.li@outlook.com). Only runs with target=api."
-        required: false
-        type: string
-        default: ""
 
 concurrency:
   group: deploy-aws-${{ github.event.inputs.environment || 'dev' }}
@@ -100,7 +96,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.inputs.branch || github.event.pull_request.head.ref || github.ref_name }}
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
           persist-credentials: false
 
       - name: Setup Python
@@ -138,13 +134,12 @@ jobs:
       terraform_apply: ${{ steps.inputs.outputs.terraform_apply }}
       run_migrations: ${{ steps.inputs.outputs.run_migrations }}
       worker_enabled: ${{ steps.inputs.outputs.worker_enabled }}
-      reset_password_for: ${{ steps.inputs.outputs.reset_password_for }}
     steps:
       - name: Resolve inputs
         id: inputs
         run: |
           environment="${{ needs.validate.outputs.environment || 'dev' }}"
-          branch="${{ github.event.inputs.branch || github.event.pull_request.head.ref || github.ref_name }}"
+          branch="${{ github.event.inputs.branch || github.ref_name }}"
           target="${{ github.event.inputs.target || 'all' }}"
           terraform_apply="${{ github.event.inputs.terraform_apply || 'false' }}"
           run_migrations="${{ github.event.inputs.run_migrations || 'true' }}"
@@ -156,9 +151,8 @@ jobs:
           echo "terraform_apply=${terraform_apply}" >> "${GITHUB_OUTPUT}"
           echo "run_migrations=${run_migrations}" >> "${GITHUB_OUTPUT}"
           echo "worker_enabled=${worker_mode}" >> "${GITHUB_OUTPUT}"
-          echo "reset_password_for=${{ github.event.inputs.reset_password_for || '' }}" >> "${GITHUB_OUTPUT}"
 
-          [[ "${target}" == "all" || "${target}" == "api" || "${{ github.event.inputs.reset_password_for || '' }}" != "" ]] && echo "deploy_api=true" >> "${GITHUB_OUTPUT}" || echo "deploy_api=false" >> "${GITHUB_OUTPUT}"
+          [[ "${target}" == "all" || "${target}" == "api" ]] && echo "deploy_api=true" >> "${GITHUB_OUTPUT}" || echo "deploy_api=false" >> "${GITHUB_OUTPUT}"
           [[ "${target}" == "all" || "${target}" == "frontend" ]] && echo "deploy_frontend=true" >> "${GITHUB_OUTPUT}" || echo "deploy_frontend=false" >> "${GITHUB_OUTPUT}"
           if [[ "${worker_mode}" == "disabled" && "${target}" == "worker" ]]; then
             echo "Error: target=worker requires worker_mode=enabled" >&2
@@ -190,7 +184,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.run_terraform == 'true' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -249,7 +243,7 @@ jobs:
         run: terraform plan -input=false -lock-timeout=300s -out=tfplan
 
       - name: Terraform apply
-        if: ${{ needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform' }}
+        if: ${{ needs.prepare.outputs.terraform_apply == 'true' }}
         working-directory: ${{ env.AWS_TF_DIR }}
         run: terraform apply -input=false -auto-approve tfplan
 
@@ -277,7 +271,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.deploy_api == 'true' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -340,7 +334,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.deploy_frontend == 'true' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -400,7 +394,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.deploy_worker == 'true' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -466,13 +460,12 @@ jobs:
       - build-api
     if: ${{ always() && needs.prepare.outputs.deploy_api == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-api.result == 'success' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
     outputs:
       url: ${{ steps.url.outputs.url }}
-      new_password: ${{ steps.reset_pw.outputs.NEW_PASSWORD || '' }}
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v6
@@ -603,49 +596,6 @@ jobs:
           done
           exit 1
 
-      - name: Reset password
-        id: reset_pw
-        if: ${{ needs.prepare.outputs.reset_password_for != '' }}
-        run: |
-          EMAIL="${{ needs.prepare.outputs.reset_password_for }}"
-          API_URL="${AWS_API_URL:-http://dachjob-dev-alb-1730467011.eu-west-1.elb.amazonaws.com}"
-
-          # Generate a random password
-          NEW_PW="Dachjob$(openssl rand -hex 4)!"
-          echo "::add-mask::${NEW_PW}"
-
-          # Step 1: Get a reset token via forgot-password endpoint
-          reset_resp="$(curl -fsS -X POST "${API_URL}/api/auth/forgot-password" \
-            -H "Content-Type: application/json" \
-            -d "{\"email\":\"${EMAIL}\"}")"
-          reset_link="$(echo "${reset_resp}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('reset_link',''))")"
-
-          if [[ -z "${reset_link}" ]]; then
-            echo "::error::Failed to get reset link from forgot-password endpoint"
-            exit 1
-          fi
-
-          # Extract token from the reset_link URL
-          TOKEN="${reset_link##*token=}"
-          if [[ -z "${TOKEN}" ]]; then
-            echo "::error::No token found in reset link: ${reset_link}"
-            exit 1
-          fi
-
-          # Step 2: Reset the password with the token
-          update_resp="$(curl -fsS -X POST "${API_URL}/api/auth/reset-password" \
-            -H "Content-Type: application/json" \
-            -d "{\"token\":\"${TOKEN}\",\"new_password\":\"${NEW_PW}\"}")"
-          message="$(echo "${update_resp}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message',''))")"
-
-          if [[ "${message}" != *"successfully"* ]]; then
-            echo "::error::Password reset failed: ${message}"
-            exit 1
-          fi
-
-          echo "::notice::Password reset for ${EMAIL}. New password: ${NEW_PW}"
-          echo "NEW_PASSWORD=${NEW_PW}" >> "${GITHUB_OUTPUT}"
-
   deploy-frontend:
     name: Deploy frontend (AWS)
     needs:
@@ -654,7 +604,7 @@ jobs:
       - build-frontend
     if: ${{ always() && needs.prepare.outputs.deploy_frontend == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-frontend.result == 'success' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -774,8 +724,7 @@ jobs:
       - build-worker
     if: ${{ always() && needs.prepare.outputs.deploy_worker == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-worker.result == 'success' }}
     runs-on: ubuntu-latest
-    continue-on-error: true
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -841,7 +790,7 @@ jobs:
       - deploy-frontend
     if: ${{ always() && needs.deploy-api.result == 'success' && needs.deploy-frontend.result == 'success' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
