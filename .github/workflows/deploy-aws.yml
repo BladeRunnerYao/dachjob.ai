@@ -55,6 +55,11 @@ on:
         options:
           - minimal
           - full
+      reset_password_for:
+        description: "Reset password for an email address (e.g., tiyao.li@outlook.com). Only runs with target=api."
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: deploy-aws-${{ github.event.inputs.environment || 'dev' }}
@@ -134,6 +139,7 @@ jobs:
       terraform_apply: ${{ steps.inputs.outputs.terraform_apply }}
       run_migrations: ${{ steps.inputs.outputs.run_migrations }}
       worker_enabled: ${{ steps.inputs.outputs.worker_enabled }}
+      reset_password_for: ${{ steps.inputs.outputs.reset_password_for }}
     steps:
       - name: Resolve inputs
         id: inputs
@@ -151,8 +157,9 @@ jobs:
           echo "terraform_apply=${terraform_apply}" >> "${GITHUB_OUTPUT}"
           echo "run_migrations=${run_migrations}" >> "${GITHUB_OUTPUT}"
           echo "worker_enabled=${worker_mode}" >> "${GITHUB_OUTPUT}"
+          echo "reset_password_for=${{ github.event.inputs.reset_password_for || '' }}" >> "${GITHUB_OUTPUT}"
 
-          [[ "${target}" == "all" || "${target}" == "api" ]] && echo "deploy_api=true" >> "${GITHUB_OUTPUT}" || echo "deploy_api=false" >> "${GITHUB_OUTPUT}"
+          [[ "${target}" == "all" || "${target}" == "api" || "${{ github.event.inputs.reset_password_for || '' }}" != "" ]] && echo "deploy_api=true" >> "${GITHUB_OUTPUT}" || echo "deploy_api=false" >> "${GITHUB_OUTPUT}"
           [[ "${target}" == "all" || "${target}" == "frontend" ]] && echo "deploy_frontend=true" >> "${GITHUB_OUTPUT}" || echo "deploy_frontend=false" >> "${GITHUB_OUTPUT}"
           if [[ "${worker_mode}" == "disabled" && "${target}" == "worker" ]]; then
             echo "Error: target=worker requires worker_mode=enabled" >&2
@@ -466,6 +473,7 @@ jobs:
       id-token: write
     outputs:
       url: ${{ steps.url.outputs.url }}
+      new_password: ${{ steps.reset_pw.outputs.NEW_PASSWORD || '' }}
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v6
@@ -595,6 +603,89 @@ jobs:
             sleep 10
           done
           exit 1
+
+      - name: Reset password
+        id: reset_pw
+        if: ${{ needs.prepare.outputs.reset_password_for != '' }}
+        run: |
+          EMAIL="${{ needs.prepare.outputs.reset_password_for }}"
+          CLUSTER="${AWS_ECS_CLUSTER:-dachjob-dev-cluster}"
+          TASK_DEF_ARN="${{ steps.taskdef.outputs.new_task_def_arn }}"
+
+          # Get subnets and security group from the API service
+          SUBNETS="$(aws ecs describe-services \
+            --cluster "${CLUSTER}" \
+            --services "${AWS_API_SERVICE:-dachjob-dev-api}" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.subnets' \
+            --output text | tr '\t' ',')"
+          SG="$(aws ecs describe-services \
+            --cluster "${CLUSTER}" \
+            --services "${AWS_API_SERVICE:-dachjob-dev-api}" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.securityGroups[0]' \
+            --output text)"
+
+          # Generate a random password
+          NEW_PW="Dachjob$(openssl rand -hex 4)!"
+          echo "::add-mask::${NEW_PW}"
+          # Build Python script via printf (avoids YAML heredoc indentation issues)
+          printf '%s\n' \
+            'import asyncio, os' \
+            'from sqlalchemy.ext.asyncio import create_async_engine' \
+            'from sqlalchemy import text' \
+            'from app.core.security import hash_password' \
+            'async def main():' \
+            '    engine = create_async_engine(os.environ["DATABASE_URL"])' \
+            '    async with engine.begin() as conn:' \
+            '        hashed = hash_password(os.environ["NEW_PW"])' \
+            '        result = await conn.execute(text("UPDATE users SET password_hash = :pw WHERE email = :email"), {"pw": hashed, "email": os.environ["RESET_EMAIL"]})' \
+            '        print(f"Password reset for {result.rowcount} user(s)")' \
+            '    await engine.dispose()' \
+            'asyncio.run(main())' \
+            > /tmp/reset_pw.py
+
+          PY_CODE_B64="$(base64 -w0 < /tmp/reset_pw.py)"
+
+          echo "Resetting password for ${EMAIL}..."
+
+          OVERRIDES="$(jq -n \
+            --arg new_pw "${NEW_PW}" \
+            --arg email "${EMAIL}" \
+            --arg code_b64 "${PY_CODE_B64}" \
+            '{
+              containerOverrides: [{
+                name: "api",
+                command: [
+                  "bash", "-c",
+                  "NEW_PW=\($new_pw | @sh) RESET_EMAIL=\($email | @sh) echo \($code_b64 | @sh) | base64 -d | python"
+                ]
+              }]
+            }')"
+
+          TASK_ARN="$(aws ecs run-task \
+            --cluster "${CLUSTER}" \
+            --task-definition "${TASK_DEF_ARN}" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SG}],assignPublicIp=DISABLED}" \
+            --overrides "${OVERRIDES}" \
+            --query 'tasks[0].taskArn' \
+            --output text)"
+
+          echo "Reset task: ${TASK_ARN}"
+          aws ecs wait tasks-stopped --cluster "${CLUSTER}" --tasks "${TASK_ARN}"
+
+          EXIT_CODE="$(aws ecs describe-tasks \
+            --cluster "${CLUSTER}" \
+            --tasks "${TASK_ARN}" \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)"
+
+          if [[ "${EXIT_CODE}" != "0" ]]; then
+            echo "Password reset failed with exit code ${EXIT_CODE}"
+            exit 1
+          fi
+
+          echo "::notice::Password reset for ${EMAIL}. New password: ${NEW_PW}"
+          echo "NEW_PASSWORD=${NEW_PW}" >> "${GITHUB_OUTPUT}"
 
   deploy-frontend:
     name: Deploy frontend (AWS)
