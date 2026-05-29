@@ -158,6 +158,9 @@ module "ecs" {
   frontend_log_group_name = module.monitoring.frontend_log_group_name
   worker_log_group_name   = module.monitoring.worker_log_group_name
 
+  # CloudFront
+  cloudfront_domain = var.cloudfront_domain
+
   # Application config (allow ALB + local dev)
   cors_origins      = var.cors_origins != "" ? var.cors_origins : "http://${var.name_prefix}-alb-*.elb.amazonaws.com,http://localhost:3000"
   llm_provider      = var.llm_provider

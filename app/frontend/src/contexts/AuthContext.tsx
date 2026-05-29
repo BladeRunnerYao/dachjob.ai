@@ -23,7 +23,12 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function getApiBase() {
-  return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+  // In production (cloud deployments), NEXT_PUBLIC_API_BASE_URL should be
+  // empty/relative so the frontend calls the API on the same origin.
+  if (process.env.NEXT_PUBLIC_API_BASE_URL && process.env.NEXT_PUBLIC_API_BASE_URL !== '') {
+    return process.env.NEXT_PUBLIC_API_BASE_URL;
+  }
+  return process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8000';
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

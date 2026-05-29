@@ -23,9 +23,14 @@ output "api_url" {
   value       = "http://${aws_lb.this.dns_name}"
 }
 
-output "frontend_url" {
-  description = "Frontend URL"
+output "alb_frontend_url" {
+  description = "Frontend URL via ALB (direct)"
   value       = "http://${aws_lb.this.dns_name}"
+}
+
+output "frontend_url" {
+  description = "Frontend URL (uses CloudFront domain if configured, otherwise ALB)"
+  value       = var.cloudfront_domain != "" ? "https://${var.cloudfront_domain}" : "http://${aws_lb.this.dns_name}"
 }
 
 output "api_service_name" {

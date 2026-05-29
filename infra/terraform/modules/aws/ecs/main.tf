@@ -334,7 +334,6 @@ resource "aws_ecs_task_definition" "frontend" {
         protocol      = "tcp"
       }]
       environment = [
-        { name = "NEXT_PUBLIC_API_BASE_URL", value = "http://${aws_lb.this.dns_name}" },
         { name = "INTERNAL_API_BASE_URL", value = "http://${aws_lb.this.dns_name}" },
       ]
       logConfiguration = {
@@ -573,6 +572,13 @@ resource "aws_iam_role_policy" "github_actions" {
           "secretsmanager:GetSecretValue",
         ]
         Resource = var.secret_arns
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudfront:ListDistributions",
+        ]
+        Resource = "*"
       },
       {
         Effect = "Allow"

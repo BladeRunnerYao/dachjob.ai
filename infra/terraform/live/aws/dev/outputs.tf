@@ -4,8 +4,13 @@ output "api_url" {
 }
 
 output "frontend_url" {
-  description = "Frontend URL (via ALB)"
+  description = "Frontend URL (CloudFront if configured, otherwise ALB)"
   value       = module.ecs.frontend_url
+}
+
+output "alb_frontend_url" {
+  description = "Frontend URL via ALB directly"
+  value       = module.ecs.alb_frontend_url
 }
 
 output "alb_dns_name" {

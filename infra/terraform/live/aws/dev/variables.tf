@@ -141,6 +141,15 @@ variable "resend_from_email" {
 }
 
 # ===========================================================================
+# CloudFront
+# ===========================================================================
+variable "cloudfront_domain" {
+  description = "CloudFront distribution domain name (e.g., d123.cloudfront.net). Leave empty if not using CloudFront."
+  type        = string
+  default     = ""
+}
+
+# ===========================================================================
 # GitHub OIDC
 # ===========================================================================
 variable "github_repo" {

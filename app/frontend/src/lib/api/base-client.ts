@@ -6,7 +6,12 @@ export function getApiBase() {
       || process.env.NEXT_PUBLIC_API_BASE_URL
       || 'http://localhost:8000';
   }
-  return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+  // In production (cloud deployments), NEXT_PUBLIC_API_BASE_URL should be
+  // empty/relative so the frontend calls the API on the same origin.
+  // The empty-string fallback to localhost:8000 only applies in local dev.
+  return process.env.NEXT_PUBLIC_API_BASE_URL && process.env.NEXT_PUBLIC_API_BASE_URL !== ''
+    ? process.env.NEXT_PUBLIC_API_BASE_URL
+    : (isProduction() ? '' : 'http://localhost:8000');
 }
 
 export function isProduction(): boolean {

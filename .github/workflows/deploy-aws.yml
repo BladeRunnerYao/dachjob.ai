@@ -386,8 +386,6 @@ jobs:
           file: app/frontend/Dockerfile
           platforms: linux/amd64
           push: true
-          build-args: |
-            NEXT_PUBLIC_API_BASE_URL=${{ env.AWS_API_URL }}
           tags: |
             ${{ steps.meta.outputs.tags }}
 
@@ -666,10 +664,46 @@ jobs:
             >/dev/null
           echo "Frontend deployment triggered."
 
+      - name: Look up CloudFront domain
+        id: cloudfront
+        run: |
+          cf_domain=""
+          # Look for CloudFront distributions that use our ALB as origin
+          ALB_DNS="${{ needs.terraform.outputs.frontend_url || env.AWS_FRONTEND_URL }}"
+          ALB_DNS="${ALB_DNS#http://}"
+          ALB_DNS="${ALB_DNS#https://}"
+
+          # Try to find CloudFront distributions whose origin matches our ALB
+          cf_distributions="$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, \`${ALB_DNS}\`)] | [0].DomainName" \
+            --output text 2>/dev/null || true)"
+
+          if [[ -n "${cf_distributions}" && "${cf_distributions}" != "None" ]]; then
+            cf_domain="https://${cf_distributions}"
+            echo "Found CloudFront distribution: ${cf_domain}"
+          elif cf_domains="$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, \`${CLUSTER:-dachjob-dev}\`)] | [0].DomainName" \
+            --output text 2>/dev/null || true)"; [[ -n "${cf_domains}" && "${cf_domains}" != "None" ]]; then
+            cf_domain="https://${cf_domains}"
+            echo "Found CloudFront distribution: ${cf_domain}"
+          fi
+          echo "domain=${cf_domain}" >> "${GITHUB_OUTPUT}"
+
       - name: Capture service URL
         id: url
         run: |
-          url="${AWS_FRONTEND_URL:-${{ needs.terraform.outputs.frontend_url }}}"
+          cf_domain="${{ steps.cloudfront.outputs.domain }}"
+          aws_frontend_url="${AWS_FRONTEND_URL}"
+          terraform_url="${{ needs.terraform.outputs.frontend_url }}"
+
+          # Prefer CloudFront > repo variable > Terraform output
+          if [[ -n "${cf_domain}" ]]; then
+            url="${cf_domain}"
+          elif [[ -n "${aws_frontend_url}" ]]; then
+            url="${aws_frontend_url}"
+          else
+            url="${terraform_url}"
+          fi
           echo "url=${url}" >> "${GITHUB_OUTPUT}"
 
       - name: Health check frontend
@@ -783,8 +817,12 @@ jobs:
             --output text 2>/dev/null || true)"
           if [[ -n "${SMOKE_TEST_PASSWORD}" ]]; then
             echo "::add-mask::${SMOKE_TEST_PASSWORD}"
-            echo "SMOKE_TEST_PASSWORD=${SMOKE_TEST_PASSWORD}" >> "${GITHUB_ENV}"
+          else
+            # Secret not available — generate a random password for smoke test
+            SMOKE_TEST_PASSWORD="Smoke$(openssl rand -hex 4)!"
+            echo "::notice::test-ci-password secret not found, using generated password"
           fi
+          echo "SMOKE_TEST_PASSWORD=${SMOKE_TEST_PASSWORD}" >> "${GITHUB_ENV}"
 
       - name: Run smoke test
         run: |
