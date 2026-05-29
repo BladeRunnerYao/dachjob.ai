@@ -2,7 +2,8 @@ name: Deploy to GCP
 
 on:
   push:
-  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       environment:
@@ -116,7 +117,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.inputs.branch || github.event.pull_request.head.ref || github.ref_name }}
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
           persist-credentials: false
 
       - name: Setup Python
@@ -177,7 +178,7 @@ jobs:
         id: inputs
         run: |
           environment="${{ needs.validate.outputs.environment || 'dev' }}"
-          branch="${{ github.event.inputs.branch || github.event.pull_request.head.ref || github.ref_name }}"
+          branch="${{ github.event.inputs.branch || github.ref_name }}"
           target="${{ github.event.inputs.target || 'all' }}"
           terraform_apply="${{ github.event.inputs.terraform_apply || 'false' }}"
           run_migrations="${{ github.event.inputs.run_migrations || 'true' }}"
@@ -224,7 +225,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.run_terraform == 'true' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -286,7 +287,7 @@ jobs:
         run: terraform plan -input=false -lock-timeout=300s -out=tfplan
 
       - name: Terraform apply
-        if: ${{ needs.prepare.outputs.terraform_apply == 'true' || needs.prepare.outputs.target == 'terraform' }}
+        if: ${{ needs.prepare.outputs.terraform_apply == 'true' }}
         working-directory: ${{ env.GCP_TF_DIR }}
         run: terraform apply -input=false -auto-approve tfplan
 
@@ -302,7 +303,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.deploy_api == 'true' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -384,7 +385,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.deploy_frontend == 'true' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -465,7 +466,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.deploy_worker == 'true' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -550,7 +551,7 @@ jobs:
       - build-api
     if: ${{ always() && needs.prepare.outputs.deploy_api == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-api.result == 'success' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -635,7 +636,7 @@ jobs:
       - build-frontend
     if: ${{ always() && needs.prepare.outputs.deploy_frontend == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-frontend.result == 'success' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -692,8 +693,7 @@ jobs:
       - build-worker
     if: ${{ always() && needs.prepare.outputs.deploy_worker == 'true' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') && needs.build-worker.result == 'success' }}
     runs-on: ubuntu-latest
-    continue-on-error: true
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -757,7 +757,7 @@ jobs:
       - deploy-frontend
     if: ${{ always() && needs.deploy-api.result == 'success' && needs.deploy-frontend.result == 'success' }}
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.prepare.outputs.environment }}
     permissions:
       contents: read
       id-token: write

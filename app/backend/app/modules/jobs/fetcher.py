@@ -1,5 +1,6 @@
-import httpx
 from urllib.parse import urlparse
+
+import httpx
 
 DEFAULT_JOB_REQUEST_HEADERS = {
     "User-Agent": (

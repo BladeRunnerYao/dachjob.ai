@@ -15,12 +15,10 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute(
-        "ALTER TABLE resume_artifacts "
-        "ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)"
+        "ALTER TABLE resume_artifacts ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)"
     )
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_resume_artifacts_user_id "
-        "ON resume_artifacts (user_id)"
+        "CREATE INDEX IF NOT EXISTS ix_resume_artifacts_user_id ON resume_artifacts (user_id)"
     )
     op.execute(
         "CREATE INDEX IF NOT EXISTS ix_resume_artifacts_job_tenant_user_created "

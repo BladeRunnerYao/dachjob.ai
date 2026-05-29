@@ -3,7 +3,6 @@ import logging
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext
@@ -176,7 +175,6 @@ async def compute_match(
 ) -> MatchReport:
     job = await get_job(db, job_id, tenant.id)
     if not job:
-
         raise AppError("job_not_found", "Job posting not found", status_code=404)
 
     if not job.parsed_json:

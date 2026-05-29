@@ -528,7 +528,7 @@ class TestImportFlowRawJD:
     def test_import_flow_does_not_format_raw_jd_with_llm(self):
         import inspect
 
-        from app.modules.jobs import importer, extractor, fetcher
+        from app.modules.jobs import importer
 
         source = inspect.getsource(importer.import_job_urls)
         assert "format_raw_jd" not in source

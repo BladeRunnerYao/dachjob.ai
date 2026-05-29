@@ -99,13 +99,13 @@ English (Fluent), German (B2), Mandarin (Native)
             await session.flush()
 
             legacy_result = await session.execute(
-            select(JobPosting)
-            .where(
-                JobPosting.tenant_id == tenant.id,
-                JobPosting.url.like("https://example.com/jobs/%"),
+                select(JobPosting)
+                .where(
+                    JobPosting.tenant_id == tenant.id,
+                    JobPosting.url.like("https://example.com/jobs/%"),
+                )
+                .order_by(JobPosting.created_at)
             )
-            .order_by(JobPosting.created_at)
-        )
         legacy_jobs = list(legacy_result.scalars().all())
 
         demo_jobs = [

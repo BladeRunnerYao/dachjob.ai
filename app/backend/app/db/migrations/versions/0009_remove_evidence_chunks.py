@@ -29,12 +29,13 @@ def downgrade() -> None:
         "evidence_chunks",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column(
-            "tenant_id", postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("tenants.id"), nullable=False
+            "tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False
         ),
         sa.Column(
-            "profile_id", postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("candidate_profiles.id"), nullable=False
+            "profile_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("candidate_profiles.id"),
+            nullable=False,
         ),
         sa.Column("source_type", sa.Text(), nullable=False),
         sa.Column("source_label", sa.Text(), nullable=False),
@@ -45,6 +46,5 @@ def downgrade() -> None:
     )
     op.create_index(op.f("ix_evidence_chunks_tenant_id"), "evidence_chunks", ["tenant_id"])
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_evidence_chunks_profile_id "
-        "ON evidence_chunks (profile_id)"
+        "CREATE INDEX IF NOT EXISTS ix_evidence_chunks_profile_id ON evidence_chunks (profile_id)"
     )
