@@ -119,3 +119,26 @@ jobs:
       - name: Terraform validate
         working-directory: ${{ matrix.directory }}
         run: terraform validate -no-color
+
+  validate:
+    name: Validate
+    needs:
+      - backend
+      - frontend
+      - terraform-fmt
+      - terraform-validate
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all checks passed
+        run: |
+          failed=()
+          [[ "${{ needs.backend.result }}" == "success" ]] || failed+=("backend")
+          [[ "${{ needs.frontend.result }}" == "success" ]] || failed+=("frontend")
+          [[ "${{ needs.terraform-fmt.result }}" == "success" ]] || failed+=("terraform-fmt")
+          [[ "${{ needs.terraform-validate.result }}" == "success" ]] || failed+=("terraform-validate")
+          if (( ${#failed[@]} > 0 )); then
+            printf 'Failed jobs: %s\n' "${failed[*]}" >&2
+            exit 1
+          fi
+          echo "All checks passed."
