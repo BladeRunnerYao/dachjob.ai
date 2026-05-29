@@ -109,6 +109,17 @@ module "secrets_manager" {
 }
 
 # ===========================================================================
+# CloudFront (CDN + Header Forwarding)
+# ===========================================================================
+module "cloudfront" {
+  source = "../../../modules/aws/cloudfront"
+
+  name_prefix  = var.name_prefix
+  alb_dns_name = module.ecs.alb_dns_name
+  tags         = var.tags
+}
+
+# ===========================================================================
 # ECS (Fargate Cluster + ALB + 3 Services)
 # ===========================================================================
 module "ecs" {
@@ -160,10 +171,10 @@ module "ecs" {
   worker_log_group_name   = module.monitoring.worker_log_group_name
 
   # CloudFront
-  cloudfront_domain = var.cloudfront_domain
+  cloudfront_domain = module.cloudfront.domain_name
 
   # Application config (allow ALB + local dev)
-  cors_origins      = var.cors_origins != "" ? var.cors_origins : "https://${var.cloudfront_domain},http://localhost:3000"
+  cors_origins      = var.cors_origins != "" ? var.cors_origins : "https://${module.cloudfront.domain_name},http://localhost:3000"
   llm_provider      = var.llm_provider
   resend_from_email = var.resend_from_email
 

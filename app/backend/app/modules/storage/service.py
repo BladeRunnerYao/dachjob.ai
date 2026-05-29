@@ -40,10 +40,7 @@ class StorageService:
         }
 
         # Use explicit endpoint/creds only for local development (MinIO)
-        use_local = (
-            settings.app_env == "local"
-            or (settings.s3_endpoint_url and "localhost" in settings.s3_endpoint_url)
-        )
+        use_local = settings.app_env == "local"
         if use_local:
             kwargs["endpoint_url"] = settings.s3_endpoint_url
             kwargs["aws_access_key_id"] = settings.s3_access_key_id

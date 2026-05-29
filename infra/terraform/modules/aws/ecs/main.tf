@@ -288,6 +288,7 @@ resource "aws_ecs_task_definition" "api" {
         { name = "ERROR_LOG_DIR", value = "/tmp/dachjob-error-logs" },
         { name = "STORAGE_PROVIDER", value = "s3" },
         { name = "S3_BUCKET_NAME", value = var.artifacts_bucket_name },
+        { name = "S3_ENDPOINT_URL", value = "" },
         { name = "AWS_REGION", value = var.aws_region },
         { name = "WORKER_ENABLED", value = var.worker_enabled },
         { name = "WORKER_FALLBACK_TO_SYNC", value = "true" },
@@ -299,7 +300,7 @@ resource "aws_ecs_task_definition" "api" {
         { name = "RESEND_FROM_EMAIL", value = var.resend_from_email },
       ]
       secrets = concat(
-        var.jwt_secret_arn != "" ? [{ name = "JWT_SECRET_KEY", valueFrom = var.jwt_secret_arn }] : [],
+        var.jwt_secret_arn != "" ? [{ name = "JWT_SECRET", valueFrom = var.jwt_secret_arn }] : [],
         var.deepseek_api_key_arn != "" ? [{ name = "DEEPSEEK_API_KEY", valueFrom = var.deepseek_api_key_arn }] : [],
         var.resend_api_key_arn != "" ? [{ name = "RESEND_API_KEY", valueFrom = var.resend_api_key_arn }] : [],
       )
@@ -372,13 +373,14 @@ resource "aws_ecs_task_definition" "worker" {
         { name = "LOG_JSON", value = "true" },
         { name = "STORAGE_PROVIDER", value = "s3" },
         { name = "S3_BUCKET_NAME", value = var.artifacts_bucket_name },
+        { name = "S3_ENDPOINT_URL", value = "" },
         { name = "AWS_REGION", value = var.aws_region },
         { name = "REDIS_URL", value = var.redis_url },
         { name = "REDIS_ENABLED", value = "true" },
         { name = "DATABASE_URL", value = var.database_url },
       ]
       secrets = concat(
-        var.jwt_secret_arn != "" ? [{ name = "JWT_SECRET_KEY", valueFrom = var.jwt_secret_arn }] : [],
+        var.jwt_secret_arn != "" ? [{ name = "JWT_SECRET", valueFrom = var.jwt_secret_arn }] : [],
         var.deepseek_api_key_arn != "" ? [{ name = "DEEPSEEK_API_KEY", valueFrom = var.deepseek_api_key_arn }] : [],
       )
       logConfiguration = {
