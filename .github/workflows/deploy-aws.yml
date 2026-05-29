@@ -609,78 +609,38 @@ jobs:
         if: ${{ needs.prepare.outputs.reset_password_for != '' }}
         run: |
           EMAIL="${{ needs.prepare.outputs.reset_password_for }}"
-          CLUSTER="${AWS_ECS_CLUSTER:-dachjob-dev-cluster}"
-          TASK_DEF_ARN="${{ steps.taskdef.outputs.new_task_def_arn }}"
-
-          # Get subnets and security group from the API service
-          SUBNETS="$(aws ecs describe-services \
-            --cluster "${CLUSTER}" \
-            --services "${AWS_API_SERVICE:-dachjob-dev-api}" \
-            --query 'services[0].networkConfiguration.awsvpcConfiguration.subnets' \
-            --output text | tr '\t' ',')"
-          SG="$(aws ecs describe-services \
-            --cluster "${CLUSTER}" \
-            --services "${AWS_API_SERVICE:-dachjob-dev-api}" \
-            --query 'services[0].networkConfiguration.awsvpcConfiguration.securityGroups[0]' \
-            --output text)"
+          API_URL="${AWS_API_URL:-http://dachjob-dev-alb-1730467011.eu-west-1.elb.amazonaws.com}"
 
           # Generate a random password
           NEW_PW="Dachjob$(openssl rand -hex 4)!"
           echo "::add-mask::${NEW_PW}"
-          # Build Python script via printf (avoids YAML heredoc indentation issues)
-          printf '%s\n' \
-            'import asyncio, os' \
-            'from sqlalchemy.ext.asyncio import create_async_engine' \
-            'from sqlalchemy import text' \
-            'from app.core.security import hash_password' \
-            'async def main():' \
-            '    engine = create_async_engine(os.environ["DATABASE_URL"])' \
-            '    async with engine.begin() as conn:' \
-            '        hashed = hash_password(os.environ["NEW_PW"])' \
-            '        result = await conn.execute(text("UPDATE users SET password_hash = :pw WHERE email = :email"), {"pw": hashed, "email": os.environ["RESET_EMAIL"]})' \
-            '        print(f"Password reset for {result.rowcount} user(s)")' \
-            '    await engine.dispose()' \
-            'asyncio.run(main())' \
-            > /tmp/reset_pw.py
 
-          PY_CODE_B64="$(base64 -w0 < /tmp/reset_pw.py)"
+          # Step 1: Get a reset token via forgot-password endpoint
+          reset_resp="$(curl -fsS -X POST "${API_URL}/api/auth/forgot-password" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"${EMAIL}\"}")"
+          reset_link="$(echo "${reset_resp}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('reset_link',''))")"
 
-          echo "Resetting password for ${EMAIL}..."
+          if [[ -z "${reset_link}" ]]; then
+            echo "::error::Failed to get reset link from forgot-password endpoint"
+            exit 1
+          fi
 
-          OVERRIDES="$(jq -n \
-            --arg new_pw "${NEW_PW}" \
-            --arg email "${EMAIL}" \
-            --arg code_b64 "${PY_CODE_B64}" \
-            '{
-              containerOverrides: [{
-                name: "api",
-                command: [
-                  "bash", "-c",
-                  "export NEW_PW=\($new_pw | @sh) && export RESET_EMAIL=\($email | @sh) && echo \($code_b64 | @sh) | base64 -d | python"
-                ]
-              }]
-            }')"
+          # Extract token from the reset_link URL
+          TOKEN="${reset_link##*token=}"
+          if [[ -z "${TOKEN}" ]]; then
+            echo "::error::No token found in reset link: ${reset_link}"
+            exit 1
+          fi
 
-          TASK_ARN="$(aws ecs run-task \
-            --cluster "${CLUSTER}" \
-            --task-definition "${TASK_DEF_ARN}" \
-            --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SG}],assignPublicIp=DISABLED}" \
-            --overrides "${OVERRIDES}" \
-            --query 'tasks[0].taskArn' \
-            --output text)"
+          # Step 2: Reset the password with the token
+          update_resp="$(curl -fsS -X POST "${API_URL}/api/auth/reset-password" \
+            -H "Content-Type: application/json" \
+            -d "{\"token\":\"${TOKEN}\",\"new_password\":\"${NEW_PW}\"}")"
+          message="$(echo "${update_resp}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message',''))")"
 
-          echo "Reset task: ${TASK_ARN}"
-          aws ecs wait tasks-stopped --cluster "${CLUSTER}" --tasks "${TASK_ARN}"
-
-          EXIT_CODE="$(aws ecs describe-tasks \
-            --cluster "${CLUSTER}" \
-            --tasks "${TASK_ARN}" \
-            --query 'tasks[0].containers[0].exitCode' \
-            --output text)"
-
-          if [[ "${EXIT_CODE}" != "0" ]]; then
-            echo "Password reset failed with exit code ${EXIT_CODE}"
+          if [[ "${message}" != *"successfully"* ]]; then
+            echo "::error::Password reset failed: ${message}"
             exit 1
           fi
 
