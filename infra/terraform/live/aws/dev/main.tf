@@ -12,7 +12,7 @@ locals {
     [module.secrets_manager.db_password_secret_arn],
     values(module.secrets_manager.app_secret_arns),
   )
-  database_url = "postgresql+asyncpg://${module.rds.db_username}:${var.db_password}@${module.rds.address}:${module.rds.port}/${module.rds.db_name}"
+  database_url = "postgresql+asyncpg://${module.rds.db_username}:${var.db_password}@${module.rds.address}:${module.rds.port}/${module.rds.db_name}?sslmode=require"
 }
 
 # ===========================================================================
