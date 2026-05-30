@@ -46,10 +46,13 @@ async def _attach_skills(db: AsyncSession, jobs: list[JobPosting]) -> list[JobPo
     return jobs
 
 
-async def count_jobs_by_tenant(db: AsyncSession, tenant_id: UUID) -> int:
-    result = await db.execute(
-        select(func.count()).select_from(JobPosting).where(JobPosting.tenant_id == tenant_id)
-    )
+async def count_jobs_by_tenant(
+    db: AsyncSession, tenant_id: UUID, exclude_smoke_test: bool = True
+) -> int:
+    stmt = select(func.count()).select_from(JobPosting).where(JobPosting.tenant_id == tenant_id)
+    if exclude_smoke_test:
+        stmt = stmt.where(~JobPosting.title.ilike("%smoke test%"))
+    result = await db.execute(stmt)
     return result.scalar() or 0
 
 
@@ -58,14 +61,18 @@ async def list_jobs_by_tenant(
     tenant_id: UUID,
     limit: int = 50,
     offset: int = 0,
+    exclude_smoke_test: bool = True,
 ) -> list[JobPosting]:
-    result = await db.execute(
+    stmt = (
         select(JobPosting)
         .where(JobPosting.tenant_id == tenant_id)
         .order_by(JobPosting.created_at.desc())
         .limit(limit)
         .offset(offset)
     )
+    if exclude_smoke_test:
+        stmt = stmt.where(~JobPosting.title.ilike("%smoke test%"))
+    result = await db.execute(stmt)
     jobs = list(result.scalars().all())
     await _attach_latest_match(db, jobs)
     await _attach_skills(db, jobs)
@@ -82,6 +89,21 @@ async def get_job(
     job = result.scalar_one_or_none()
     if not job:
         return None
+    await _attach_latest_match(db, [job])
+    await _attach_skills(db, [job])
+    return job
+
+
+async def update_job_status(
+    db: AsyncSession, job_id: UUID, tenant_id: UUID, status: str
+) -> JobPosting | None:
+    stmt = select(JobPosting).where(JobPosting.id == job_id, JobPosting.tenant_id == tenant_id)
+    result = await db.execute(stmt)
+    job = result.scalar_one_or_none()
+    if not job:
+        return None
+    job.status = status
+    await db.flush()
     await _attach_latest_match(db, [job])
     await _attach_skills(db, [job])
     return job

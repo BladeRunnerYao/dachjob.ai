@@ -65,6 +65,10 @@ export class ApiClient {
     return jobsApi.createJob(rawJd);
   }
 
+  updateJobStatus(jobId: string, status: 'new' | 'saved' | 'applied'): Promise<JobPosting> {
+    return jobsApi.updateJobStatus(jobId, status);
+  }
+
   parseJob(jobId: string): Promise<JobPosting> {
     return jobsApi.parseJob(jobId);
   }

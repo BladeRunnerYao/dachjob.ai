@@ -41,6 +41,10 @@ class JobCreateRequest(BaseModel):
     raw_jd: str
 
 
+class JobStatusUpdateRequest(BaseModel):
+    status: str = Field(..., pattern=r"^(new|saved|applied)$")
+
+
 class JobImportRequest(BaseModel):
     urls: list[str]
 

@@ -23,6 +23,12 @@ function recBadge(rec: string) {
   return 'red';
 }
 
+function statusBadge(status: string) {
+  if (status === 'applied') return 'green';
+  if (status === 'saved') return 'yellow';
+  return undefined;
+}
+
 export function JobCard({ job }: JobCardProps) {
   return (
     <Link href={`/jobs/${job.id}`}>
@@ -35,6 +41,9 @@ export function JobCard({ job }: JobCardProps) {
           <div className="flex items-center gap-2 ml-4 shrink-0">
             {job.score != null && <Badge variant={scoreBadge(toPercent(job.score))}>{toPercent(job.score)}%</Badge>}
             {job.recommendation && <Badge variant={recBadge(job.recommendation)}>{job.recommendation}</Badge>}
+            {statusBadge(job.status) && (
+              <Badge variant={statusBadge(job.status)!}>{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</Badge>
+            )}
             <span className="text-xs text-slate-400 hidden sm:inline">{new Date(job.created_at).toLocaleDateString()}</span>
           </div>
         </CardContent>

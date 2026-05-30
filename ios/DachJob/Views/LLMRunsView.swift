@@ -100,7 +100,7 @@ struct LLMRunRow: View {
                     .padding(.vertical, 2)
                     .background(statusColor.opacity(0.15))
                     .foregroundColor(statusColor)
-                    .cornerRadius(4)
+                    .clipShape(.rect(cornerRadius: 4))
             }
             HStack(spacing: 12) {
                 Text(run.provider)

@@ -8,7 +8,7 @@ import type { JobPosting } from '@/lib/api/types';
 
 const PAGE_SIZES = [15, 30, 50, 100];
 
-type FilterKey = 'all' | 'apply' | 'maybe' | 'skip';
+type FilterKey = 'all' | 'applied' | 'saved';
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<JobPosting[]>([]);
@@ -78,7 +78,7 @@ export default function JobsPage() {
     setPage(nextPage);
   };
 
-  const filtered = filter === 'all' ? jobs : jobs.filter(j => j.recommendation === filter);
+  const filtered = filter === 'all' ? jobs : jobs.filter(j => j.status === filter);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
@@ -99,7 +99,7 @@ export default function JobsPage() {
       </div>
 
       <div className="flex gap-2 items-center overflow-x-auto -mx-4 px-4 pb-1">
-        {(['all', 'apply', 'maybe', 'skip'] as FilterKey[]).map((f) => (
+        {(['all', 'applied', 'saved'] as FilterKey[]).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -111,7 +111,7 @@ export default function JobsPage() {
           >
             {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
             <span className="ml-1 opacity-60">
-              ({f === 'all' ? total : jobs.filter(j => j.recommendation === f).length})
+              ({f === 'all' ? total : jobs.filter(j => j.status === f).length})
             </span>
           </button>
         ))}

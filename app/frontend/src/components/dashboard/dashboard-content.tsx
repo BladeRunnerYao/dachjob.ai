@@ -33,9 +33,8 @@ export function DashboardContent() {
     fetchData();
   }, []);
 
-  const applyCount = jobs.filter((j) => j.recommendation === 'apply').length;
-  const maybeCount = jobs.filter((j) => j.recommendation === 'maybe').length;
-  const skipCount = jobs.filter((j) => j.recommendation === 'skip').length;
+  const appliedCount = jobs.filter((j) => j.status === 'applied').length;
+  const savedCount = jobs.filter((j) => j.status === 'saved').length;
   const avgLatency = runs.length
     ? Math.round(runs.reduce((a, r) => a + r.latency_ms, 0) / runs.length)
     : 0;
@@ -57,9 +56,8 @@ export function DashboardContent() {
 
       <StatsCards
         totalJobs={jobs.length}
-        applyCount={applyCount}
-        maybeCount={maybeCount}
-        skipCount={skipCount}
+        appliedCount={appliedCount}
+        savedCount={savedCount}
         totalApplications={apps.length}
         totalRuns={runs.length}
       />

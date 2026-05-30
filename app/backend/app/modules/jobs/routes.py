@@ -16,6 +16,7 @@ from app.modules.jobs.repository import (
     create_job,
     get_job,
     list_jobs_by_tenant,
+    update_job_status,
 )
 from app.modules.jobs.schemas import (
     ImportError,
@@ -23,6 +24,7 @@ from app.modules.jobs.schemas import (
     JobImportRequest,
     JobImportResponse,
     JobResponse,
+    JobStatusUpdateRequest,
     PaginatedJobResponse,
 )
 
@@ -136,4 +138,20 @@ async def get_job_endpoint(
     if tenant.id is not None:
         serialized = JobResponse.model_validate(job).model_dump(mode="json")
         await cache.set_json("job:detail", str(job_id), value=serialized)
+    return job
+
+
+@router.patch("/{job_id}/status", response_model=JobResponse)
+async def update_job_status_endpoint(
+    job_id: UUID,
+    body: JobStatusUpdateRequest,
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+):
+    if tenant.id is None:
+        raise AppError("tenant_not_found", "Tenant context is required")
+    job = await update_job_status(db, job_id, tenant.id, body.status)
+    if not job:
+        raise AppError("job_not_found", "Job posting not found", status_code=404)
+    await _invalidate_jobs_cache(tenant.id, job_id)
     return job

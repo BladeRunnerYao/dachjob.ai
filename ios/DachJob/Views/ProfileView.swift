@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ProfileView: View {
-    @EnvironmentObject var authService: AuthService
+    @Environment(AuthService.self) var authService
     @State private var profile: CandidateProfile?
     @State private var isLoading = true
     @State private var error: String?
@@ -95,7 +95,7 @@ struct ProfileView: View {
                                 .padding(.vertical, 4)
                                 .background(Color.blue.opacity(0.1))
                                 .foregroundColor(.blue)
-                                .cornerRadius(6)
+                                .clipShape(.rect(cornerRadius: 6))
                         }
                     }
                 }

@@ -13,7 +13,7 @@ struct JobsListView: View {
 
     var filteredJobs: [JobPosting] {
         if filter == "all" { return jobs }
-        return jobs.filter { $0.recommendation == filter }
+        return jobs.filter { $0.status == filter }
     }
 
     var body: some View {
@@ -69,9 +69,8 @@ struct JobsListView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 FilterChip(label: "All", isSelected: filter == "all") { filter = "all" }
-                FilterChip(label: "Apply", isSelected: filter == "apply") { filter = "apply" }
-                FilterChip(label: "Maybe", isSelected: filter == "maybe") { filter = "maybe" }
-                FilterChip(label: "Skip", isSelected: filter == "skip") { filter = "skip" }
+                FilterChip(label: "Applied", isSelected: filter == "applied") { filter = "applied" }
+                FilterChip(label: "Saved", isSelected: filter == "saved") { filter = "saved" }
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -125,7 +124,9 @@ struct JobRow: View {
                         .fontWeight(.bold)
                         .foregroundColor(percent >= 84 ? .green : percent >= 72 ? .orange : .red)
                 }
-                if let rec = job.recommendation {
+                if let status = job.status, status != "new" {
+                    StatusBadge(status: status)
+                } else if let rec = job.recommendation {
                     RecommendationBadge(recommendation: rec)
                 }
             }
@@ -148,7 +149,30 @@ struct FilterChip: View {
                 .padding(.vertical, 6)
                 .background(isSelected ? Color.blue : Color(.systemGray5))
                 .foregroundColor(isSelected ? .white : .primary)
-                .cornerRadius(16)
+                .clipShape(.rect(cornerRadius: 16))
         }
+    }
+}
+
+struct StatusBadge: View {
+    let status: String
+
+    var color: Color {
+        switch status {
+        case "applied": return .green
+        case "saved": return .orange
+        default: return .gray
+        }
+    }
+
+    var body: some View {
+        Text(status.capitalized)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.15))
+            .foregroundColor(color)
+            .clipShape(.rect(cornerRadius: 4))
     }
 }

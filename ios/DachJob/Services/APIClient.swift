@@ -86,6 +86,11 @@ class APIClient {
         return try await post("/api/jobs/import", body: body)
     }
 
+    func updateJobStatus(id: String, status: String) async throws -> JobPosting {
+        let body: [String: String] = ["status": status]
+        return try await patch("/api/jobs/\(id)/status", body: body)
+    }
+
     // MARK: - Profile
 
     func getProfile() async throws -> CandidateProfile {
@@ -143,10 +148,28 @@ class APIClient {
         return try await execute(request)
     }
 
+    private func patch<T: Codable, B: Encodable>(_ path: String, body: B) async throws -> T {
+        guard let url = URL(string: "\(baseURL)\(path)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.httpBody = try JSONEncoder().encode(body)
+
+        return try await execute(request)
+    }
+
     private func execute<T: Codable>(_ request: URLRequest) async throws -> T {
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            var timedRequest = request
+            timedRequest.timeoutInterval = 15
+            (data, response) = try await URLSession.shared.data(for: timedRequest)
         } catch {
             throw APIError.networkError(error)
         }

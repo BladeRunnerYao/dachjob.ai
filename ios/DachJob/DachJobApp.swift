@@ -2,16 +2,16 @@ import SwiftUI
 
 @main
 struct DachJobApp: App {
-    @StateObject private var authService = AuthService()
+    @State private var authService = AuthService()
 
     var body: some Scene {
         WindowGroup {
             if authService.isAuthenticated {
                 MainTabView()
-                    .environmentObject(authService)
+                    .environment(authService)
             } else {
                 LoginView()
-                    .environmentObject(authService)
+                    .environment(authService)
             }
         }
     }
