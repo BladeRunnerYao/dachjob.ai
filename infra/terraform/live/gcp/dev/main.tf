@@ -9,7 +9,7 @@ locals {
 }
 
 module "networking" {
-  source = "./modules/networking"
+  source = "../../../modules/gcp/networking"
 
   name_prefix = local.name_prefix
   region      = var.region
@@ -17,7 +17,7 @@ module "networking" {
 }
 
 module "artifact-registry" {
-  source = "./modules/artifact-registry"
+  source = "../../../modules/gcp/artifact-registry"
 
   name_prefix = local.name_prefix
   region      = var.region
@@ -26,7 +26,7 @@ module "artifact-registry" {
 }
 
 module "cloud-sql" {
-  source = "./modules/cloud-sql"
+  source = "../../../modules/gcp/cloud-sql"
 
   name_prefix               = local.name_prefix
   region                    = var.region
@@ -38,7 +38,7 @@ module "cloud-sql" {
 }
 
 module "memorystore" {
-  source = "./modules/memorystore"
+  source = "../../../modules/gcp/memorystore"
 
   name_prefix          = local.name_prefix
   region               = var.region
@@ -49,7 +49,7 @@ module "memorystore" {
 }
 
 module "cloud-storage" {
-  source = "./modules/cloud-storage"
+  source = "../../../modules/gcp/cloud-storage"
 
   name_prefix = local.name_prefix
   location    = var.region
@@ -57,14 +57,14 @@ module "cloud-storage" {
 }
 
 module "secret-manager" {
-  source = "./modules/secret-manager"
+  source = "../../../modules/gcp/secret-manager"
 
   name_prefix = local.name_prefix
   labels      = local.common_labels
 }
 
 module "iam" {
-  source = "./modules/iam"
+  source = "../../../modules/gcp/iam"
 
   name_prefix               = local.name_prefix
   project_id                = var.project_id
@@ -73,7 +73,7 @@ module "iam" {
 }
 
 module "cloud-run" {
-  source = "./modules/cloud-run"
+  source = "../../../modules/gcp/cloud-run"
 
   name_prefix                    = local.name_prefix
   region                         = var.region
@@ -91,7 +91,7 @@ module "cloud-run" {
 }
 
 module "gke" {
-  source = "./modules/gke"
+  source = "../../../modules/gcp/gke"
 
   name_prefix                  = local.name_prefix
   region                       = var.region
@@ -105,7 +105,7 @@ module "gke" {
 }
 
 module "monitoring" {
-  source = "./modules/monitoring"
+  source = "../../../modules/gcp/monitoring"
 
   name_prefix        = local.name_prefix
   project_id         = var.project_id

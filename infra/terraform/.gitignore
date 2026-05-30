@@ -1,8 +1,8 @@
 *.tfstate
 *.tfstate.backup
 tfplan
-.terraform.lock.hcl
 .terraform/
 *.backup
 *.lock.hcl
+!.terraform.lock.hcl
 tfplan

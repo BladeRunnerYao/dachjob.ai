@@ -98,7 +98,7 @@ jobs:
       matrix:
         include:
           - cloud: gcp
-            directory: infra/terraform
+            directory: infra/terraform/live/gcp/dev
           - cloud: azure
             directory: infra/terraform/live/azure/dev
           - cloud: aws

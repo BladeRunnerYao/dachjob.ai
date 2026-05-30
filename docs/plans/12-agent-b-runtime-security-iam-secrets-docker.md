@@ -286,8 +286,8 @@ Terraform checks:
 
 ```bash
 terraform fmt -check -recursive infra/terraform
-terraform -chdir=infra/terraform init -backend=false
-terraform -chdir=infra/terraform validate
+terraform -chdir=infra/terraform/live/gcp/dev init -backend=false
+terraform -chdir=infra/terraform/live/gcp/dev validate
 terraform -chdir=infra/terraform/live/aws/dev init -backend=false
 terraform -chdir=infra/terraform/live/aws/dev validate
 terraform -chdir=infra/terraform/live/azure/dev init -backend=false

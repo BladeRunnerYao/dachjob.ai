@@ -72,6 +72,11 @@ aws sts get-caller-identity
 - Lock table: `dachjob-dev-terraform-lock` (DynamoDB)
 - Config: `infra/terraform/live/aws/dev/`
 
+**Terraform roots:**
+- GCP dev: `infra/terraform/live/gcp/dev/`
+- Azure dev: `infra/terraform/live/azure/dev/`
+- AWS dev: `infra/terraform/live/aws/dev/`
+
 **Password reset** — use the workflow dispatch input `reset_password_for` (calls the API forgot-password → reset-password flow). Or manually via curl:
 ```bash
 # 1. Get reset token

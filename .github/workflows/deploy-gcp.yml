@@ -92,7 +92,7 @@ env:
   REDIS_URL: redis://10.36.0.3:6379/0
   REDIS_ENABLED: "true"
   GCS_BUCKET: dachjob-dev-artifacts
-  GCP_TF_DIR: infra/terraform
+  GCP_TF_DIR: infra/terraform/live/gcp/dev
 
 jobs:
   validate:
@@ -235,6 +235,8 @@ jobs:
       TF_VAR_environment: ${{ needs.prepare.outputs.environment }}
       TF_VAR_billing_account_id: ${{ vars.GCP_BILLING_ACCOUNT_ID || secrets.GCP_BILLING_ACCOUNT_ID || '' }}
       TF_VAR_notification_email: ${{ vars.GCP_NOTIFICATION_EMAIL || vars.NOTIFICATION_EMAIL || secrets.GCP_NOTIFICATION_EMAIL || '' }}
+      GCP_TF_BACKEND_BUCKET: ${{ vars.GCP_TF_BACKEND_BUCKET || 'dachjob-ai-terraform-state' }}
+      GCP_TF_BACKEND_PREFIX: ${{ vars.GCP_TF_BACKEND_PREFIX || 'dev' }}
     outputs:
       api_url: ${{ steps.tf_outputs.outputs.api_url }}
       frontend_url: ${{ steps.tf_outputs.outputs.frontend_url }}
@@ -261,7 +263,7 @@ jobs:
 
       - name: Terraform init
         working-directory: ${{ env.GCP_TF_DIR }}
-        run: terraform init -backend-config=environments/${{ needs.prepare.outputs.environment }}/backend.conf
+        run: terraform init -backend-config="bucket=${GCP_TF_BACKEND_BUCKET}" -backend-config="prefix=${GCP_TF_BACKEND_PREFIX}"
 
       - name: Terraform format check
         run: terraform fmt -check -recursive

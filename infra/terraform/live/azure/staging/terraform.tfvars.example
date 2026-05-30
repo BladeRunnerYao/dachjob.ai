@@ -1,0 +1,7 @@
+name_prefix                     = "dachjob-staging"
+location                        = "westeurope"
+postgres_administrator_password = "replace-with-secure-password"
+api_image_tag                   = "latest"
+frontend_image_tag              = "latest"
+worker_image_tag                = "latest"
+cors_origins                    = ""

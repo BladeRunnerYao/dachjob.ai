@@ -1,6 +1,6 @@
 # Cloud Infrastructure — dachjob.ai
 
-Terraform configuration for deploying dachjob.ai on GCP and Azure.
+Terraform configuration for deploying dachjob.ai on GCP, Azure, and AWS.
 
 ## Architecture
 
@@ -14,32 +14,19 @@ See [docs/deployment/gcp-architecture.md](/docs/deployment/gcp-architecture.md) 
 
 ## Quick Start
 
-```bash
-# 1. First apply (bootstrap state bucket)
-cd infra/terraform
-terraform init
-TF_VAR_project_id=... \
-TF_VAR_billing_account_id=... \
-TF_VAR_notification_email=... \
-terraform plan -out=tfplan
-terraform apply tfplan
+Run Terraform from a live environment root:
 
-# 2. On subsequent runs, use the GCS backend
-# Update environments/dev/backend.conf with the state bucket name from step 1
+```bash
+terraform -chdir=infra/terraform/live/gcp/dev init -backend=false
+terraform -chdir=infra/terraform/live/gcp/dev validate
 ```
+
+Use the environment root's `terraform.tfvars.example` as a starting point for local planning. Do not commit real `.tfvars` files.
 
 ## Directory Structure
 
 ```
 infra/terraform/
-├── main.tf                    # Root module — orchestrates all submodules
-├── versions.tf                # Provider and Terraform version constraints
-├── backend.tf                 # GCS backend configuration
-├── providers.tf               # GCP provider configuration
-├── variables.tf               # Input variables
-├── outputs.tf                 # Output values
-├── terraform.tfvars.example   # Example variable values
-│
 ├── modules/
 │   ├── networking/            # VPC + Serverless VPC Connector
 │   ├── artifact-registry/     # Docker image repositories
@@ -52,9 +39,19 @@ infra/terraform/
 │   ├── gke/                   # GKE Autopilot cluster
 │   └── monitoring/            # Budget alerts + uptime checks
 │
-└── environments/
-    └── dev/
-        └── backend.conf       # Dev backend config
+└── live/
+    ├── gcp/
+    │   ├── dev/               # GCP deploy workflow root
+    │   ├── staging/
+    │   └── prod/
+    ├── azure/
+    │   ├── dev/               # Azure deploy workflow root
+    │   ├── staging/
+    │   └── prod/
+    └── aws/
+        ├── dev/               # AWS deploy workflow root
+        ├── staging/
+        └── prod/
 ```
 
 ## Variables
@@ -87,10 +84,11 @@ The repository `.gitignore` blocks all `*.tfvars`, `*.tfstate`, `*.tfstate.*`, a
 
 ## CI/CD Pipeline
 
-Deployment is split into two cloud-specific workflows:
+Deployment is split into cloud-specific workflows:
 
 - [`.github/workflows/deploy-gcp.yml`](/.github/workflows/deploy-gcp.yml) — GCP Cloud Run + GKE
 - [`.github/workflows/deploy-azure.yml`](/.github/workflows/deploy-azure.yml) — Azure Container Apps
+- [`.github/workflows/deploy-aws.yml`](/.github/workflows/deploy-aws.yml) — AWS ECS/Fargate
 
 The old combined [`.github/workflows/deploy.yml`](/.github/workflows/deploy.yml) is deprecated
 and kept for manual fallback only.
@@ -101,7 +99,7 @@ Each pipeline supports:
 
 ### Required CI Variables and Secrets
 
-GCP Terraform reads these GitHub Variables/Secrets as `TF_VAR_*` values:
+GCP Terraform runs from `infra/terraform/live/gcp/dev` and reads these GitHub Variables/Secrets as `TF_VAR_*` values:
 
 - `GCP_BILLING_ACCOUNT_ID`
 - `GCP_NOTIFICATION_EMAIL`

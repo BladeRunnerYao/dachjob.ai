@@ -41,3 +41,13 @@ output "cloud_run_urls" {
     frontend = module.cloud-run.frontend_url
   }
 }
+
+output "api_url" {
+  description = "Cloud Run API URL"
+  value       = module.cloud-run.api_url
+}
+
+output "frontend_url" {
+  description = "Cloud Run frontend URL"
+  value       = module.cloud-run.frontend_url
+}
