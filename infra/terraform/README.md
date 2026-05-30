@@ -6,6 +6,12 @@ Terraform configuration for deploying dachjob.ai on GCP, Azure, and AWS.
 
 See [docs/deployment/gcp-architecture.md](/docs/deployment/gcp-architecture.md) for the full architecture overview.
 
+## Prerequisites
+
+- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.6
+- [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
+- Authenticated with: `gcloud auth application-default login`
+
 ## Quick Start
 
 Run Terraform from a live environment root:
@@ -15,7 +21,7 @@ terraform -chdir=infra/terraform/live/gcp/dev init -backend=false
 terraform -chdir=infra/terraform/live/gcp/dev validate
 ```
 
-Use the environment root's terraform.tfvars.example as a starting point for local planning. Do not commit real .tfvars files.
+Use the environment root's `terraform.tfvars.example` as a starting point for local planning. Do not commit real `.tfvars` files.
 
 ## Directory Structure
 
@@ -93,7 +99,7 @@ Each pipeline supports:
 
 ### Required CI Variables and Secrets
 
-GCP Terraform runs from infra/terraform/live/gcp/dev and reads these GitHub Variables/Secrets as `TF_VAR_*` values:
+GCP Terraform runs from `infra/terraform/live/gcp/dev` and reads these GitHub Variables/Secrets as `TF_VAR_*` values:
 
 - `GCP_BILLING_ACCOUNT_ID`
 - `GCP_NOTIFICATION_EMAIL`
