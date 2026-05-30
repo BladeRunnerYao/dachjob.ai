@@ -4,39 +4,27 @@ A native iOS app for the dachjob.ai platform, built with SwiftUI. Connects to th
 
 ## Requirements
 
-- **Xcode 16+** (Swift 5.9+)
-- **iOS 17.0+** (iPhone)
+- **Xcode 26+** (Swift 6.2+)
+- **XcodeGen** (`brew install xcodegen`)
+- **iOS 26.0+** (iPhone)
 - macOS 14+ (Sonoma) for development
 
 ## Project Setup
 
-### Option 1: Create Xcode Project (Recommended)
+### Option 1: Generate Xcode Project (Recommended)
 
-1. Open **Xcode** → File → New → Project
-2. Select **iOS** → **App**
-3. Configure:
-   - Product Name: `DachJob`
-   - Bundle Identifier: `ai.dachjob.app`
-   - Interface: **SwiftUI**
-   - Language: **Swift**
-   - Minimum Deployment: **iOS 17.0**
-4. Choose the location (any temp folder)
-5. Delete the auto-generated `ContentView.swift`
-6. Drag all files from `ios/DachJob/` into the Xcode project navigator:
-   - `DachJobApp.swift`
-   - `Models/Models.swift`
-   - `Services/APIClient.swift`
-   - `Services/AuthService.swift`
-   - `Services/KeychainHelper.swift`
-   - `Views/LoginView.swift`
-   - `Views/MainTabView.swift`
-   - `Views/DashboardView.swift`
-   - `Views/JobsListView.swift`
-   - `Views/JobDetailView.swift`
-   - `Views/ImportJobView.swift`
-   - `Views/LLMRunsView.swift`
-   - `Views/ProfileView.swift`
-7. Add `Assets.xcassets` from `ios/DachJob/Assets.xcassets/`
+```bash
+cd ios
+xcodegen generate
+open DachJob.xcodeproj
+```
+
+The generated app target uses:
+- Product Name: `DachJob`
+- Bundle Identifier: `ai.dachjob.app`
+- Interface: **SwiftUI**
+- Language: **Swift 6.2**
+- Minimum Deployment: **iOS 26.0**
 
 ### Option 2: Open as Swift Package (Preview Only)
 
@@ -49,8 +37,8 @@ This allows browsing/editing code but won't produce a runnable app (use Option 1
 
 ## Build & Run
 
-1. Open the Xcode project (from Option 1)
-2. Select an iPhone simulator (iPhone 16 recommended) or connect a real device
+1. Open the generated Xcode project (from Option 1)
+2. Select an iPhone simulator or connect a real device
 3. Press **⌘R** to build and run
 
 ### Running on Physical Device

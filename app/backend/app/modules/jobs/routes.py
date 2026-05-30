@@ -56,7 +56,10 @@ async def list_jobs(
         offset=offset,
     )
     await cache.set_json(
-        "jobs:list", str(tenant.id), str(limit), str(offset),
+        "jobs:list",
+        str(tenant.id),
+        str(limit),
+        str(offset),
         value=serialized.model_dump(mode="json"),
     )
     return serialized

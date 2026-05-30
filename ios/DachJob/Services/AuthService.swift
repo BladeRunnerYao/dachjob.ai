@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 class AuthService: ObservableObject {
     @Published var isAuthenticated = false
     @Published var isLoading = false
