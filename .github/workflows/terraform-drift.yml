@@ -44,8 +44,8 @@ jobs:
       TF_VAR_environment: ${{ github.event.inputs.environment || 'dev' }}
       TF_VAR_billing_account_id: ${{ vars.GCP_BILLING_ACCOUNT_ID || secrets.GCP_BILLING_ACCOUNT_ID || '' }}
       TF_VAR_notification_email: ${{ vars.GCP_NOTIFICATION_EMAIL || vars.NOTIFICATION_EMAIL || secrets.GCP_NOTIFICATION_EMAIL || '' }}
-      GCP_TF_BACKEND_BUCKET: ${{ vars.GCP_TF_BACKEND_BUCKET || 'dachjob-ai-terraform-state' }}
-      GCP_TF_BACKEND_PREFIX: ${{ vars.GCP_TF_BACKEND_PREFIX || 'dev' }}
+      GCP_TF_BACKEND_BUCKET: ${{ vars.GCP_TF_BACKEND_BUCKET || format('dachjob-{0}-terraform-state', github.event.inputs.environment || 'dev') }}
+      GCP_TF_BACKEND_PREFIX: ${{ vars.GCP_TF_BACKEND_PREFIX || github.event.inputs.environment || 'dev' }}
       WORKLOAD_IDENTITY_PROVIDER: projects/936971254595/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
       DEPLOYER_SERVICE_ACCOUNT: dachjob-dev-terraform-sa@dachjob-ai-platform.iam.gserviceaccount.com
     steps:

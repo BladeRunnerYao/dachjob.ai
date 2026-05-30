@@ -21,7 +21,13 @@ else
 fi
 
 # 2. Write backend configuration
-BACKEND_CONF="infra/terraform/environments/${ENV}/backend.conf"
+TF_ROOT="infra/terraform/live/gcp/${ENV}"
+BACKEND_CONF="${TF_ROOT}/backend.conf"
+if [[ ! -d "${TF_ROOT}" ]]; then
+  echo "Terraform root ${TF_ROOT} does not exist." >&2
+  exit 1
+fi
+
 cat > "${BACKEND_CONF}" <<EOF
 bucket = "${STATE_BUCKET}"
 prefix = "${ENV}"
@@ -29,13 +35,13 @@ EOF
 echo "Backend config written to ${BACKEND_CONF}"
 
 # 3. Initialize Terraform with the backend
-cd infra/terraform
-terraform init -backend-config="${BACKEND_CONF}"
+cd "${TF_ROOT}"
+terraform init -backend-config=backend.conf
 echo "Terraform initialized successfully."
 
 echo ""
 echo "=== Bootstrap complete ==="
 echo "Next steps:"
-echo "  1. Verify variables in infra/terraform/environments/${ENV}/terraform.tfvars"
-echo "  2. Run: make plan   (or: cd infra/terraform && terraform plan -var-file=environments/${ENV}/terraform.tfvars)"
-echo "  3. Run: make apply  (or: cd infra/terraform && terraform apply)"
+echo "  1. Verify variables in ${TF_ROOT}/terraform.tfvars"
+echo "  2. Run: cd ${TF_ROOT} && terraform plan"
+echo "  3. Run: cd ${TF_ROOT} && terraform apply"
