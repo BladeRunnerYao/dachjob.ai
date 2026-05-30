@@ -97,9 +97,7 @@ async def import_jobs_endpoint(
             "user_id": str(tenant.user_id) if tenant.user_id else None,
             "urls": urls,
         },
-        celery_task=__import__(
-            "app.workers.tasks", fromlist=["import_jobs_task"]
-        ).import_jobs_task,
+        celery_task=__import__("app.workers.tasks", fromlist=["import_jobs_task"]).import_jobs_task,
         sync_runner=lambda: import_job_urls(db, tenant, urls),
         result_serializer=lambda r: {
             "imported_job_ids": [str(j.id) for j in r[0]],
