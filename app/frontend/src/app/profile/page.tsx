@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api/client';
 import type { CandidateProfile } from '@/lib/api/types';
 

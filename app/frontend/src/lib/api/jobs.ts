@@ -1,37 +1,43 @@
 import { isBuildTime, isProduction, request } from './base-client';
 import { checkTaskResult, isBackgroundTaskResponse, pollTask } from './tasks';
 import { getMockJobs } from './mocks';
-import type { BackgroundTask, JobImportResponse, JobPosting, PaginatedJobs } from './types';
+import type { BackgroundTask, JobImportResponse, JobPosting, JobStatus, PaginatedJobs } from './types';
 
 /** Filter out jobs whose title contains "smoke test" (case-insensitive). */
 function filterSmokeTestJobs(jobs: JobPosting[]): JobPosting[] {
   return jobs.filter((j) => !/smoke\s*test/i.test(j.title ?? ''));
 }
 
-export async function getJobs(limit?: number, offset?: number): Promise<JobPosting[]> {
+function buildJobsQuery(limit: number, offset: number, status?: JobStatus): string {
+  const q = new URLSearchParams();
+  q.set('limit', String(limit));
+  q.set('offset', String(offset));
+  if (status) q.set('status', status);
+  return q.toString();
+}
+
+export async function getJobs(limit?: number, offset?: number, status?: JobStatus): Promise<JobPosting[]> {
   try {
-    const q = new URLSearchParams();
-    q.set('limit', String(limit ?? 1000));
-    q.set('offset', String(offset ?? 0));
-    const result = await request<PaginatedJobs>(`/api/jobs?${q.toString()}`);
+    const query = buildJobsQuery(limit ?? 1000, offset ?? 0, status);
+    const result = await request<PaginatedJobs>(`/api/jobs?${query}`);
     return filterSmokeTestJobs(result.items);
   } catch {
     if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
-    return filterSmokeTestJobs(getMockJobs());
+    const jobs = filterSmokeTestJobs(getMockJobs());
+    return status ? jobs.filter((job) => job.status === status) : jobs;
   }
 }
 
-export async function getJobsPaginated(limit: number, offset: number): Promise<PaginatedJobs> {
+export async function getJobsPaginated(limit: number, offset: number, status?: JobStatus): Promise<PaginatedJobs> {
   try {
-    const q = new URLSearchParams();
-    q.set('limit', String(limit));
-    q.set('offset', String(offset));
-    const result = await request<PaginatedJobs>(`/api/jobs?${q.toString()}`);
+    const query = buildJobsQuery(limit, offset, status);
+    const result = await request<PaginatedJobs>(`/api/jobs?${query}`);
     const filtered = filterSmokeTestJobs(result.items);
     return { items: filtered, total: result.total - (result.items.length - filtered.length), limit, offset };
   } catch {
     if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
-    const items = filterSmokeTestJobs(getMockJobs());
+    const allItems = filterSmokeTestJobs(getMockJobs());
+    const items = status ? allItems.filter((job) => job.status === status) : allItems;
     return { items, total: items.length, limit, offset };
   }
 }
@@ -60,7 +66,7 @@ export function createJob(rawJd: string): Promise<JobPosting> {
   });
 }
 
-export function updateJobStatus(jobId: string, status: 'new' | 'saved' | 'applied'): Promise<JobPosting> {
+export function updateJobStatus(jobId: string, status: JobStatus): Promise<JobPosting> {
   return request<JobPosting>(`/api/jobs/${jobId}/status`, {
     method: 'PATCH',
     body: JSON.stringify({ status }),

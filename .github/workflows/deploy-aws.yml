@@ -652,26 +652,37 @@ jobs:
         id: cloudfront
         run: |
           cf_domain=""
+          cf_id=""
           # Look for CloudFront distributions that use our ALB as origin
           ALB_DNS="${{ needs.terraform.outputs.frontend_url || env.AWS_FRONTEND_URL }}"
           ALB_DNS="${ALB_DNS#http://}"
           ALB_DNS="${ALB_DNS#https://}"
+          CONFIGURED_FRONTEND="${AWS_FRONTEND_URL#http://}"
+          CONFIGURED_FRONTEND="${CONFIGURED_FRONTEND#https://}"
 
           # Try to find CloudFront distributions whose origin matches our ALB
-          cf_distributions="$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, \`${ALB_DNS}\`)] | [0].DomainName" \
-            --output text 2>/dev/null || true)"
+          cf_distribution="$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, \`${ALB_DNS}\`)] | [0].{Id:Id,DomainName:DomainName}" \
+            --output json 2>/dev/null || true)"
 
-          if [[ -n "${cf_distributions}" && "${cf_distributions}" != "None" ]]; then
-            cf_domain="https://${cf_distributions}"
+          if [[ -n "${cf_distribution}" && "${cf_distribution}" != "null" ]]; then
+            cf_id="$(jq -r '.Id // ""' <<< "${cf_distribution}")"
+            cf_distribution_domain="$(jq -r '.DomainName // ""' <<< "${cf_distribution}")"
+            cf_domain="https://${cf_distribution_domain}"
             echo "Found CloudFront distribution: ${cf_domain}"
-          elif cf_domains="$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, \`${CLUSTER:-dachjob-dev}\`)] | [0].DomainName" \
-            --output text 2>/dev/null || true)"; [[ -n "${cf_domains}" && "${cf_domains}" != "None" ]]; then
-            cf_domain="https://${cf_domains}"
+          elif [[ -n "${CONFIGURED_FRONTEND}" ]]; then
+            cf_distribution="$(aws cloudfront list-distributions \
+              --query "DistributionList.Items[?DomainName == \`${CONFIGURED_FRONTEND}\`] | [0].{Id:Id,DomainName:DomainName}" \
+              --output json 2>/dev/null || true)"
+            if [[ -n "${cf_distribution}" && "${cf_distribution}" != "null" ]]; then
+              cf_id="$(jq -r '.Id // ""' <<< "${cf_distribution}")"
+              cf_distribution_domain="$(jq -r '.DomainName // ""' <<< "${cf_distribution}")"
+              cf_domain="https://${cf_distribution_domain}"
+            fi
             echo "Found CloudFront distribution: ${cf_domain}"
           fi
           echo "domain=${cf_domain}" >> "${GITHUB_OUTPUT}"
+          echo "distribution_id=${cf_id}" >> "${GITHUB_OUTPUT}"
 
       - name: Capture service URL
         id: url
@@ -689,6 +700,18 @@ jobs:
             url="${terraform_url}"
           fi
           echo "url=${url}" >> "${GITHUB_OUTPUT}"
+
+      - name: Invalidate CloudFront frontend cache
+        if: ${{ steps.cloudfront.outputs.distribution_id != '' }}
+        run: |
+          invalidation_id="$(aws cloudfront create-invalidation \
+            --distribution-id "${{ steps.cloudfront.outputs.distribution_id }}" \
+            --paths "/*" \
+            --query 'Invalidation.Id' \
+            --output text)"
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "${{ steps.cloudfront.outputs.distribution_id }}" \
+            --id "${invalidation_id}"
 
       - name: Health check frontend
         run: |

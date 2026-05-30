@@ -1,3 +1,5 @@
+export type JobStatus = 'new' | 'saved' | 'applied';
+
 export interface JobPosting {
   id: string;
   title: string;
@@ -10,7 +12,7 @@ export interface JobPosting {
   employment_type?: string;
   workplace?: string;
   salary_text?: string;
-  status: string;
+  status: JobStatus | string;
   score?: number;
   recommendation?: string;
   parsed_json?: Record<string, unknown>;

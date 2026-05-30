@@ -7,6 +7,7 @@ struct JobDetailView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var updatingStatus = false
+    @State private var selectedSkills: Set<String> = []
 
     private let api = APIClient.shared
 
@@ -28,8 +29,11 @@ struct JobDetailView: View {
             } else if let job {
                 VStack(alignment: .leading, spacing: 16) {
                     headerSection(job: job)
-                    if let match = matchReport {
-                        matchSection(match: match)
+                    if let percent = matchReport?.scorePercent ?? job.scorePercent {
+                        matchSection(percent: percent)
+                    }
+                    if job.hasQualificationDetails {
+                        qualificationsSection(job: job)
                     }
                     if let rawJd = job.rawJd, !rawJd.isEmpty {
                         descriptionSection(rawJd: rawJd)
@@ -91,27 +95,96 @@ struct JobDetailView: View {
         }
     }
 
-    private func matchSection(match: MatchReport) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Match Report")
-                .font(.headline)
-            HStack {
-                Text("Score:")
-                    .foregroundColor(.secondary)
-                Text("\(Int(match.overallScore * 100))%")
+    private func matchSection(percent: Int) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(matchColor(percent).opacity(0.12))
+                Text("\(percent)%")
+                    .font(.title3)
                     .fontWeight(.bold)
-                    .foregroundColor(match.overallScore >= 0.84 ? .green : match.overallScore >= 0.72 ? .orange : .red)
+                    .foregroundColor(matchColor(percent))
             }
-            .font(.subheadline)
-            if let explanation = match.explanation {
-                Text(explanation)
+            .frame(width: 72, height: 72)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Match")
+                    .font(.headline)
+                Text("Latest database score")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
+            Spacer()
         }
         .padding()
         .background(Color(.systemGray6))
         .clipShape(.rect(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private func qualificationsSection(job: JobPosting) -> some View {
+        if let parsed = job.parsedJson {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Qualifications")
+                    .font(.headline)
+
+                if !parsed.mustHaveSkills.isEmpty {
+                    skillGroup(title: "Required Skills", skills: parsed.mustHaveSkills)
+                }
+                if !parsed.niceToHaveSkills.isEmpty {
+                    skillGroup(title: "Preferred Skills", skills: parsed.niceToHaveSkills)
+                }
+                if let years = parsed.experienceYears {
+                    Text("\(Int(years))+ years of experience required")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                if !parsed.requiredQualifications.isEmpty {
+                    bulletGroup(title: "Required", items: parsed.requiredQualifications)
+                }
+                if !parsed.preferredQualifications.isEmpty {
+                    bulletGroup(title: "Preferred", items: parsed.preferredQualifications)
+                }
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .clipShape(.rect(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+        }
+    }
+
+    private func skillGroup(title: String, skills: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+            FlowLayout(spacing: 6) {
+                ForEach(skills, id: \.self) { skill in
+                    SkillChoiceChip(skill: skill, isSelected: selectedSkills.contains(skill)) {
+                        toggleSkill(skill)
+                    }
+                }
+            }
+        }
+    }
+
+    private func bulletGroup(title: String, items: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(items, id: \.self) { item in
+                    Text("• \(item)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
     }
 
     private func descriptionSection(rawJd: String) -> some View {
@@ -133,6 +206,20 @@ struct JobDetailView: View {
             self.error = error.localizedDescription
         }
         isLoading = false
+    }
+
+    private func toggleSkill(_ skill: String) {
+        if selectedSkills.contains(skill) {
+            selectedSkills.remove(skill)
+        } else {
+            selectedSkills.insert(skill)
+        }
+    }
+
+    private func matchColor(_ percent: Int) -> Color {
+        if percent >= 84 { return .green }
+        if percent >= 72 { return .orange }
+        return .red
     }
 
     @ViewBuilder
@@ -159,5 +246,28 @@ struct JobDetailView: View {
                 .clipShape(.rect(cornerRadius: 8))
         }
         .disabled(updatingStatus)
+    }
+}
+
+struct SkillChoiceChip: View {
+    let skill: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "plus.circle")
+                    .font(.caption2)
+                Text(skill)
+            }
+            .font(.caption)
+            .fontWeight(.medium)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(isSelected ? Color.green.opacity(0.18) : Color.blue.opacity(0.10))
+            .foregroundColor(isSelected ? .green : .blue)
+            .clipShape(.rect(cornerRadius: 8))
+        }
     }
 }

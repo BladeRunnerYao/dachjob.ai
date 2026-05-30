@@ -9,6 +9,9 @@ import type { JobPosting, Application, LLMRun } from '@/lib/api/types';
 
 export function DashboardContent() {
   const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const [totalJobs, setTotalJobs] = useState(0);
+  const [appliedCount, setAppliedCount] = useState(0);
+  const [savedCount, setSavedCount] = useState(0);
   const [apps, setApps] = useState<Application[]>([]);
   const [runs, setRuns] = useState<LLMRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,12 +19,17 @@ export function DashboardContent() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [jobsData, appsData, runsData] = await Promise.all([
-          api.getJobs(),
+        const [jobsData, appliedData, savedData, appsData, runsData] = await Promise.all([
+          api.getJobsPaginated(5, 0),
+          api.getJobsPaginated(1, 0, 'applied'),
+          api.getJobsPaginated(1, 0, 'saved'),
           api.getApplications(),
           api.getLLMRuns({ limit: 200 }),
         ]);
-        setJobs(jobsData);
+        setJobs(jobsData.items);
+        setTotalJobs(jobsData.total);
+        setAppliedCount(appliedData.total);
+        setSavedCount(savedData.total);
         setApps(appsData);
         setRuns(runsData.items || []);
       } catch {
@@ -33,8 +41,6 @@ export function DashboardContent() {
     fetchData();
   }, []);
 
-  const appliedCount = jobs.filter((j) => j.status === 'applied').length;
-  const savedCount = jobs.filter((j) => j.status === 'saved').length;
   const avgLatency = runs.length
     ? Math.round(runs.reduce((a, r) => a + r.latency_ms, 0) / runs.length)
     : 0;
@@ -55,7 +61,7 @@ export function DashboardContent() {
       </div>
 
       <StatsCards
-        totalJobs={jobs.length}
+        totalJobs={totalJobs}
         appliedCount={appliedCount}
         savedCount={savedCount}
         totalApplications={apps.length}

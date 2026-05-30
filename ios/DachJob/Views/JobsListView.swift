@@ -6,15 +6,11 @@ struct JobsListView: View {
     @State private var isLoading = true
     @State private var showImport = false
     @State private var filter: String = "all"
+    @State private var counts: [String: Int] = ["all": 0, "applied": 0, "saved": 0]
     @State private var error: String?
 
     private let api = APIClient.shared
     private let pageSize = 30
-
-    var filteredJobs: [JobPosting] {
-        if filter == "all" { return jobs }
-        return jobs.filter { $0.status == filter }
-    }
 
     var body: some View {
         NavigationStack {
@@ -37,7 +33,7 @@ struct JobsListView: View {
                     }
                     Spacer()
                 } else {
-                    List(filteredJobs) { job in
+                    List(jobs) { job in
                         NavigationLink(destination: JobDetailView(jobId: job.id)) {
                             JobRow(job: job)
                         }
@@ -45,7 +41,7 @@ struct JobsListView: View {
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("Jobs (\(total))")
+            .navigationTitle("Jobs (\(counts["all"] ?? total))")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -68,9 +64,9 @@ struct JobsListView: View {
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                FilterChip(label: "All", isSelected: filter == "all") { filter = "all" }
-                FilterChip(label: "Applied", isSelected: filter == "applied") { filter = "applied" }
-                FilterChip(label: "Saved", isSelected: filter == "saved") { filter = "saved" }
+                FilterChip(label: "All", count: counts["all"] ?? 0, isSelected: filter == "all") { selectFilter("all") }
+                FilterChip(label: "Applied", count: counts["applied"] ?? 0, isSelected: filter == "applied") { selectFilter("applied") }
+                FilterChip(label: "Saved", count: counts["saved"] ?? 0, isSelected: filter == "saved") { selectFilter("saved") }
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -82,13 +78,31 @@ struct JobsListView: View {
         isLoading = jobs.isEmpty
         error = nil
         do {
-            let result = try await api.getJobs(limit: pageSize)
+            async let selectedResult = api.getJobs(limit: pageSize, status: filter == "all" ? nil : filter)
+            async let allResult = api.getJobs(limit: 1)
+            async let appliedResult = api.getJobs(limit: 1, status: "applied")
+            async let savedResult = api.getJobs(limit: 1, status: "saved")
+            let result = try await selectedResult
             jobs = result.items
             total = result.total
+            counts = [
+                "all": try await allResult.total,
+                "applied": try await appliedResult.total,
+                "saved": try await savedResult.total,
+            ]
+        } catch let apiError as APIError where apiError.isCancelled {
+            isLoading = false
+            return
         } catch {
             self.error = error.localizedDescription
         }
         isLoading = false
+    }
+
+    private func selectFilter(_ nextFilter: String) {
+        guard filter != nextFilter else { return }
+        filter = nextFilter
+        Task { await loadJobs() }
     }
 }
 
@@ -137,12 +151,13 @@ struct JobRow: View {
 
 struct FilterChip: View {
     let label: String
+    let count: Int
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(label)
+            Text("\(label) (\(count))")
                 .font(.caption)
                 .fontWeight(.medium)
                 .padding(.horizontal, 12)

@@ -6,6 +6,7 @@ enum APIError: LocalizedError {
     case serverError(Int, String)
     case networkError(Error)
     case decodingError(Error)
+    case cancelled
 
     var errorDescription: String? {
         switch self {
@@ -19,7 +20,22 @@ enum APIError: LocalizedError {
             return "Network error: \(error.localizedDescription)"
         case .decodingError(let error):
             return "Data error: \(error.localizedDescription)"
+        case .cancelled:
+            return "Request cancelled"
         }
+    }
+
+    var isCancelled: Bool {
+        if case .cancelled = self { return true }
+        return false
+    }
+}
+
+private struct CVMarkdownUpload: Encodable {
+    let rawCvMd: String
+
+    enum CodingKeys: String, CodingKey {
+        case rawCvMd = "raw_cv_md"
     }
 }
 
@@ -68,8 +84,12 @@ class APIClient {
 
     // MARK: - Jobs
 
-    func getJobs(limit: Int = 50, offset: Int = 0) async throws -> PaginatedJobs {
-        let result: PaginatedJobs = try await get("/api/jobs?limit=\(limit)&offset=\(offset)")
+    func getJobs(limit: Int = 50, offset: Int = 0, status: String? = nil) async throws -> PaginatedJobs {
+        var path = "/api/jobs?limit=\(limit)&offset=\(offset)"
+        if let status {
+            path += "&status=\(status)"
+        }
+        let result: PaginatedJobs = try await get(path)
         // Filter out smoke test jobs
         let filtered = result.items.filter { job in
             !(job.title.range(of: "smoke\\s*test", options: [.regularExpression, .caseInsensitive]) != nil)
@@ -93,8 +113,29 @@ class APIClient {
 
     // MARK: - Profile
 
-    func getProfile() async throws -> CandidateProfile {
+    func getProfile() async throws -> CandidateProfile? {
         return try await get("/api/profile")
+    }
+
+    func uploadCvMarkdown(_ rawCvMd: String) async throws -> CandidateProfile {
+        return try await post("/api/profile/cv", body: CVMarkdownUpload(rawCvMd: rawCvMd))
+    }
+
+    func importProfileFromPdf(fileURL: URL) async throws -> CandidateProfile {
+        let didAccess = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+        let data = try Data(contentsOf: fileURL)
+        return try await postMultipart(
+            "/api/profile/import-pdf",
+            fieldName: "file",
+            fileName: fileURL.lastPathComponent,
+            mimeType: "application/pdf",
+            fileData: data
+        )
     }
 
     // MARK: - Match
@@ -164,6 +205,40 @@ class APIClient {
         return try await execute(request)
     }
 
+    private func postMultipart<T: Codable>(
+        _ path: String,
+        fieldName: String,
+        fileName: String,
+        mimeType: String,
+        fileData: Data
+    ) async throws -> T {
+        guard let url = URL(string: "\(baseURL)\(path)") else {
+            throw APIError.invalidURL
+        }
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var body = Data()
+        append("--\(boundary)\r\n", to: &body)
+        append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(fileName)\"\r\n", to: &body)
+        append("Content-Type: \(mimeType)\r\n\r\n", to: &body)
+        body.append(fileData)
+        append("\r\n--\(boundary)--\r\n", to: &body)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.httpBody = body
+
+        return try await execute(request)
+    }
+
+    private func append(_ string: String, to data: inout Data) {
+        data.append(Data(string.utf8))
+    }
+
     private func execute<T: Codable>(_ request: URLRequest) async throws -> T {
         let (data, response): (Data, URLResponse)
         do {
@@ -171,6 +246,9 @@ class APIClient {
             timedRequest.timeoutInterval = 15
             (data, response) = try await URLSession.shared.data(for: timedRequest)
         } catch {
+            if isCancellation(error) {
+                throw APIError.cancelled
+            }
             throw APIError.networkError(error)
         }
 
@@ -194,5 +272,15 @@ class APIClient {
         } catch {
             throw APIError.decodingError(error)
         }
+    }
+
+    private func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+        if let urlError = error as? URLError, urlError.code == .cancelled {
+            return true
+        }
+        return false
     }
 }

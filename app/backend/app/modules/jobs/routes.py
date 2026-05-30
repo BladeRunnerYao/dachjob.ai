@@ -12,6 +12,7 @@ from app.modules.background_tasks.execution import run_or_enqueue
 from app.modules.background_tasks.schemas import BackgroundTaskResponse
 from app.modules.jobs.importer import import_job_urls
 from app.modules.jobs.repository import (
+    VALID_JOB_STATUSES,
     count_jobs_by_tenant,
     create_job,
     get_job,
@@ -43,14 +44,16 @@ async def list_jobs(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(15, ge=1, le=200, description="Number of jobs per page"),
     offset: int = Query(0, ge=0, description="Number of jobs to skip"),
+    status: str | None = Query(None, pattern=r"^(new|saved|applied)$"),
 ):
     if tenant.id is None:
         return PaginatedJobResponse(items=[], total=0, limit=limit, offset=offset)
-    cached = await cache.get_json("jobs:list", str(tenant.id), str(limit), str(offset))
+    status_key = status or "all"
+    cached = await cache.get_json("jobs:list", str(tenant.id), status_key, str(limit), str(offset))
     if cached is not None:
         return PaginatedJobResponse.model_validate(cached)
-    total = await count_jobs_by_tenant(db, tenant.id)
-    jobs = await list_jobs_by_tenant(db, tenant.id, limit=limit, offset=offset)
+    total = await count_jobs_by_tenant(db, tenant.id, status=status)
+    jobs = await list_jobs_by_tenant(db, tenant.id, limit=limit, offset=offset, status=status)
     serialized = PaginatedJobResponse(
         items=[JobResponse.model_validate(job).model_dump(mode="json") for job in jobs],
         total=total,
@@ -60,6 +63,7 @@ async def list_jobs(
     await cache.set_json(
         "jobs:list",
         str(tenant.id),
+        status_key,
         str(limit),
         str(offset),
         value=serialized.model_dump(mode="json"),
@@ -150,6 +154,10 @@ async def update_job_status_endpoint(
 ):
     if tenant.id is None:
         raise AppError("tenant_not_found", "Tenant context is required")
+    if body.status not in VALID_JOB_STATUSES:
+        raise AppError(
+            "invalid_job_status", "Status must be one of new, saved, applied", status_code=422
+        )
     job = await update_job_status(db, job_id, tenant.id, body.status)
     if not job:
         raise AppError("job_not_found", "Job posting not found", status_code=404)
