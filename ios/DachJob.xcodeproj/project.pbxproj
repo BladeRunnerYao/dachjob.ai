@@ -1,0 +1,402 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		077ABED827DB1C882CBE1A78 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2EA2ED4E9B1E3FF575A9B9 /* APIClient.swift */; };
+		1CD08B9E2E4335C2083B0207 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4DB0EA94C0216918468CC0B /* DashboardView.swift */; };
+		33EEFBB51317D9990219BB1D /* JobDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94B46470D1E4771CC411FA9 /* JobDetailView.swift */; };
+		3F8979079C75BF614A42B947 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4731393D15E6A146B5D1093 /* ProfileView.swift */; };
+		4BCFBCB6031AC2512B00CF60 /* ImportJobView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D27D29D7A1EE422D7795352 /* ImportJobView.swift */; };
+		54FB5A1E11FBC0C043B505A0 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD0DE2C9A5FE510CACC179C /* Models.swift */; };
+		8279DDE432E6D7F14325B75F /* DachJobApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD71B7EDD9B6D3EA0B9F22A4 /* DachJobApp.swift */; };
+		851209A8EFBA20B909E6BB63 /* JobsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 010AAA788A6C42BDEF7A556C /* JobsListView.swift */; };
+		953208EA762D5D48B7DE021F /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40D81CA2B1C46F2673E76C1 /* KeychainHelper.swift */; };
+		967A58257AE89CD33141173F /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 195DAB18FA73E95160878A79 /* LoginView.swift */; };
+		A31F08EA849309A7BD889836 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA31ECA5AA8D010AAF88AC35 /* MainTabView.swift */; };
+		A728D4A7CD03E76468482850 /* LLMRunsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7211EAA3EC60738DDF0EC86F /* LLMRunsView.swift */; };
+		AB083991DDFB2E98E50C29C8 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CA70C6746145A4D5124448 /* AuthService.swift */; };
+		C327E67E69AAC0C295DDFBF0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 774F3C77826D03B727B782F8 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		010AAA788A6C42BDEF7A556C /* JobsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobsListView.swift; sourceTree = "<group>"; };
+		195DAB18FA73E95160878A79 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		2DD0DE2C9A5FE510CACC179C /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		7211EAA3EC60738DDF0EC86F /* LLMRunsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMRunsView.swift; sourceTree = "<group>"; };
+		774F3C77826D03B727B782F8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		9D27D29D7A1EE422D7795352 /* ImportJobView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportJobView.swift; sourceTree = "<group>"; };
+		AB2EA2ED4E9B1E3FF575A9B9 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		B1CA70C6746145A4D5124448 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		B4DB0EA94C0216918468CC0B /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		B94B46470D1E4771CC411FA9 /* JobDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobDetailView.swift; sourceTree = "<group>"; };
+		C40D81CA2B1C46F2673E76C1 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
+		C97CA778169FEA0F5A94D4FE /* DachJob.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = DachJob.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA31ECA5AA8D010AAF88AC35 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		DD71B7EDD9B6D3EA0B9F22A4 /* DachJobApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DachJobApp.swift; sourceTree = "<group>"; };
+		F4731393D15E6A146B5D1093 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0AEDFC270EC88C1B7F846B83 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				2DD0DE2C9A5FE510CACC179C /* Models.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		120DF3F5323B45FA2AEB86E3 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				AB2EA2ED4E9B1E3FF575A9B9 /* APIClient.swift */,
+				B1CA70C6746145A4D5124448 /* AuthService.swift */,
+				C40D81CA2B1C46F2673E76C1 /* KeychainHelper.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		76368B64FD5E67FBF9433127 /* DachJob */ = {
+			isa = PBXGroup;
+			children = (
+				774F3C77826D03B727B782F8 /* Assets.xcassets */,
+				DD71B7EDD9B6D3EA0B9F22A4 /* DachJobApp.swift */,
+				0AEDFC270EC88C1B7F846B83 /* Models */,
+				120DF3F5323B45FA2AEB86E3 /* Services */,
+				DDD31342E95407448BE9B900 /* Views */,
+			);
+			path = DachJob;
+			sourceTree = "<group>";
+		};
+		9B4EE3A7805665F05DAB8401 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C97CA778169FEA0F5A94D4FE /* DachJob.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B11ACFF3347F94BA8F1DDF42 = {
+			isa = PBXGroup;
+			children = (
+				76368B64FD5E67FBF9433127 /* DachJob */,
+				9B4EE3A7805665F05DAB8401 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		DDD31342E95407448BE9B900 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				B4DB0EA94C0216918468CC0B /* DashboardView.swift */,
+				9D27D29D7A1EE422D7795352 /* ImportJobView.swift */,
+				B94B46470D1E4771CC411FA9 /* JobDetailView.swift */,
+				010AAA788A6C42BDEF7A556C /* JobsListView.swift */,
+				7211EAA3EC60738DDF0EC86F /* LLMRunsView.swift */,
+				195DAB18FA73E95160878A79 /* LoginView.swift */,
+				CA31ECA5AA8D010AAF88AC35 /* MainTabView.swift */,
+				F4731393D15E6A146B5D1093 /* ProfileView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		71012A480AE850201623ABF0 /* DachJob */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7BE79595D4B0638BAF0D089F /* Build configuration list for PBXNativeTarget "DachJob" */;
+			buildPhases = (
+				63E786F0A2CC0A949B1AA55C /* Sources */,
+				F57B6FCCCE272B04D1C5300E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DachJob;
+			packageProductDependencies = (
+			);
+			productName = DachJob;
+			productReference = C97CA778169FEA0F5A94D4FE /* DachJob.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		8373D6613E449939B738F1D4 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					71012A480AE850201623ABF0 = {
+						DevelopmentTeam = "";
+					};
+				};
+			};
+			buildConfigurationList = 9266E7616A3054237BFD203A /* Build configuration list for PBXProject "DachJob" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = B11ACFF3347F94BA8F1DDF42;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 9B4EE3A7805665F05DAB8401 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				71012A480AE850201623ABF0 /* DachJob */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F57B6FCCCE272B04D1C5300E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C327E67E69AAC0C295DDFBF0 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		63E786F0A2CC0A949B1AA55C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				077ABED827DB1C882CBE1A78 /* APIClient.swift in Sources */,
+				AB083991DDFB2E98E50C29C8 /* AuthService.swift in Sources */,
+				8279DDE432E6D7F14325B75F /* DachJobApp.swift in Sources */,
+				1CD08B9E2E4335C2083B0207 /* DashboardView.swift in Sources */,
+				4BCFBCB6031AC2512B00CF60 /* ImportJobView.swift in Sources */,
+				33EEFBB51317D9990219BB1D /* JobDetailView.swift in Sources */,
+				851209A8EFBA20B909E6BB63 /* JobsListView.swift in Sources */,
+				953208EA762D5D48B7DE021F /* KeychainHelper.swift in Sources */,
+				A728D4A7CD03E76468482850 /* LLMRunsView.swift in Sources */,
+				967A58257AE89CD33141173F /* LoginView.swift in Sources */,
+				A31F08EA849309A7BD889836 /* MainTabView.swift in Sources */,
+				54FB5A1E11FBC0C043B505A0 /* Models.swift in Sources */,
+				3F8979079C75BF614A42B947 /* ProfileView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		81F7EF0FBD974A18CB1EBAD1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = DachJob;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = (
+					UIInterfaceOrientationPortrait,
+					UIInterfaceOrientationLandscapeLeft,
+					UIInterfaceOrientationLandscapeRight,
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ai.dachjob.app;
+				PRODUCT_NAME = DachJob;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		91BD23C998E901F0D670A1FC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = DachJob;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = (
+					UIInterfaceOrientationPortrait,
+					UIInterfaceOrientationLandscapeLeft,
+					UIInterfaceOrientationLandscapeRight,
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ai.dachjob.app;
+				PRODUCT_NAME = DachJob;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		C46DA0785DBC06774AF98D77 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		DF6FCA81D46EF7F8623B51A6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		7BE79595D4B0638BAF0D089F /* Build configuration list for PBXNativeTarget "DachJob" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				81F7EF0FBD974A18CB1EBAD1 /* Debug */,
+				91BD23C998E901F0D670A1FC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9266E7616A3054237BFD203A /* Build configuration list for PBXProject "DachJob" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C46DA0785DBC06774AF98D77 /* Debug */,
+				DF6FCA81D46EF7F8623B51A6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 8373D6613E449939B738F1D4 /* Project object */;
+}

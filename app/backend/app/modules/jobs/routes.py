@@ -44,8 +44,7 @@ async def list_jobs(
 ):
     if tenant.id is None:
         return PaginatedJobResponse(items=[], total=0, limit=limit, offset=offset)
-    cache_key = f"jobs:list:{tenant.id}:{limit}:{offset}"
-    cached = await cache.get_json("jobs:list", cache_key)
+    cached = await cache.get_json("jobs:list", str(tenant.id), str(limit), str(offset))
     if cached is not None:
         return PaginatedJobResponse.model_validate(cached)
     total = await count_jobs_by_tenant(db, tenant.id)
@@ -56,7 +55,13 @@ async def list_jobs(
         limit=limit,
         offset=offset,
     )
-    await cache.set_json("jobs:list", cache_key, value=serialized.model_dump(mode="json"))
+    await cache.set_json(
+        "jobs:list",
+        str(tenant.id),
+        str(limit),
+        str(offset),
+        value=serialized.model_dump(mode="json"),
+    )
     return serialized
 
 

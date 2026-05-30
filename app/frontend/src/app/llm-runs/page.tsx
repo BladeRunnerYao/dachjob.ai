@@ -128,8 +128,8 @@ export default function LLMRunsPage() {
       </div>
 
       <Card>
-        <CardContent className="p-0">
-          <table className="w-full text-sm">
+        <CardContent className="p-0 overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
                 <th className="px-4 py-3 font-medium">Task</th>
@@ -178,7 +178,7 @@ export default function LLMRunsPage() {
       </Card>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 text-sm">
+        <div className="flex items-center justify-center gap-2 text-sm flex-wrap">
           <button
             onClick={() => goToPage(p => Math.max(0, p - 1))}
             disabled={page === 0}
@@ -186,7 +186,7 @@ export default function LLMRunsPage() {
           >
             Previous
           </button>
-          {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => (
+          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => (
             <button
               key={i}
               onClick={() => goToPage(i)}

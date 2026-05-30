@@ -49,7 +49,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-full bg-slate-100">
       <Sidebar user={user} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden">
         {/* Hamburger button — mobile only */}
         {!sidebarOpen && (
           <button
