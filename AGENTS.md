@@ -12,6 +12,7 @@ Instructions for AI coding assistants working on this project.
 
 ## General Guidelines
 
+- **Run pre-commit before testing.** Always run `pre-commit run --all-files` before running any test suite or pushing changes for review. Fix any issues found before proceeding to tests.
 - Use `git worktree` for changes — create a feature branch from main in a separate worktree, make changes there, then PR back to main.
 - The platform deploys to Google Cloud, Azure, and AWS. Changes to CI workflows, Terraform, or deployment scripts may affect all three clouds.
 - Azure deployments sometimes experience transient OIDC federation failures (`No subscriptions found` during `az login`). The deploy workflow already includes retry logic for this.

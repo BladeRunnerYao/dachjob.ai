@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 WORKDIR /app
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app \
+    PYTHONDONTWRITEBYTECODE=1
 RUN groupadd --system app && useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,8 +19,10 @@ ARG GIT_COMMIT_SHA=unknown
 
 COPY app/backend/pyproject.toml .
 COPY app/backend/ .
-RUN pip install --no-cache-dir -e ".[dev]"
+RUN pip install --no-cache-dir .
 
 RUN echo "{\"branch\": \"${GIT_BRANCH}\", \"commit\": \"${GIT_COMMIT_SHA}\"}" > /app/version.json
+RUN chown -R app:app /app
 
+USER app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

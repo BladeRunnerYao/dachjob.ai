@@ -82,16 +82,19 @@ resource "google_service_account" "terraform" {
 
 resource "google_project_iam_member" "terraform_roles" {
   for_each = toset([
-    "roles/editor",
-    "roles/iam.securityAdmin",
-    "roles/secretmanager.admin",
-    "roles/storage.admin",
-    "roles/run.admin",
-    "roles/container.admin",
-    "roles/compute.networkAdmin",
+    "roles/artifactregistry.admin",
     "roles/cloudsql.admin",
+    "roles/compute.networkAdmin",
+    "roles/container.admin",
+    "roles/iam.securityAdmin",
+    "roles/iam.serviceAccountUser",
+    "roles/monitoring.admin",
     "roles/redis.admin",
+    "roles/run.admin",
+    "roles/secretmanager.admin",
     "roles/serviceusage.serviceUsageAdmin",
+    "roles/storage.admin",
+    "roles/vpcaccess.admin",
   ])
   project = var.project_id
   role    = each.key
