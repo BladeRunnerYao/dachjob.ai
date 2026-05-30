@@ -13,6 +13,7 @@ node_modules/
 *.egg-info/
 dist/
 build/
+ios/.build/
 .DS_Store
 *.log
 .pytest_cache/
