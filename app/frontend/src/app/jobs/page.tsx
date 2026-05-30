@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { JobCard } from '@/components/jobs/job-card';
 import { JobForm } from '@/components/jobs/job-form';
 import { api } from '@/lib/api/client';
 import type { JobPosting } from '@/lib/api/types';
 
-const PAGE_SIZES = [15, 30, 50, 100];
+const PAGE_SIZE = 15;
 
 type FilterKey = 'all' | 'applied' | 'saved';
 
@@ -20,7 +21,6 @@ export default function JobsPage() {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [counts, setCounts] = useState<JobCounts>({ all: 0, applied: 0, saved: 0 });
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(15);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
@@ -28,7 +28,7 @@ export default function JobsPage() {
     setLoading(true);
     const status = filter === 'all' ? undefined : filter;
     const [result, allResult, appliedResult, savedResult] = await Promise.all([
-      api.getJobsPaginated(pageSize, page * pageSize, status),
+      api.getJobsPaginated(PAGE_SIZE, page * PAGE_SIZE, status),
       api.getJobsPaginated(1, 0),
       api.getJobsPaginated(1, 0, 'applied'),
       api.getJobsPaginated(1, 0, 'saved'),
@@ -37,7 +37,7 @@ export default function JobsPage() {
     setTotal(result.total);
     setCounts({ all: allResult.total, applied: appliedResult.total, saved: savedResult.total });
     setLoading(false);
-  }, [filter, page, pageSize]);
+  }, [filter, page]);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +46,7 @@ export default function JobsPage() {
       setLoading(true);
       const status = filter === 'all' ? undefined : filter;
       const [result, allResult, appliedResult, savedResult] = await Promise.all([
-        api.getJobsPaginated(pageSize, page * pageSize, status),
+        api.getJobsPaginated(PAGE_SIZE, page * PAGE_SIZE, status),
         api.getJobsPaginated(1, 0),
         api.getJobsPaginated(1, 0, 'applied'),
         api.getJobsPaginated(1, 0, 'saved'),
@@ -63,7 +63,7 @@ export default function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [filter, page, pageSize]);
+  }, [filter, page]);
 
   const handleSave = async (urlText: string) => {
     setImporting(true);
@@ -86,18 +86,12 @@ export default function JobsPage() {
     }
   };
 
-  const handlePageSizeChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    setLoading(true);
-    setPageSize(Number(e.target.value));
-    setPage(0);
-  };
-
   const goToPage = (nextPage: number | ((current: number) => number)) => {
     setLoading(true);
     setPage(nextPage);
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const selectFilter = (nextFilter: FilterKey) => {
     setFilter(nextFilter);
@@ -138,13 +132,9 @@ export default function JobsPage() {
             </span>
           </button>
         ))}
-        <select
-          value={pageSize}
-          onChange={handlePageSizeChange}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs bg-white ml-auto"
-        >
-          {PAGE_SIZES.map(s => <option key={s} value={s}>{s} / page</option>)}
-        </select>
+        <span className="ml-auto shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500">
+          {PAGE_SIZE} / page
+        </span>
       </div>
 
       <div className="space-y-2">
@@ -161,9 +151,10 @@ export default function JobsPage() {
           <button
             onClick={() => goToPage(p => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="px-3 py-1.5 rounded border border-slate-300 disabled:opacity-40 hover:bg-slate-50"
+            aria-label="Previous page"
+            className="inline-flex h-9 w-9 items-center justify-center rounded border border-slate-300 disabled:opacity-40 hover:bg-slate-50"
           >
-            Previous
+            <ChevronLeft className="h-4 w-4" />
           </button>
           {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => (
             <button
@@ -177,9 +168,10 @@ export default function JobsPage() {
           <button
             onClick={() => goToPage(p => Math.min(totalPages - 1, p + 1))}
             disabled={page >= totalPages - 1}
-            className="px-3 py-1.5 rounded border border-slate-300 disabled:opacity-40 hover:bg-slate-50"
+            aria-label="Next page"
+            className="inline-flex h-9 w-9 items-center justify-center rounded border border-slate-300 disabled:opacity-40 hover:bg-slate-50"
           >
-            Next
+            <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       )}

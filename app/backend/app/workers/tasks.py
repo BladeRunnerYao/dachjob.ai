@@ -152,7 +152,13 @@ def generate_resume_task(self, background_task_id: str):
             slug=payload.get("tenant_slug", ""),
             user_id=UUID(payload["user_id"]) if payload.get("user_id") else None,
         )
-        artifact = await generate_resume(db, tenant, UUID(payload["job_id"]))
+        artifact = await generate_resume(
+            db,
+            tenant,
+            UUID(payload["job_id"]),
+            confirmed_skills=payload.get("confirmed_skills") or [],
+            style=payload.get("style", "german"),
+        )
         return {
             "job_id": payload["job_id"],
             "resume_artifact_id": str(artifact.id),

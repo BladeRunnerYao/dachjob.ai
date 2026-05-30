@@ -7,10 +7,15 @@ struct JobsListView: View {
     @State private var showImport = false
     @State private var filter: String = "all"
     @State private var counts: [String: Int] = ["all": 0, "applied": 0, "saved": 0]
+    @State private var page = 0
     @State private var error: String?
 
     private let api = APIClient.shared
-    private let pageSize = 30
+    private let pageSize = 7
+
+    private var totalPages: Int {
+        max(1, Int(ceil(Double(total) / Double(pageSize))))
+    }
 
     var body: some View {
         NavigationStack {
@@ -33,12 +38,16 @@ struct JobsListView: View {
                     }
                     Spacer()
                 } else {
-                    List(jobs) { job in
-                        NavigationLink(destination: JobDetailView(jobId: job.id)) {
-                            JobRow(job: job)
+                    VStack(spacing: 0) {
+                        List(jobs) { job in
+                            NavigationLink(destination: JobDetailView(jobId: job.id)) {
+                                JobRow(job: job)
+                            }
                         }
+                        .listStyle(.plain)
+
+                        paginationBar
                     }
-                    .listStyle(.plain)
                 }
             }
             .navigationTitle("Jobs (\(counts["all"] ?? total))")
@@ -74,11 +83,42 @@ struct JobsListView: View {
         .background(Color(.systemGroupedBackground))
     }
 
+    private var paginationBar: some View {
+        HStack(spacing: 16) {
+            Button {
+                page = max(0, page - 1)
+                Task { await loadJobs() }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.bordered)
+            .disabled(page == 0 || isLoading)
+
+            Text("Page \(page + 1) of \(totalPages)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Button {
+                page = min(totalPages - 1, page + 1)
+                Task { await loadJobs() }
+            } label: {
+                Image(systemName: "chevron.right")
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.bordered)
+            .disabled(page >= totalPages - 1 || isLoading)
+        }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(Color(.systemBackground))
+    }
+
     private func loadJobs() async {
         isLoading = jobs.isEmpty
         error = nil
         do {
-            async let selectedResult = api.getJobs(limit: pageSize, status: filter == "all" ? nil : filter)
+            async let selectedResult = api.getJobs(limit: pageSize, offset: page * pageSize, status: filter == "all" ? nil : filter)
             async let allResult = api.getJobs(limit: 1)
             async let appliedResult = api.getJobs(limit: 1, status: "applied")
             async let savedResult = api.getJobs(limit: 1, status: "saved")
@@ -102,6 +142,7 @@ struct JobsListView: View {
     private func selectFilter(_ nextFilter: String) {
         guard filter != nextFilter else { return }
         filter = nextFilter
+        page = 0
         Task { await loadJobs() }
     }
 }

@@ -138,6 +138,7 @@ jobs:
       TF_VAR_azure_openai_model_fast: ${{ vars.AZURE_OPENAI_MODEL_FAST || 'gpt-4o-mini' }}
       TF_VAR_azure_openai_model_quality: ${{ vars.AZURE_OPENAI_MODEL_QUALITY || 'gpt-4o' }}
       TF_VAR_azure_openai_model_reasoning: ${{ vars.AZURE_OPENAI_MODEL_REASONING || 'o1-mini' }}
+      TF_VAR_deepseek_api_key: ${{ secrets.DEEPSEEK_API_KEY || secrets.AZURE_DEEPSEEK_API_KEY || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6

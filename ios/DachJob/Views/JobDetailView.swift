@@ -7,6 +7,9 @@ struct JobDetailView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var updatingStatus = false
+    @State private var generatingResumeStyle: ResumeStyle?
+    @State private var resumeMessage: String?
+    @State private var resumeError: String?
     @State private var selectedSkills: Set<String> = []
 
     private let api = APIClient.shared
@@ -29,6 +32,7 @@ struct JobDetailView: View {
             } else if let job {
                 VStack(alignment: .leading, spacing: 16) {
                     headerSection(job: job)
+                    resumeSection
                     if let percent = matchReport?.scorePercent ?? job.scorePercent {
                         matchSection(percent: percent)
                     }
@@ -124,6 +128,47 @@ struct JobDetailView: View {
         .padding()
         .background(Color(.systemGray6))
         .clipShape(.rect(cornerRadius: 12))
+    }
+
+    private var resumeSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Generate CV")
+                .font(.headline)
+
+            HStack(spacing: 10) {
+                ForEach(ResumeStyle.allCases) { style in
+                    Button {
+                        Task { await generateResume(style: style) }
+                    } label: {
+                        if generatingResumeStyle == style {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text(style.title)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(style == .american ? .blue : .orange)
+                    .disabled(generatingResumeStyle != nil)
+                }
+            }
+
+            if let resumeMessage {
+                Text(resumeMessage)
+                    .font(.caption)
+                    .foregroundColor(.green)
+            }
+            if let resumeError {
+                Text(resumeError)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .clipShape(.rect(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
     }
 
     @ViewBuilder
@@ -262,6 +307,24 @@ struct JobDetailView: View {
             selectedSkills.remove(skill)
         } else {
             selectedSkills.insert(skill)
+        }
+    }
+
+    private func generateResume(style: ResumeStyle) async {
+        generatingResumeStyle = style
+        resumeMessage = nil
+        resumeError = nil
+        defer { generatingResumeStyle = nil }
+
+        do {
+            _ = try await api.createResumeArtifact(
+                jobId: jobId,
+                style: style,
+                confirmedSkills: Array(selectedSkills)
+            )
+            resumeMessage = "\(style.title) generated."
+        } catch {
+            resumeError = error.localizedDescription
         }
     }
 

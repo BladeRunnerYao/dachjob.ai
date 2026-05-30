@@ -20,7 +20,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/api/client';
-import type { JobPosting, MatchReport, ResumeArtifact, CandidateProfile } from '@/lib/api/types';
+import type { JobPosting, MatchReport, ResumeArtifact, CandidateProfile, ResumeStyle } from '@/lib/api/types';
 
 // ── Section parsing (from raw JD — fallback only) ────────────────
 
@@ -239,6 +239,7 @@ export default function JobDetailPage() {
   const [matching, setMatching] = useState(false);
   const [generatingResume, setGeneratingResume] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const [resumeStyle, setResumeStyle] = useState<ResumeStyle>('german');
   const [showCv, setShowCv] = useState(false);
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [ownedSkills, setOwnedSkills] = useState<Set<string>>(new Set());
@@ -373,12 +374,13 @@ export default function JobDetailPage() {
     }
   };
 
-  const generateResume = async () => {
+  const generateResume = async (style: ResumeStyle = resumeStyle) => {
     setGeneratingResume(true);
     setResumeError(null);
     try {
+      setResumeStyle(style);
       const confirmedSkills = Array.from(ownedSkills);
-      const artifact = await api.createResumeArtifact(id, confirmedSkills);
+      const artifact = await api.createResumeArtifact(id, confirmedSkills, style);
       setResume(artifact);
       setShowCv(true);
     } catch (err) {
@@ -568,13 +570,21 @@ export default function JobDetailPage() {
                   {parsing ? 'Re-parsing...' : 'Re-parse for sections'}
                 </button>
               )}
-              {!resume && !generatingResume && (
-                <button
-                  onClick={generateResume}
-                  className="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm text-white hover:bg-slate-700 transition-colors"
-                >
-                  Generate Tailored CV
-                </button>
+              {!generatingResume && (
+                <div className="grid grid-cols-1 gap-2">
+                  <button
+                    onClick={() => generateResume('american')}
+                    className="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm text-white hover:bg-slate-700 transition-colors"
+                  >
+                    Generate American CV
+                  </button>
+                  <button
+                    onClick={() => generateResume('german')}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    Generate German CV
+                  </button>
+                </div>
               )}
               {generatingResume && (
                 <button disabled className="w-full rounded-lg bg-slate-400 px-4 py-2 text-sm text-white">
@@ -590,11 +600,11 @@ export default function JobDetailPage() {
                     Preview CV
                   </button>
                   <button
-                    onClick={generateResume}
+                    onClick={() => generateResume(resumeStyle)}
                     disabled={generatingResume}
                     className="w-full text-xs text-slate-400 hover:text-blue-600 underline"
                   >
-                    Regenerate CV
+                    Regenerate {resumeStyle === 'american' ? 'American' : 'German'} CV
                   </button>
                 </div>
               )}
@@ -859,7 +869,7 @@ export default function JobDetailPage() {
           <Modal
             open={showCv && !!htmlBlobUrl}
             onClose={() => setShowCv(false)}
-            title="Tailored CV Preview"
+            title={`${resumeStyle === 'american' ? 'American' : 'German'} CV Preview`}
             size="xl"
           >
             <div className="flex items-center justify-end gap-2 px-5 py-2 bg-slate-50 border-b border-slate-200">
@@ -874,7 +884,7 @@ export default function JobDetailPage() {
                 </a>
               )}
               <button
-                onClick={generateResume}
+                onClick={() => generateResume(resumeStyle)}
                 disabled={generatingResume}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200 transition-colors disabled:opacity-50"
               >

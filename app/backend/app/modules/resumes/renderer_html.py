@@ -7,6 +7,7 @@ from app.db.models import CandidateProfile
 def render_resume_html(
     profile: CandidateProfile,
     parsed_job: dict[str, Any],
+    style: str = "german",
 ) -> tuple[str, dict[str, Any]]:
     job_title = (
         parsed_job.get("title", profile.headline)
@@ -73,6 +74,50 @@ def render_resume_html(
     exp_html = "".join(f"<li>{e}</li>" for e in experience_items[:10])
     edu_html = "".join(f"<li>{e}</li>" for e in education_items[:5])
 
+    if style == "american":
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+    body {{ font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 10.5pt; color: #1f2933; margin: 0; padding: 0; line-height: 1.35; }}
+    .page {{ max-width: 8.5in; margin: 0 auto; padding: 0.55in 0.6in; }}
+    h1 {{ font-size: 20pt; margin: 0 0 2pt 0; color: #111827; text-transform: uppercase; letter-spacing: 0; }}
+    .headline {{ font-size: 11pt; color: #374151; margin-bottom: 4pt; }}
+    .contact {{ font-size: 9.5pt; color: #4b5563; margin-bottom: 12pt; }}
+    h2 {{ font-size: 11pt; border-bottom: 1px solid #111827; padding-bottom: 2pt; margin: 12pt 0 6pt 0; color: #111827; text-transform: uppercase; }}
+    ul {{ margin: 3pt 0 7pt 0; padding-left: 16pt; }}
+    li {{ margin-bottom: 2pt; }}
+    .section {{ page-break-inside: avoid; }}
+</style>
+</head>
+<body>
+<div class="page">
+    <h1>{profile.full_name}</h1>
+    <div class="headline">{job_title}{f" | {company}" if company else ""}</div>
+    <div class="contact">{profile.location or ""}</div>
+
+    <div class="section">
+        <h2>Professional Summary</h2>
+        {summary_html}
+    </div>
+
+    <div class="section">
+        <h2>Professional Experience</h2>
+        <ul>{exp_html}</ul>
+    </div>
+
+    <div class="section">
+        <h2>Education</h2>
+        <ul>{edu_html if edu_html else "<li>Details available upon request</li>"}</ul>
+    </div>
+
+    {f'<div class="section"><h2>Technical Skills</h2><ul>{skills_html}</ul></div>' if skills_html else ""}
+</div>
+</body>
+</html>"""
+        return html, {"style": "american"}
+
     html = f"""<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -115,4 +160,4 @@ def render_resume_html(
 </body>
 </html>"""
 
-    return html, {}
+    return html, {"style": "german"}

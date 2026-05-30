@@ -27,11 +27,15 @@ module "container_registry" {
 module "postgres" {
   source = "../../../modules/azure/postgres"
 
-  name_prefix            = var.name_prefix
-  resource_group_name    = module.networking.resource_group_name
-  location               = var.location
-  administrator_password = var.postgres_administrator_password
-  tags                   = var.tags
+  name_prefix                  = var.name_prefix
+  resource_group_name          = module.networking.resource_group_name
+  location                     = var.location
+  administrator_password       = var.postgres_administrator_password
+  postgres_subnet_id           = module.networking.postgres_subnet_id
+  postgres_private_dns_zone_id = module.networking.postgres_private_dns_zone_id
+  tags                         = var.tags
+
+  depends_on = [module.networking]
 }
 
 module "redis" {
@@ -65,6 +69,9 @@ module "key_vault" {
     },
     nonsensitive(var.azure_openai_api_key != "") ? {
       "azure-openai-api-key" = var.azure_openai_api_key
+    } : {},
+    nonsensitive(var.deepseek_api_key != "") ? {
+      "deepseek-api-key" = var.deepseek_api_key
     } : {},
     nonsensitive(var.jwt_secret != "") ? {
       "jwt-secret" = var.jwt_secret
@@ -111,6 +118,7 @@ module "container_apps" {
   azure_openai_model_fast         = var.azure_openai_model_fast
   azure_openai_model_quality      = var.azure_openai_model_quality
   azure_openai_model_reasoning    = var.azure_openai_model_reasoning
+  deepseek_api_key                = var.deepseek_api_key
   jwt_secret                      = var.jwt_secret
   secret_key                      = var.secret_key
   resend_api_key                  = var.resend_api_key

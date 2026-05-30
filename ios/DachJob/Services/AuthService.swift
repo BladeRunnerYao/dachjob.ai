@@ -7,18 +7,25 @@ class AuthService {
     var isAuthenticated = false
     var isLoading = false
     var errorMessage: String?
+    var accountEmail: String?
+    var accountName: String?
 
     private let api = APIClient.shared
+    private let emailKey = "account_email"
+    private let nameKey = "account_name"
 
     init() {
         isAuthenticated = api.isAuthenticated
+        accountEmail = UserDefaults.standard.string(forKey: emailKey)
+        accountName = UserDefaults.standard.string(forKey: nameKey)
     }
 
     func login(email: String, password: String) async {
         isLoading = true
         errorMessage = nil
         do {
-            _ = try await api.login(email: email, password: password)
+            let response = try await api.login(email: email, password: password)
+            saveAccount(response)
             isAuthenticated = true
         } catch {
             errorMessage = error.localizedDescription
@@ -30,7 +37,8 @@ class AuthService {
         isLoading = true
         errorMessage = nil
         do {
-            _ = try await api.register(email: email, password: password, fullName: fullName)
+            let response = try await api.register(email: email, password: password, fullName: fullName)
+            saveAccount(response)
             isAuthenticated = true
         } catch {
             errorMessage = error.localizedDescription
@@ -40,6 +48,17 @@ class AuthService {
 
     func logout() {
         api.logout()
+        accountEmail = nil
+        accountName = nil
+        UserDefaults.standard.removeObject(forKey: emailKey)
+        UserDefaults.standard.removeObject(forKey: nameKey)
         isAuthenticated = false
+    }
+
+    private func saveAccount(_ response: AuthResponse) {
+        accountEmail = response.email
+        accountName = response.name
+        UserDefaults.standard.set(response.email, forKey: emailKey)
+        UserDefaults.standard.set(response.name, forKey: nameKey)
     }
 }

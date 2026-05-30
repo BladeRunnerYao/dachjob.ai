@@ -297,6 +297,9 @@ resource "aws_ecs_task_definition" "api" {
         { name = "DATABASE_URL", value = var.database_url },
         { name = "CORS_ORIGINS", value = var.cors_origins },
         { name = "LLM_PROVIDER", value = var.llm_provider },
+        { name = "DEEPSEEK_MODEL_FAST", value = "deepseek-v4-flash" },
+        { name = "DEEPSEEK_MODEL_QUALITY", value = "deepseek-v4-flash" },
+        { name = "DEEPSEEK_MODEL_REASONING", value = "deepseek-v4-flash" },
         { name = "RESEND_FROM_EMAIL", value = var.resend_from_email },
       ]
       secrets = concat(
@@ -378,6 +381,10 @@ resource "aws_ecs_task_definition" "worker" {
         { name = "REDIS_URL", value = var.redis_url },
         { name = "REDIS_ENABLED", value = "true" },
         { name = "DATABASE_URL", value = var.database_url },
+        { name = "LLM_PROVIDER", value = var.llm_provider },
+        { name = "DEEPSEEK_MODEL_FAST", value = "deepseek-v4-flash" },
+        { name = "DEEPSEEK_MODEL_QUALITY", value = "deepseek-v4-flash" },
+        { name = "DEEPSEEK_MODEL_REASONING", value = "deepseek-v4-flash" },
       ]
       secrets = concat(
         var.jwt_secret_arn != "" ? [{ name = "JWT_SECRET", valueFrom = var.jwt_secret_arn }] : [],
