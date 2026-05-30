@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @EnvironmentObject var authService: AuthService
+    @Environment(AuthService.self) var authService
 
     var body: some View {
         TabView {

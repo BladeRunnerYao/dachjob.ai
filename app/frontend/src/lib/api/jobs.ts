@@ -60,6 +60,13 @@ export function createJob(rawJd: string): Promise<JobPosting> {
   });
 }
 
+export function updateJobStatus(jobId: string, status: 'new' | 'saved' | 'applied'): Promise<JobPosting> {
+  return request<JobPosting>(`/api/jobs/${jobId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+}
+
 export async function parseJob(jobId: string): Promise<JobPosting> {
   const result = await request<{ job_id: string; status: string; parsed_json?: Record<string, unknown> } | BackgroundTask>(`/api/jobs/${jobId}/parse`, {
     method: 'POST',

@@ -6,6 +6,7 @@ struct JobDetailView: View {
     @State private var matchReport: MatchReport?
     @State private var isLoading = true
     @State private var error: String?
+    @State private var updatingStatus = false
 
     private let api = APIClient.shared
 
@@ -76,6 +77,11 @@ struct JobDetailView: View {
                 }
             }
 
+            HStack(spacing: 10) {
+                statusButton(label: "Applied", targetStatus: "applied", currentStatus: job.status)
+                statusButton(label: "Saved", targetStatus: "saved", currentStatus: job.status)
+            }
+
             if let url = job.url, let link = URL(string: url) {
                 Link(destination: link) {
                     Label("View Original", systemImage: "arrow.up.right.square")
@@ -105,7 +111,7 @@ struct JobDetailView: View {
         }
         .padding()
         .background(Color(.systemGray6))
-        .cornerRadius(12)
+        .clipShape(.rect(cornerRadius: 12))
     }
 
     private func descriptionSection(rawJd: String) -> some View {
@@ -127,5 +133,31 @@ struct JobDetailView: View {
             self.error = error.localizedDescription
         }
         isLoading = false
+    }
+
+    @ViewBuilder
+    private func statusButton(label: String, targetStatus: String, currentStatus: String?) -> some View {
+        let isActive = currentStatus == targetStatus
+        let color: Color = targetStatus == "applied" ? .green : .orange
+        Button {
+            Task {
+                updatingStatus = true
+                let newStatus = isActive ? "new" : targetStatus
+                if let updated = try? await api.updateJobStatus(id: jobId, status: newStatus) {
+                    job = updated
+                }
+                updatingStatus = false
+            }
+        } label: {
+            Text(label)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(isActive ? color : color.opacity(0.12))
+                .foregroundColor(isActive ? .white : color)
+                .clipShape(.rect(cornerRadius: 8))
+        }
+        .disabled(updatingStatus)
     }
 }

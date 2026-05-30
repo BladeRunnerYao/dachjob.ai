@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct LoginView: View {
-    @EnvironmentObject var authService: AuthService
+    @Environment(AuthService.self) var authService
     @State private var email = ""
     @State private var password = ""
     @State private var showRegister = false
@@ -70,13 +70,14 @@ struct LoginView: View {
             }
             .sheet(isPresented: $showRegister) {
                 RegisterView()
-                    .environmentObject(authService)
+                    .environment(authService)
             }
         }
     }
 }
 
 struct SettingsLink: View {
+    @Environment(AuthService.self) var authService
     @State private var showSettings = false
 
     var body: some View {
@@ -87,11 +88,13 @@ struct SettingsLink: View {
         .foregroundColor(.secondary)
         .sheet(isPresented: $showSettings) {
             ServerSettingsView()
+                .environment(authService)
         }
     }
 }
 
 struct ServerSettingsView: View {
+    @Environment(AuthService.self) var authService
     @Environment(\.dismiss) var dismiss
     @State private var apiURL: String = UserDefaults.standard.string(forKey: "api_base_url") ?? "https://d3ktpumdo7sly4.cloudfront.net"
 
@@ -107,6 +110,9 @@ struct ServerSettingsView: View {
                     Text("Default: AWS CloudFront endpoint")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    Text("Changing the server will require you to log in again.")
+                        .font(.caption)
+                        .foregroundColor(.orange)
                 }
             }
             .navigationTitle("Server Settings")
@@ -117,7 +123,11 @@ struct ServerSettingsView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
+                        let oldURL = UserDefaults.standard.string(forKey: "api_base_url") ?? "https://d3ktpumdo7sly4.cloudfront.net"
                         UserDefaults.standard.set(apiURL, forKey: "api_base_url")
+                        if apiURL != oldURL {
+                            authService.logout()
+                        }
                         dismiss()
                     }
                 }
@@ -127,7 +137,7 @@ struct ServerSettingsView: View {
 }
 
 struct RegisterView: View {
-    @EnvironmentObject var authService: AuthService
+    @Environment(AuthService.self) var authService
     @Environment(\.dismiss) var dismiss
     @State private var fullName = ""
     @State private var email = ""

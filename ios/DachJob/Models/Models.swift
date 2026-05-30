@@ -7,12 +7,13 @@ struct JobPosting: Codable, Identifiable {
     let location: String?
     let score: Double?
     let recommendation: String?
+    let status: String?
     let url: String?
     let rawJd: String?
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, company, location, score, recommendation, url
+        case id, title, company, location, score, recommendation, status, url
         case rawJd = "raw_jd"
         case createdAt = "created_at"
     }

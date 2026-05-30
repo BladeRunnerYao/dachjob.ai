@@ -1,10 +1,12 @@
 import SwiftUI
+import Observation
 
+@Observable
 @MainActor
-class AuthService: ObservableObject {
-    @Published var isAuthenticated = false
-    @Published var isLoading = false
-    @Published var errorMessage: String?
+class AuthService {
+    var isAuthenticated = false
+    var isLoading = false
+    var errorMessage: String?
 
     private let api = APIClient.shared
 
@@ -12,7 +14,6 @@ class AuthService: ObservableObject {
         isAuthenticated = api.isAuthenticated
     }
 
-    @MainActor
     func login(email: String, password: String) async {
         isLoading = true
         errorMessage = nil
@@ -25,7 +26,6 @@ class AuthService: ObservableObject {
         isLoading = false
     }
 
-    @MainActor
     func register(email: String, password: String, fullName: String) async {
         isLoading = true
         errorMessage = nil

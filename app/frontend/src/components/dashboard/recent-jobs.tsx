@@ -17,10 +17,10 @@ function scoreBadge(percent: number) {
   return 'red';
 }
 
-function recBadge(rec: string) {
-  if (rec === 'apply') return 'green';
-  if (rec === 'maybe') return 'yellow';
-  return 'red';
+function statusBadge(status: string) {
+  if (status === 'applied') return 'green';
+  if (status === 'saved') return 'yellow';
+  return undefined;
 }
 
 export function RecentJobs({ jobs }: RecentJobsProps) {
@@ -37,7 +37,7 @@ export function RecentJobs({ jobs }: RecentJobsProps) {
               <th className="px-4 py-2 font-medium">Title</th>
               <th className="px-4 py-2 font-medium">Company</th>
               <th className="px-4 py-2 font-medium">Score</th>
-              <th className="px-4 py-2 font-medium">Rec.</th>
+              <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium">Date</th>
             </tr>
           </thead>
@@ -58,10 +58,10 @@ export function RecentJobs({ jobs }: RecentJobsProps) {
                   )}
                 </td>
                 <td className="px-4 py-2.5">
-                  {job.recommendation ? (
-                    <Badge variant={recBadge(job.recommendation)}>{job.recommendation}</Badge>
+                  {statusBadge(job.status) ? (
+                    <Badge variant={statusBadge(job.status)!}>{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</Badge>
                   ) : (
-                    <span className="text-xs text-slate-400">Pending</span>
+                    <span className="text-xs text-slate-400">New</span>
                   )}
                 </td>
                 <td className="px-4 py-2.5 text-slate-500">{new Date(job.created_at).toLocaleDateString()}</td>

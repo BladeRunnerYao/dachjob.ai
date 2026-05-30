@@ -9,9 +9,8 @@ struct DashboardView: View {
 
     private let api = APIClient.shared
 
-    var applyCount: Int { jobs.filter { $0.recommendation == "apply" }.count }
-    var maybeCount: Int { jobs.filter { $0.recommendation == "maybe" }.count }
-    var skipCount: Int { jobs.filter { $0.recommendation == "skip" }.count }
+    var appliedCount: Int { jobs.filter { $0.status == "applied" }.count }
+    var savedCount: Int { jobs.filter { $0.status == "saved" }.count }
 
     var body: some View {
         NavigationStack {
@@ -53,9 +52,8 @@ struct DashboardView: View {
             GridItem(.flexible()),
         ], spacing: 12) {
             StatCard(title: "Jobs", value: "\(jobs.count)", color: .blue)
-            StatCard(title: "Apply", value: "\(applyCount)", color: .green)
-            StatCard(title: "Maybe", value: "\(maybeCount)", color: .orange)
-            StatCard(title: "Skip", value: "\(skipCount)", color: .red)
+            StatCard(title: "Applied", value: "\(appliedCount)", color: .green)
+            StatCard(title: "Saved", value: "\(savedCount)", color: .orange)
             StatCard(title: "Apps", value: "\(applications.count)", color: .purple)
             StatCard(title: "LLM Runs", value: "\(llmRuns.count)", color: .indigo)
         }
@@ -85,7 +83,9 @@ struct DashboardView: View {
                                 .fontWeight(.bold)
                                 .foregroundColor(percent >= 84 ? .green : percent >= 72 ? .orange : .red)
                         }
-                        if let rec = job.recommendation {
+                        if let status = job.status, status != "new" {
+                            StatusBadge(status: status)
+                        } else if let rec = job.recommendation {
                             RecommendationBadge(recommendation: rec)
                         }
                     }
@@ -95,7 +95,7 @@ struct DashboardView: View {
         }
         .padding()
         .background(Color(.systemBackground))
-        .cornerRadius(12)
+        .clipShape(.rect(cornerRadius: 12))
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
     }
 
@@ -129,7 +129,7 @@ struct DashboardView: View {
         }
         .padding()
         .background(Color(.systemBackground))
-        .cornerRadius(12)
+        .clipShape(.rect(cornerRadius: 12))
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
     }
 
@@ -168,7 +168,7 @@ struct StatCard: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
         .background(Color(.systemBackground))
-        .cornerRadius(10)
+        .clipShape(.rect(cornerRadius: 10))
         .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
     }
 }
@@ -192,6 +192,6 @@ struct RecommendationBadge: View {
             .padding(.vertical, 2)
             .background(color.opacity(0.15))
             .foregroundColor(color)
-            .cornerRadius(4)
+            .clipShape(.rect(cornerRadius: 4))
     }
 }

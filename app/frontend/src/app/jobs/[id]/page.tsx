@@ -363,6 +363,16 @@ export default function JobDetailPage() {
     });
   };
 
+  const handleStatusChange = async (status: 'saved' | 'applied') => {
+    const newStatus = job!.status === status ? 'new' : status;
+    try {
+      const updated = await api.updateJobStatus(id, newStatus);
+      setJob(updated);
+    } catch {
+      // silently ignore
+    }
+  };
+
   const generateResume = async () => {
     setGeneratingResume(true);
     setResumeError(null);
@@ -426,6 +436,28 @@ export default function JobDetailPage() {
         {job.salary_text && (
           <p className="mt-2 text-sm text-slate-500">{job.salary_text}</p>
         )}
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={() => handleStatusChange('applied')}
+            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+              job.status === 'applied'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-slate-200 text-slate-600 hover:bg-emerald-100 hover:text-emerald-700'
+            }`}
+          >
+            Applied
+          </button>
+          <button
+            onClick={() => handleStatusChange('saved')}
+            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+              job.status === 'saved'
+                ? 'bg-amber-500 text-white'
+                : 'bg-slate-200 text-slate-600 hover:bg-amber-100 hover:text-amber-700'
+            }`}
+          >
+            Saved
+          </button>
+        </div>
       </div>
 
       {/* ── Two-column body ──────────────────────────────────── */}
