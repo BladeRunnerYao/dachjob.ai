@@ -27,7 +27,8 @@ struct JobPosting: Codable, Identifiable {
 
     var hasQualificationDetails: Bool {
         guard let parsedJson else { return false }
-        return !parsedJson.mustHaveSkills.isEmpty
+        return !parsedJson.responsibilities.isEmpty
+            || !parsedJson.mustHaveSkills.isEmpty
             || !parsedJson.niceToHaveSkills.isEmpty
             || !parsedJson.requiredQualifications.isEmpty
             || !parsedJson.preferredQualifications.isEmpty
@@ -35,6 +36,7 @@ struct JobPosting: Codable, Identifiable {
 }
 
 struct ParsedJobDescription: Codable {
+    let responsibilities: [String]
     let mustHaveSkills: [String]
     let niceToHaveSkills: [String]
     let requiredQualifications: [String]
@@ -42,6 +44,7 @@ struct ParsedJobDescription: Codable {
     let experienceYears: Double?
 
     enum CodingKeys: String, CodingKey {
+        case responsibilities
         case mustHaveSkills = "must_have_skills"
         case niceToHaveSkills = "nice_to_have_skills"
         case requiredQualifications = "required_qualifications"
@@ -51,6 +54,7 @@ struct ParsedJobDescription: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        responsibilities = try container.decodeIfPresent([String].self, forKey: .responsibilities) ?? []
         mustHaveSkills = try container.decodeIfPresent([String].self, forKey: .mustHaveSkills) ?? []
         niceToHaveSkills = try container.decodeIfPresent([String].self, forKey: .niceToHaveSkills) ?? []
         requiredQualifications = try container.decodeIfPresent([String].self, forKey: .requiredQualifications) ?? []

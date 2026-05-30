@@ -8,6 +8,8 @@ struct ProfileView: View {
     @State private var isSavingCv = false
     @State private var showMarkdownEditor = false
     @State private var showPdfImporter = false
+    @State private var showUrlImporter = false
+    @State private var urlDraft = ""
     @State private var markdownDraft = ""
     @State private var uploadMessage: String?
     @State private var error: String?
@@ -69,6 +71,11 @@ struct ProfileView: View {
                         } label: {
                             Label("Upload PDF CV", systemImage: "doc.badge.plus")
                         }
+                        Button {
+                            showUrlImporter = true
+                        } label: {
+                            Label("Import from URL", systemImage: "link")
+                        }
                         Divider()
                         Button(role: .destructive) {
                             authService.logout()
@@ -101,6 +108,15 @@ struct ProfileView: View {
                     self.error = error.localizedDescription
                 }
             }
+            .alert("Import from URL", isPresented: $showUrlImporter) {
+                TextField("LinkedIn or personal website URL", text: $urlDraft)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("Import") { Task { await importFromUrl() } }
+                Button("Cancel", role: .cancel) { urlDraft = "" }
+            } message: {
+                Text("Enter your LinkedIn profile or personal website URL to create your CV.")
+            }
             .refreshable { await loadProfile() }
             .task { await loadProfile() }
         }
@@ -129,6 +145,13 @@ struct ProfileView: View {
                 showPdfImporter = true
             } label: {
                 Label("Upload PDF", systemImage: "doc.badge.plus")
+            }
+            .buttonStyle(.bordered)
+
+            Button {
+                showUrlImporter = true
+            } label: {
+                Label("From URL", systemImage: "link")
             }
             .buttonStyle(.bordered)
         }
@@ -225,6 +248,27 @@ struct ProfileView: View {
         do {
             profile = try await api.importProfileFromPdf(fileURL: url)
             uploadMessage = "PDF CV imported."
+        } catch let apiError as APIError where apiError.isCancelled {
+            return
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func importFromUrl() async {
+        let url = urlDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty else { return }
+        isSavingCv = true
+        uploadMessage = nil
+        error = nil
+        defer {
+            isSavingCv = false
+            urlDraft = ""
+        }
+
+        do {
+            profile = try await api.importProfileFromUrl(url)
+            uploadMessage = "Profile imported from URL."
         } catch let apiError as APIError where apiError.isCancelled {
             return
         } catch {
