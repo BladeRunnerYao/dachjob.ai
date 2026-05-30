@@ -29,8 +29,12 @@ export default function ProfilePage() {
 
   useEffect(() => {
     api.getProfile().then((p) => {
-      setProfile(p);
-      setCvMd(p.raw_cv_md);
+      if (p) {
+        setProfile(p);
+        setCvMd(p.raw_cv_md || '');
+      }
+      setLoading(false);
+    }).catch(() => {
       setLoading(false);
     });
   }, []);

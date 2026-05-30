@@ -1,0 +1,29 @@
+name: Smoke test
+description: Run the shared API smoke-test script with consistent environment inputs.
+
+inputs:
+  mode:
+    description: Smoke test mode.
+    required: false
+    default: full
+  api-base-url:
+    description: API base URL.
+    required: true
+  frontend-url:
+    description: Frontend URL.
+    required: true
+  email:
+    description: Smoke test email address.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Run smoke test
+      shell: bash
+      env:
+        SMOKE_TEST_MODE: ${{ inputs.mode }}
+        API_BASE_URL: ${{ inputs.api-base-url }}
+        FRONTEND_URL: ${{ inputs.frontend-url }}
+        SMOKE_TEST_EMAIL: ${{ inputs.email }}
+      run: bash infra/deploy/scripts/smoke-test-api.sh

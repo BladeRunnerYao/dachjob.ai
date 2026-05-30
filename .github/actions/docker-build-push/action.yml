@@ -1,0 +1,42 @@
+name: Docker build and push
+description: Setup Buildx and build/push a Docker image.
+
+inputs:
+  context:
+    description: Docker build context.
+    required: false
+    default: .
+  file:
+    description: Dockerfile path.
+    required: true
+  platforms:
+    description: Target platforms.
+    required: false
+    default: linux/amd64
+  push:
+    description: Whether to push the image.
+    required: false
+    default: "true"
+  build-args:
+    description: Build arguments.
+    required: false
+    default: ""
+  tags:
+    description: Image tags.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Buildx
+      uses: docker/setup-buildx-action@v4
+
+    - name: Build and push
+      uses: docker/build-push-action@v7
+      with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.file }}
+        platforms: ${{ inputs.platforms }}
+        push: ${{ inputs.push }}
+        build-args: ${{ inputs.build-args }}
+        tags: ${{ inputs.tags }}

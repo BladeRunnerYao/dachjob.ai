@@ -1,0 +1,29 @@
+name: Setup backend
+description: Configure Python and install backend dev dependencies.
+
+inputs:
+  python-version:
+    description: Python version.
+    required: false
+    default: "3.12"
+  working-directory:
+    description: Backend working directory.
+    required: false
+    default: app/backend
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+        cache-dependency-path: ${{ inputs.working-directory }}/pyproject.toml
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        pip install --upgrade pip
+        pip install -e ".[dev]"

@@ -101,15 +101,8 @@ jobs:
           ref: ${{ github.event.inputs.branch || github.ref_name }}
           persist-credentials: false
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -e ".[dev]"
+      - name: Setup backend
+        uses: ./.github/actions/setup-backend
 
       - name: Run pre-commit
         run: pre-commit run --all-files
@@ -373,9 +366,6 @@ jobs:
       - name: Login to ACR
         run: az acr login --name "${{ env.AZURE_ACR_NAME }}"
 
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4
-
       - name: Set image metadata
         id: meta
         run: |
@@ -392,7 +382,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Build and push API image
-        uses: docker/build-push-action@v7
+        uses: ./.github/actions/docker-build-push
         with:
           context: .
           file: app/backend/Dockerfile
@@ -449,9 +439,6 @@ jobs:
       - name: Login to ACR
         run: az acr login --name "${{ env.AZURE_ACR_NAME }}"
 
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4
-
       - name: Set image metadata
         id: meta
         run: |
@@ -468,7 +455,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Build and push frontend image
-        uses: docker/build-push-action@v7
+        uses: ./.github/actions/docker-build-push
         with:
           context: .
           file: app/frontend/Dockerfile
@@ -524,9 +511,6 @@ jobs:
       - name: Login to ACR
         run: az acr login --name "${{ env.AZURE_ACR_NAME }}"
 
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4
-
       - name: Set image metadata
         id: meta
         run: |
@@ -543,7 +527,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Build and push worker image
-        uses: docker/build-push-action@v7
+        uses: ./.github/actions/docker-build-push
         with:
           context: .
           file: app/backend/Dockerfile
@@ -808,12 +792,12 @@ jobs:
           } >> "${GITHUB_ENV}"
 
       - name: Run smoke test
-        run: |
-          SMOKE_TEST_MODE="${{ github.event.inputs.smoke_test_mode || 'full' }}" \
-          API_BASE_URL="${{ needs.deploy-api.outputs.url || env.AZURE_API_URL }}" \
-          FRONTEND_URL="${{ needs.deploy-frontend.outputs.url || env.AZURE_FRONTEND_URL }}" \
-          SMOKE_TEST_EMAIL="smoke+azure-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com" \
-          bash infra/deploy/scripts/smoke-test-api.sh
+        uses: ./.github/actions/smoke-test
+        with:
+          mode: ${{ github.event.inputs.smoke_test_mode || 'minimal' }}
+          api-base-url: ${{ needs.deploy-api.outputs.url || env.AZURE_API_URL }}
+          frontend-url: ${{ needs.deploy-frontend.outputs.url || env.AZURE_FRONTEND_URL }}
+          email: smoke+azure-${{ github.run_id }}-${{ github.run_attempt }}@example.com
 
   summary:
     name: Deployment summary

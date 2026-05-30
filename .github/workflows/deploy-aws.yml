@@ -99,15 +99,8 @@ jobs:
           ref: ${{ github.event.inputs.branch || github.ref_name }}
           persist-credentials: false
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -e ".[dev]"
+      - name: Setup backend
+        uses: ./.github/actions/setup-backend
 
       - name: Run pre-commit
         run: pre-commit run --all-files
@@ -296,9 +289,6 @@ jobs:
         with:
           registry: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
 
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4
-
       - name: Set image metadata
         id: meta
         run: |
@@ -317,7 +307,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Build and push API image
-        uses: docker/build-push-action@v7
+        uses: ./.github/actions/docker-build-push
         with:
           context: .
           file: app/backend/Dockerfile
@@ -359,9 +349,6 @@ jobs:
         with:
           registry: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
 
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4
-
       - name: Set image metadata
         id: meta
         run: |
@@ -380,7 +367,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Build and push frontend image
-        uses: docker/build-push-action@v7
+        uses: ./.github/actions/docker-build-push
         with:
           context: .
           file: app/frontend/Dockerfile
@@ -419,9 +406,6 @@ jobs:
         with:
           registry: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
 
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4
-
       - name: Set image metadata
         id: meta
         run: |
@@ -440,7 +424,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Build and push worker image
-        uses: docker/build-push-action@v7
+        uses: ./.github/actions/docker-build-push
         with:
           context: .
           file: app/backend/Dockerfile
@@ -824,12 +808,12 @@ jobs:
           echo "SMOKE_TEST_PASSWORD=${SMOKE_TEST_PASSWORD}" >> "${GITHUB_ENV}"
 
       - name: Run smoke test
-        run: |
-          SMOKE_TEST_MODE="${{ github.event.inputs.smoke_test_mode || 'full' }}" \
-          API_BASE_URL="${{ needs.deploy-api.outputs.url || env.AWS_API_URL }}" \
-          FRONTEND_URL="${{ needs.deploy-frontend.outputs.url || env.AWS_FRONTEND_URL }}" \
-          SMOKE_TEST_EMAIL="smoke+aws-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com" \
-          bash infra/deploy/scripts/smoke-test-api.sh
+        uses: ./.github/actions/smoke-test
+        with:
+          mode: ${{ github.event.inputs.smoke_test_mode || 'minimal' }}
+          api-base-url: ${{ needs.deploy-api.outputs.url || env.AWS_API_URL }}
+          frontend-url: ${{ needs.deploy-frontend.outputs.url || env.AWS_FRONTEND_URL }}
+          email: smoke+aws-${{ github.run_id }}-${{ github.run_attempt }}@example.com
 
   summary:
     name: Deployment summary
