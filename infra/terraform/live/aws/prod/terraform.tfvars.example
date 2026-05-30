@@ -1,0 +1,7 @@
+name_prefix        = "dachjob-prod"
+region             = "eu-west-1"
+environment        = "prod"
+api_image_tag      = "latest"
+frontend_image_tag = "latest"
+worker_image_tag   = "latest"
+cors_origins       = ""

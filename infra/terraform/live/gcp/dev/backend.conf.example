@@ -1,0 +1,2 @@
+bucket = "dachjob-ai-terraform-state"
+prefix = "dev"

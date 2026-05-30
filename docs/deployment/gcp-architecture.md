@@ -122,12 +122,6 @@ All logging is structured (JSON) and error/critical logs are archived to `ERROR_
 
 ```
 infra/terraform/
-├── versions.tf
-├── backend.tf                   # State stored in GCS bucket
-├── providers.tf
-├── variables.tf
-├── locals.tf
-│
 ├── modules/
 │   ├── artifact-registry/       # Docker image repositories
 │   │   └── main.tf
@@ -156,10 +150,19 @@ infra/terraform/
 │   └── monitoring/              # Alerting policies + dashboards
 │       └── main.tf
 │
-└── environments/
-    └── dev/
-        ├── terraform.tfvars
-        └── backend.conf
+└── live/
+    ├── gcp/
+    │   ├── dev/                 # GCP deploy workflow root
+    │   ├── staging/
+    │   └── prod/
+    ├── azure/
+    │   ├── dev/                 # Azure deploy workflow root
+    │   ├── staging/
+    │   └── prod/
+    └── aws/
+        ├── dev/                 # AWS deploy workflow root
+        ├── staging/
+        └── prod/
 ```
 
 ### Deployment Pipeline (CI/CD)
