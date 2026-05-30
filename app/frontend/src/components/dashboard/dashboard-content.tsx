@@ -5,7 +5,6 @@ import { StatsCards } from './stats-cards';
 import { RecentJobs } from './recent-jobs';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { api } from '@/lib/api/client';
-import { isProduction, isBuildTime } from '@/lib/api/base-client';
 import type { JobPosting, Application, LLMRun } from '@/lib/api/types';
 
 export function DashboardContent() {
@@ -26,11 +25,7 @@ export function DashboardContent() {
         setApps(appsData);
         setRuns(runsData.items || []);
       } catch {
-        if (!isProduction() || isBuildTime()) {
-          setJobs(api.getMockJobs());
-          setApps(api.getMockApplications());
-          setRuns(api.getMockLLMRuns());
-        }
+        // In production, leave state as empty if API is unreachable
       } finally {
         setLoading(false);
       }

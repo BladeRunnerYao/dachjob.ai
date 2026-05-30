@@ -31,7 +31,7 @@ export function RecentJobs({ jobs }: RecentJobsProps) {
       </CardHeader>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm min-w-[500px]">
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
               <th className="px-4 py-2 font-medium">Title</th>

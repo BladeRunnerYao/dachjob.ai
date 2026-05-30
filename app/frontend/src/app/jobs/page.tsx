@@ -134,7 +134,7 @@ export default function JobsPage() {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 text-sm">
+        <div className="flex items-center justify-center gap-2 text-sm flex-wrap">
           <button
             onClick={() => goToPage(p => Math.max(0, p - 1))}
             disabled={page === 0}
@@ -142,7 +142,7 @@ export default function JobsPage() {
           >
             Previous
           </button>
-          {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => (
+          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => (
             <button
               key={i}
               onClick={() => goToPage(i)}
