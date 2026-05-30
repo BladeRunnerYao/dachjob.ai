@@ -143,6 +143,11 @@ class APIClient {
         )
     }
 
+    func importProfileFromUrl(_ url: String) async throws -> CandidateProfile {
+        let body: [String: String] = ["url": url]
+        return try await post("/api/profile/import-url", body: body)
+    }
+
     // MARK: - Match
 
     func getMatchReport(jobId: String) async throws -> MatchReport? {

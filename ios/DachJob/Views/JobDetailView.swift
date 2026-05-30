@@ -32,10 +32,15 @@ struct JobDetailView: View {
                     if let percent = matchReport?.scorePercent ?? job.scorePercent {
                         matchSection(percent: percent)
                     }
-                    if job.hasQualificationDetails {
+                    if let parsed = job.parsedJson {
+                        if !parsed.requiredQualifications.isEmpty || !parsed.preferredQualifications.isEmpty {
+                            responsibilitiesSection(parsed: parsed)
+                        }
                         qualificationsSection(job: job)
-                    }
-                    if let rawJd = job.rawJd, !rawJd.isEmpty {
+                        if !parsed.requiredQualifications.isEmpty {
+                            requiredSection(parsed: parsed)
+                        }
+                    } else if let rawJd = job.rawJd, !rawJd.isEmpty {
                         descriptionSection(rawJd: rawJd)
                     }
                 }
@@ -197,6 +202,50 @@ struct JobDetailView: View {
         }
     }
 
+    private func responsibilitiesSection(parsed: ParsedJobDescription) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Responsibilities")
+                .font(.headline)
+            if !parsed.responsibilities.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(parsed.responsibilities, id: \.self) { item in
+                        Text("• \(item)")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .clipShape(.rect(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+    }
+
+    private func requiredSection(parsed: ParsedJobDescription) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Requirements")
+                .font(.headline)
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(parsed.requiredQualifications, id: \.self) { item in
+                    Text("• \(item)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            }
+            if let years = parsed.experienceYears {
+                Text("\(Int(years))+ years of experience required")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 4)
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .clipShape(.rect(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+    }
+
     private func loadJob() async {
         isLoading = true
         do {
@@ -225,7 +274,8 @@ struct JobDetailView: View {
     @ViewBuilder
     private func statusButton(label: String, targetStatus: String, currentStatus: String?) -> some View {
         let isActive = currentStatus == targetStatus
-        let color: Color = targetStatus == "applied" ? .green : .orange
+        let activeColor: Color = targetStatus == "applied" ? .green : .yellow
+        let inactiveColor: Color = .blue
         Button {
             Task {
                 updatingStatus = true
@@ -241,8 +291,8 @@ struct JobDetailView: View {
                 .fontWeight(.medium)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
-                .background(isActive ? color : color.opacity(0.12))
-                .foregroundColor(isActive ? .white : color)
+                .background(isActive ? activeColor : inactiveColor.opacity(0.12))
+                .foregroundColor(isActive ? .white : inactiveColor)
                 .clipShape(.rect(cornerRadius: 8))
         }
         .disabled(updatingStatus)
