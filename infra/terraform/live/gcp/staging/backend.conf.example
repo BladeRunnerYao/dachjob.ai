@@ -1,2 +1,2 @@
-bucket = "dachjob-ai-terraform-state"
+bucket = "dachjob-staging-terraform-state"
 prefix = "staging"
