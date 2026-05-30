@@ -48,7 +48,7 @@ export class ApiClient {
       const result = await request<PaginatedJobs>(`/api/jobs?${q.toString()}`);
       return result.items;
     } catch {
-      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
+      if (isProduction() && !isBuildTime()) return [];
       return this.getMockJobs();
     }
   }
@@ -60,7 +60,7 @@ export class ApiClient {
       q.set('offset', String(offset));
       return await request<PaginatedJobs>(`/api/jobs?${q.toString()}`);
     } catch {
-      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
+      if (isProduction() && !isBuildTime()) return { items: [], total: 0, limit, offset };
       const items = this.getMockJobs();
       return { items, total: items.length, limit, offset };
     }
@@ -70,7 +70,7 @@ export class ApiClient {
     try {
       return await request<JobPosting>(`/api/jobs/${id}`);
     } catch {
-      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
+      if (isProduction() && !isBuildTime()) throw new Error('Job not found');
       const jobs = await this.getJobs();
       const job = jobs.find(j => j.id === id);
       if (!job) throw new Error('Job not found');
@@ -135,19 +135,19 @@ export class ApiClient {
     try {
       return await request<Application[]>('/api/applications');
     } catch {
-      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
+      if (isProduction() && !isBuildTime()) return [];
       return this.getMockApplications();
     }
   }
 
   // ── Profile ───────────────────────────────────────────────────
 
-  async getProfile(): Promise<CandidateProfile> {
+  async getProfile(): Promise<CandidateProfile | null> {
     try {
-      const profile = await request<CandidateProfile>('/api/profile');
+      const profile = await request<CandidateProfile | null>('/api/profile');
       return profile;
     } catch {
-      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
+      if (isProduction() && !isBuildTime()) return null;
       return this.getMockProfile();
     }
   }
@@ -221,7 +221,7 @@ export class ApiClient {
       } | null>(`/api/jobs/${jobId}/match`);
       return report ? this.toMatchReport(report) : null;
     } catch {
-      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
+      if (isProduction() && !isBuildTime()) return null;
       return null;
     }
   }
@@ -317,7 +317,7 @@ export class ApiClient {
       const query = q.toString();
       return await request<PaginatedLLMRuns>(`/api/llm-runs${query ? '?' + query : ''}`);
     } catch {
-      if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
+      if (isProduction() && !isBuildTime()) return { items: [], total: 0 };
       const items = this.getMockLLMRuns();
       return { items, total: items.length };
     }

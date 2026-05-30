@@ -1,0 +1,171 @@
+name: Terraform Drift
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      cloud:
+        description: Cloud to check
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - gcp
+          - azure
+          - aws
+      environment:
+        description: Environment root to check
+        required: true
+        type: choice
+        default: dev
+        options:
+          - dev
+
+concurrency:
+  group: terraform-drift-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  gcp:
+    name: GCP drift
+    if: ${{ github.event.inputs.cloud == 'all' || github.event.inputs.cloud == 'gcp' || github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    env:
+      TF_DIR: infra/terraform/live/gcp/dev
+      TF_VAR_project_id: dachjob-ai-platform
+      TF_VAR_region: europe-west1
+      TF_VAR_environment: ${{ github.event.inputs.environment || 'dev' }}
+      TF_VAR_billing_account_id: ${{ vars.GCP_BILLING_ACCOUNT_ID || secrets.GCP_BILLING_ACCOUNT_ID || '' }}
+      TF_VAR_notification_email: ${{ vars.GCP_NOTIFICATION_EMAIL || vars.NOTIFICATION_EMAIL || secrets.GCP_NOTIFICATION_EMAIL || '' }}
+      GCP_TF_BACKEND_BUCKET: ${{ vars.GCP_TF_BACKEND_BUCKET || 'dachjob-ai-terraform-state' }}
+      GCP_TF_BACKEND_PREFIX: ${{ vars.GCP_TF_BACKEND_PREFIX || 'dev' }}
+      WORKLOAD_IDENTITY_PROVIDER: projects/936971254595/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
+      DEPLOYER_SERVICE_ACCOUNT: dachjob-dev-terraform-sa@dachjob-ai-platform.iam.gserviceaccount.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init -backend-config="bucket=${GCP_TF_BACKEND_BUCKET}" -backend-config="prefix=${GCP_TF_BACKEND_PREFIX}"
+
+      - name: Terraform plan drift check
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform plan -detailed-exitcode -input=false -lock=false
+
+  aws:
+    name: AWS drift
+    if: ${{ github.event.inputs.cloud == 'all' || github.event.inputs.cloud == 'aws' || github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    env:
+      TF_DIR: infra/terraform/live/aws/dev
+      AWS_REGION: eu-west-1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
+          role-session-name: github-terraform-drift-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+
+      - name: Write backend config
+        working-directory: ${{ env.TF_DIR }}
+        env:
+          TF_BACKEND_BUCKET: ${{ vars.AWS_TF_BACKEND_BUCKET || '' }}
+          TF_BACKEND_KEY: ${{ vars.AWS_TF_BACKEND_KEY || '' }}
+          TF_BACKEND_DYNAMODB_TABLE: ${{ vars.AWS_TF_BACKEND_DYNAMODB_TABLE || '' }}
+        run: |
+          : "${TF_BACKEND_BUCKET:?AWS_TF_BACKEND_BUCKET repository variable is required}"
+          : "${TF_BACKEND_KEY:?AWS_TF_BACKEND_KEY repository variable is required}"
+          : "${TF_BACKEND_DYNAMODB_TABLE:?AWS_TF_BACKEND_DYNAMODB_TABLE repository variable is required}"
+          {
+            echo "bucket = \"${TF_BACKEND_BUCKET}\""
+            echo "key = \"${TF_BACKEND_KEY}\""
+            echo "region = \"${AWS_REGION}\""
+            echo "encrypt = true"
+            echo "dynamodb_table = \"${TF_BACKEND_DYNAMODB_TABLE}\""
+          } > backend.conf
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init -backend-config=backend.conf
+
+      - name: Terraform plan drift check
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform plan -detailed-exitcode -input=false -lock=false
+
+  azure:
+    name: Azure drift
+    if: ${{ github.event.inputs.cloud == 'all' || github.event.inputs.cloud == 'azure' || github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    env:
+      TF_DIR: infra/terraform/live/azure/dev
+      TF_VAR_postgres_administrator_password: ${{ secrets.AZURE_POSTGRES_ADMINISTRATOR_PASSWORD || secrets.TF_VAR_POSTGRES_ADMINISTRATOR_PASSWORD || '' }}
+      TF_VAR_azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY || '' }}
+      TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET || '' }}
+      TF_VAR_secret_key: ${{ secrets.SECRET_KEY || '' }}
+      TF_VAR_resend_api_key: ${{ secrets.RESEND_API_KEY || '' }}
+      TF_VAR_azure_openai_endpoint: ${{ vars.AZURE_OPENAI_ENDPOINT || '' }}
+      TF_VAR_azure_openai_api_version: ${{ vars.AZURE_OPENAI_API_VERSION || '2024-10-21' }}
+      TF_VAR_azure_openai_model_fast: ${{ vars.AZURE_OPENAI_MODEL_FAST || 'gpt-4o-mini' }}
+      TF_VAR_azure_openai_model_quality: ${{ vars.AZURE_OPENAI_MODEL_QUALITY || 'gpt-4o' }}
+      TF_VAR_azure_openai_model_reasoning: ${{ vars.AZURE_OPENAI_MODEL_REASONING || 'o1-mini' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Authenticate to Azure
+        run: |
+          for i in 1 2 3; do
+            az login --service-principal \
+              -u "${{ vars.AZURE_CLIENT_ID }}" \
+              -t "${{ vars.AZURE_TENANT_ID }}" \
+              --federated-token "$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)" \
+              && break || { echo "az login attempt $i failed, retrying..."; sleep 5; }
+          done
+          az account set --subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Validate required Azure inputs
+        run: |
+          : "${TF_VAR_postgres_administrator_password:?AZURE_POSTGRES_ADMINISTRATOR_PASSWORD or TF_VAR_POSTGRES_ADMINISTRATOR_PASSWORD secret is required}"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init -backend=false -input=false
+
+      - name: Terraform plan drift check
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform plan -detailed-exitcode -input=false -lock=false

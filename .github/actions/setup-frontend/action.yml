@@ -1,0 +1,27 @@
+name: Setup frontend
+description: Configure Node.js and install frontend dependencies.
+
+inputs:
+  node-version:
+    description: Node.js version.
+    required: false
+    default: "26"
+  working-directory:
+    description: Frontend working directory.
+    required: false
+    default: app/frontend
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npm ci
