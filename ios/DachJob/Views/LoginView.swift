@@ -96,7 +96,7 @@ struct SettingsLink: View {
 struct ServerSettingsView: View {
     @Environment(AuthService.self) var authService
     @Environment(\.dismiss) var dismiss
-    @State private var apiURL: String = UserDefaults.standard.string(forKey: "api_base_url") ?? "https://d3ktpumdo7sly4.cloudfront.net"
+    @State private var apiURL: String = UserDefaults.standard.string(forKey: "api_base_url") ?? "https://dachjob-dev-api-qxugiew36a-ew.a.run.app"
 
     var body: some View {
         NavigationStack {
@@ -107,7 +107,7 @@ struct ServerSettingsView: View {
                         .keyboardType(.URL)
                 }
                 Section {
-                    Text("Default: AWS CloudFront endpoint")
+                    Text("Default: GCP Cloud Run endpoint")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Text("Changing the server will require you to log in again.")
@@ -123,7 +123,7 @@ struct ServerSettingsView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        let oldURL = UserDefaults.standard.string(forKey: "api_base_url") ?? "https://d3ktpumdo7sly4.cloudfront.net"
+                        let oldURL = UserDefaults.standard.string(forKey: "api_base_url") ?? "https://dachjob-dev-api-qxugiew36a-ew.a.run.app"
                         UserDefaults.standard.set(apiURL, forKey: "api_base_url")
                         if apiURL != oldURL {
                             authService.logout()

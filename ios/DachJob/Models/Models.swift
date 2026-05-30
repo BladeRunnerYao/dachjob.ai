@@ -138,12 +138,20 @@ struct MatchReport: Codable, Identifiable {
 }
 
 struct AuthResponse: Codable {
-    let accessToken: String
-    let tokenType: String
+    let token: String
+    let userId: String
+    let email: String
+    let name: String
+    let tenantId: String?
+    let passwordNeedsReset: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case accessToken = "access_token"
-        case tokenType = "token_type"
+        case token
+        case userId = "user_id"
+        case email
+        case name
+        case tenantId = "tenant_id"
+        case passwordNeedsReset = "password_needs_reset"
     }
 }
 

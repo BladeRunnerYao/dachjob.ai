@@ -44,7 +44,12 @@ class APIClient {
     static let shared = APIClient()
 
     private var baseURL: String {
-        UserDefaults.standard.string(forKey: "api_base_url") ?? "https://d3ktpumdo7sly4.cloudfront.net"
+        // Migrate old AWS default → GCP default
+        if let saved = UserDefaults.standard.string(forKey: "api_base_url"),
+           saved == "https://d3ktpumdo7sly4.cloudfront.net" {
+            UserDefaults.standard.removeObject(forKey: "api_base_url")
+        }
+        return UserDefaults.standard.string(forKey: "api_base_url") ?? "https://dachjob-dev-api-qxugiew36a-ew.a.run.app"
     }
 
     private var authToken: String? {
@@ -67,14 +72,14 @@ class APIClient {
     func login(email: String, password: String) async throws -> AuthResponse {
         let body: [String: String] = ["email": email, "password": password]
         let response: AuthResponse = try await post("/api/auth/login", body: body)
-        authToken = response.accessToken
+        authToken = response.token
         return response
     }
 
     func register(email: String, password: String, fullName: String) async throws -> AuthResponse {
-        let body: [String: String] = ["email": email, "password": password, "full_name": fullName]
+        let body: [String: String] = ["email": email, "password": password, "name": fullName]
         let response: AuthResponse = try await post("/api/auth/register", body: body)
-        authToken = response.accessToken
+        authToken = response.token
         return response
     }
 
@@ -256,13 +261,17 @@ class APIClient {
             throw APIError.networkError(NSError(domain: "Invalid response", code: 0))
         }
 
-        if httpResponse.statusCode == 401 {
-            authToken = nil
-            throw APIError.unauthorized
-        }
-
         guard (200...299).contains(httpResponse.statusCode) else {
             let message = String(data: data, encoding: .utf8) ?? "Unknown error"
+            if httpResponse.statusCode == 401 {
+                authToken = nil
+                // Try to extract the detail message from the server error
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let detail = json["detail"] as? String {
+                    throw APIError.serverError(401, detail)
+                }
+                throw APIError.unauthorized
+            }
             throw APIError.serverError(httpResponse.statusCode, message)
         }
 
