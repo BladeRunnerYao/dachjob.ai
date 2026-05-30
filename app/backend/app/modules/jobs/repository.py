@@ -5,6 +5,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import JobPosting, JobSkill, MatchReport
 
+VALID_JOB_STATUSES = {"new", "saved", "applied"}
+
+
+def _job_filters(
+    tenant_id: UUID,
+    status: str | None = None,
+    exclude_smoke_test: bool = True,
+):
+    filters = [JobPosting.tenant_id == tenant_id]
+    if status:
+        filters.append(JobPosting.status == status)
+    if exclude_smoke_test:
+        filters.append(~JobPosting.title.ilike("%smoke test%"))
+    return filters
+
 
 async def _attach_latest_match(db: AsyncSession, jobs: list[JobPosting]) -> list[JobPosting]:
     if not jobs:
@@ -47,11 +62,16 @@ async def _attach_skills(db: AsyncSession, jobs: list[JobPosting]) -> list[JobPo
 
 
 async def count_jobs_by_tenant(
-    db: AsyncSession, tenant_id: UUID, exclude_smoke_test: bool = True
+    db: AsyncSession,
+    tenant_id: UUID,
+    status: str | None = None,
+    exclude_smoke_test: bool = True,
 ) -> int:
-    stmt = select(func.count()).select_from(JobPosting).where(JobPosting.tenant_id == tenant_id)
-    if exclude_smoke_test:
-        stmt = stmt.where(~JobPosting.title.ilike("%smoke test%"))
+    stmt = (
+        select(func.count())
+        .select_from(JobPosting)
+        .where(*_job_filters(tenant_id, status, exclude_smoke_test))
+    )
     result = await db.execute(stmt)
     return result.scalar() or 0
 
@@ -61,17 +81,16 @@ async def list_jobs_by_tenant(
     tenant_id: UUID,
     limit: int = 50,
     offset: int = 0,
+    status: str | None = None,
     exclude_smoke_test: bool = True,
 ) -> list[JobPosting]:
     stmt = (
         select(JobPosting)
-        .where(JobPosting.tenant_id == tenant_id)
+        .where(*_job_filters(tenant_id, status, exclude_smoke_test))
         .order_by(JobPosting.created_at.desc())
         .limit(limit)
         .offset(offset)
     )
-    if exclude_smoke_test:
-        stmt = stmt.where(~JobPosting.title.ilike("%smoke test%"))
     result = await db.execute(stmt)
     jobs = list(result.scalars().all())
     await _attach_latest_match(db, jobs)

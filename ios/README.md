@@ -74,11 +74,11 @@ The app uses the same JWT authentication as the web frontend. Log in with your e
 | Feature | Description |
 |---------|-------------|
 | **Dashboard** | Overview with stats (jobs, applications, LLM runs) |
-| **Jobs** | Browse, filter (apply/maybe/skip), and view job details |
+| **Jobs** | Browse, filter by applied/saved status, and view job details |
 | **Import Jobs** | Paste job URLs to import (LinkedIn, Indeed, StepStone, etc.) |
-| **Match Reports** | View AI match scores and recommendations per job |
+| **Match Scores** | View saved AI match percentages per job |
 | **LLM Runs** | Monitor AI processing history and status |
-| **Profile** | View your candidate profile and skills |
+| **Profile** | View your candidate profile and upload Markdown or PDF CVs |
 
 ## Architecture
 
@@ -95,7 +95,7 @@ DachJobApp.swift          → App entry point, auth routing
     ├── MainTabView.swift → Tab bar navigation
     ├── DashboardView.swift → Stats overview
     ├── JobsListView.swift  → Paginated job list with filters
-    ├── JobDetailView.swift → Job details + match report
+    ├── JobDetailView.swift → Job details + match score and qualifications
     ├── ImportJobView.swift → URL-based job import
     ├── LLMRunsView.swift   → LLM observability
     └── ProfileView.swift   → Candidate profile

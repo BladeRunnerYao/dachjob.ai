@@ -1,9 +1,15 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ProfileView: View {
     @Environment(AuthService.self) var authService
     @State private var profile: CandidateProfile?
     @State private var isLoading = true
+    @State private var isSavingCv = false
+    @State private var showMarkdownEditor = false
+    @State private var showPdfImporter = false
+    @State private var markdownDraft = ""
+    @State private var uploadMessage: String?
     @State private var error: String?
 
     private let api = APIClient.shared
@@ -27,7 +33,11 @@ struct ProfileView: View {
                     }
                     .padding(.top, 60)
                 } else if let profile {
-                    profileContent(profile)
+                    VStack(alignment: .leading, spacing: 16) {
+                        uploadBanner
+                        profileActions
+                        profileContent(profile)
+                    }
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "person.crop.circle.badge.plus")
@@ -35,10 +45,11 @@ struct ProfileView: View {
                             .foregroundColor(.blue)
                         Text("No profile yet")
                             .font(.headline)
-                        Text("Upload your CV in the web app to create your profile.")
+                        Text("Upload your CV as Markdown or PDF to create your profile.")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
+                        profileActions
                     }
                     .padding(.top, 60)
                     .padding(.horizontal)
@@ -48,6 +59,17 @@ struct ProfileView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
+                        Button {
+                            openMarkdownEditor()
+                        } label: {
+                            Label("Edit Markdown CV", systemImage: "doc.text")
+                        }
+                        Button {
+                            showPdfImporter = true
+                        } label: {
+                            Label("Upload PDF CV", systemImage: "doc.badge.plus")
+                        }
+                        Divider()
                         Button(role: .destructive) {
                             authService.logout()
                         } label: {
@@ -58,9 +80,60 @@ struct ProfileView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showMarkdownEditor) {
+                MarkdownCVEditor(
+                    markdown: $markdownDraft,
+                    isSaving: isSavingCv,
+                    onCancel: { showMarkdownEditor = false },
+                    onSave: { Task { await uploadMarkdownCv() } }
+                )
+            }
+            .fileImporter(
+                isPresented: $showPdfImporter,
+                allowedContentTypes: [.pdf],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    guard let url = urls.first else { return }
+                    Task { await uploadPdfCv(url) }
+                case .failure(let error):
+                    self.error = error.localizedDescription
+                }
+            }
             .refreshable { await loadProfile() }
             .task { await loadProfile() }
         }
+    }
+
+    @ViewBuilder
+    private var uploadBanner: some View {
+        if let uploadMessage {
+            Text(uploadMessage)
+                .font(.caption)
+                .foregroundColor(.green)
+                .padding(.horizontal)
+        }
+    }
+
+    private var profileActions: some View {
+        HStack(spacing: 10) {
+            Button {
+                openMarkdownEditor()
+            } label: {
+                Label("Markdown CV", systemImage: "doc.text")
+            }
+            .buttonStyle(.borderedProminent)
+
+            Button {
+                showPdfImporter = true
+            } label: {
+                Label("Upload PDF", systemImage: "doc.badge.plus")
+            }
+            .buttonStyle(.bordered)
+        }
+        .disabled(isSavingCv)
+        .padding(.horizontal)
     }
 
     private func profileContent(_ profile: CandidateProfile) -> some View {
@@ -100,8 +173,63 @@ struct ProfileView: View {
                     }
                 }
             }
+
+            if !profile.rawCvMd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("CV Markdown")
+                        .font(.headline)
+                    Text(profile.rawCvMd)
+                        .font(.footnote.monospaced())
+                        .foregroundColor(.secondary)
+                        .lineLimit(18)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(Color(.systemGray6))
+                        .clipShape(.rect(cornerRadius: 8))
+                }
+            }
         }
         .padding()
+    }
+
+    private func openMarkdownEditor() {
+        markdownDraft = profile?.rawCvMd ?? "# Your Name\n\n## Profile\n\n"
+        showMarkdownEditor = true
+    }
+
+    private func uploadMarkdownCv() async {
+        let markdown = markdownDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !markdown.isEmpty else { return }
+        isSavingCv = true
+        uploadMessage = nil
+        error = nil
+        defer { isSavingCv = false }
+
+        do {
+            profile = try await api.uploadCvMarkdown(markdown)
+            uploadMessage = "CV markdown saved."
+            showMarkdownEditor = false
+        } catch let apiError as APIError where apiError.isCancelled {
+            return
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func uploadPdfCv(_ url: URL) async {
+        isSavingCv = true
+        uploadMessage = nil
+        error = nil
+        defer { isSavingCv = false }
+
+        do {
+            profile = try await api.importProfileFromPdf(fileURL: url)
+            uploadMessage = "PDF CV imported."
+        } catch let apiError as APIError where apiError.isCancelled {
+            return
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     private func loadProfile() async {
@@ -109,16 +237,39 @@ struct ProfileView: View {
         error = nil
         do {
             profile = try await api.getProfile()
-        } catch let apiError as APIError {
-            if case .serverError(404, _) = apiError {
-                profile = nil
-            } else {
-                error = apiError.localizedDescription
-            }
+        } catch let apiError as APIError where apiError.isCancelled {
+            isLoading = false
+            return
         } catch {
             self.error = error.localizedDescription
         }
         isLoading = false
+    }
+}
+
+struct MarkdownCVEditor: View {
+    @Binding var markdown: String
+    let isSaving: Bool
+    let onCancel: () -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            TextEditor(text: $markdown)
+                .font(.body.monospaced())
+                .padding()
+                .navigationTitle("Markdown CV")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", action: onCancel)
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(isSaving ? "Saving..." : "Save", action: onSave)
+                            .disabled(isSaving || markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+        }
     }
 }
 

@@ -24,6 +24,7 @@ import type {
   PaginatedJobs,
   PaginatedLLMRuns,
   ResumeArtifact,
+  JobStatus,
 } from './types';
 
 export class ApiClient {
@@ -49,12 +50,12 @@ export class ApiClient {
     return resumesApi.getResumePdfUrl(artifactId);
   }
 
-  getJobs(limit?: number, offset?: number): Promise<JobPosting[]> {
-    return jobsApi.getJobs(limit, offset);
+  getJobs(limit?: number, offset?: number, status?: JobStatus): Promise<JobPosting[]> {
+    return jobsApi.getJobs(limit, offset, status);
   }
 
-  getJobsPaginated(limit: number, offset: number): Promise<PaginatedJobs> {
-    return jobsApi.getJobsPaginated(limit, offset);
+  getJobsPaginated(limit: number, offset: number, status?: JobStatus): Promise<PaginatedJobs> {
+    return jobsApi.getJobsPaginated(limit, offset, status);
   }
 
   getJob(id: string): Promise<JobPosting> {
@@ -65,7 +66,7 @@ export class ApiClient {
     return jobsApi.createJob(rawJd);
   }
 
-  updateJobStatus(jobId: string, status: 'new' | 'saved' | 'applied'): Promise<JobPosting> {
+  updateJobStatus(jobId: string, status: JobStatus): Promise<JobPosting> {
     return jobsApi.updateJobStatus(jobId, status);
   }
 

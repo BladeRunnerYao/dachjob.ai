@@ -10,17 +10,52 @@ struct JobPosting: Codable, Identifiable {
     let status: String?
     let url: String?
     let rawJd: String?
+    let parsedJson: ParsedJobDescription?
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, company, location, score, recommendation, status, url
         case rawJd = "raw_jd"
+        case parsedJson = "parsed_json"
         case createdAt = "created_at"
     }
 
     var scorePercent: Int? {
         guard let s = score else { return nil }
         return Int((min(max(s, 1), 5) / 5.0) * 100)
+    }
+
+    var hasQualificationDetails: Bool {
+        guard let parsedJson else { return false }
+        return !parsedJson.mustHaveSkills.isEmpty
+            || !parsedJson.niceToHaveSkills.isEmpty
+            || !parsedJson.requiredQualifications.isEmpty
+            || !parsedJson.preferredQualifications.isEmpty
+    }
+}
+
+struct ParsedJobDescription: Codable {
+    let mustHaveSkills: [String]
+    let niceToHaveSkills: [String]
+    let requiredQualifications: [String]
+    let preferredQualifications: [String]
+    let experienceYears: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case mustHaveSkills = "must_have_skills"
+        case niceToHaveSkills = "nice_to_have_skills"
+        case requiredQualifications = "required_qualifications"
+        case preferredQualifications = "preferred_qualifications"
+        case experienceYears = "experience_years"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        mustHaveSkills = try container.decodeIfPresent([String].self, forKey: .mustHaveSkills) ?? []
+        niceToHaveSkills = try container.decodeIfPresent([String].self, forKey: .niceToHaveSkills) ?? []
+        requiredQualifications = try container.decodeIfPresent([String].self, forKey: .requiredQualifications) ?? []
+        preferredQualifications = try container.decodeIfPresent([String].self, forKey: .preferredQualifications) ?? []
+        experienceYears = try container.decodeIfPresent(Double.self, forKey: .experienceYears)
     }
 }
 
@@ -72,12 +107,14 @@ struct CandidateProfile: Codable {
     let fullName: String?
     let headline: String?
     let location: String?
+    let rawCvMd: String
     let skills: [String]?
 
     enum CodingKeys: String, CodingKey {
         case id
         case fullName = "full_name"
         case headline, location, skills
+        case rawCvMd = "raw_cv_md"
     }
 }
 
@@ -93,6 +130,10 @@ struct MatchReport: Codable, Identifiable {
         case jobId = "job_id"
         case overallScore = "overall_score"
         case recommendation, explanation
+    }
+
+    var scorePercent: Int {
+        Int((min(max(overallScore, 1), 5) / 5.0) * 100)
     }
 }
 

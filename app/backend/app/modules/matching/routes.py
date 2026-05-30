@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/jobs/{job_id}", tags=["matching"])
 
 
 async def _invalidate_job_caches(tenant_id: UUID, job_id: UUID):
-    await cache.delete("jobs:list", str(tenant_id))
+    await cache.delete_pattern(f"jobs:list:{tenant_id}")
     await cache.delete("job:detail", str(job_id))
 
 

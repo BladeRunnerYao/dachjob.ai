@@ -10,32 +10,51 @@ const PAGE_SIZES = [15, 30, 50, 100];
 
 type FilterKey = 'all' | 'applied' | 'saved';
 
+type JobCounts = Record<FilterKey, number>;
+
 export default function JobsPage() {
   const [jobs, setJobs] = useState<JobPosting[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [counts, setCounts] = useState<JobCounts>({ all: 0, applied: 0, saved: 0 });
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
   const fetchJobs = useCallback(async () => {
-    const result = await api.getJobsPaginated(pageSize, page * pageSize);
+    setLoading(true);
+    const status = filter === 'all' ? undefined : filter;
+    const [result, allResult, appliedResult, savedResult] = await Promise.all([
+      api.getJobsPaginated(pageSize, page * pageSize, status),
+      api.getJobsPaginated(1, 0),
+      api.getJobsPaginated(1, 0, 'applied'),
+      api.getJobsPaginated(1, 0, 'saved'),
+    ]);
     setJobs(result.items);
     setTotal(result.total);
+    setCounts({ all: allResult.total, applied: appliedResult.total, saved: savedResult.total });
     setLoading(false);
-  }, [page, pageSize]);
+  }, [filter, page, pageSize]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadJobs() {
-      const result = await api.getJobsPaginated(pageSize, page * pageSize);
+      setLoading(true);
+      const status = filter === 'all' ? undefined : filter;
+      const [result, allResult, appliedResult, savedResult] = await Promise.all([
+        api.getJobsPaginated(pageSize, page * pageSize, status),
+        api.getJobsPaginated(1, 0),
+        api.getJobsPaginated(1, 0, 'applied'),
+        api.getJobsPaginated(1, 0, 'saved'),
+      ]);
       if (!cancelled) {
         setJobs(result.items);
         setTotal(result.total);
+        setCounts({ all: allResult.total, applied: appliedResult.total, saved: savedResult.total });
         setLoading(false);
       }
     }
@@ -44,7 +63,7 @@ export default function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, pageSize]);
+  }, [filter, page, pageSize]);
 
   const handleSave = async (urlText: string) => {
     setImporting(true);
@@ -78,8 +97,12 @@ export default function JobsPage() {
     setPage(nextPage);
   };
 
-  const filtered = filter === 'all' ? jobs : jobs.filter(j => j.status === filter);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const selectFilter = (nextFilter: FilterKey) => {
+    setFilter(nextFilter);
+    setPage(0);
+  };
 
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
 
@@ -88,7 +111,7 @@ export default function JobsPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Jobs</h1>
-          <p className="text-sm text-slate-500 mt-1">{total} job postings</p>
+          <p className="text-sm text-slate-500 mt-1">{counts.all} job postings</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -102,7 +125,7 @@ export default function JobsPage() {
         {(['all', 'applied', 'saved'] as FilterKey[]).map((f) => (
           <button
             key={f}
-            onClick={() => setFilter(f)}
+            onClick={() => selectFilter(f)}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
               filter === f
                 ? 'bg-blue-600 text-white'
@@ -111,7 +134,7 @@ export default function JobsPage() {
           >
             {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
             <span className="ml-1 opacity-60">
-              ({f === 'all' ? total : jobs.filter(j => j.status === f).length})
+              ({counts[f]})
             </span>
           </button>
         ))}
@@ -125,10 +148,10 @@ export default function JobsPage() {
       </div>
 
       <div className="space-y-2">
-        {filtered.map((job) => (
+        {jobs.map((job) => (
           <JobCard key={job.id} job={job} />
         ))}
-        {filtered.length === 0 && (
+        {jobs.length === 0 && (
           <p className="text-sm text-slate-500 py-8 text-center">No jobs match this filter.</p>
         )}
       </div>

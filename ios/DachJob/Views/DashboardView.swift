@@ -2,15 +2,15 @@ import SwiftUI
 
 struct DashboardView: View {
     @State private var jobs: [JobPosting] = []
+    @State private var totalJobs = 0
+    @State private var appliedCount = 0
+    @State private var savedCount = 0
     @State private var applications: [Application] = []
     @State private var llmRuns: [LLMRun] = []
     @State private var isLoading = true
     @State private var error: String?
 
     private let api = APIClient.shared
-
-    var appliedCount: Int { jobs.filter { $0.status == "applied" }.count }
-    var savedCount: Int { jobs.filter { $0.status == "saved" }.count }
 
     var body: some View {
         NavigationStack {
@@ -51,7 +51,7 @@ struct DashboardView: View {
             GridItem(.flexible()),
             GridItem(.flexible()),
         ], spacing: 12) {
-            StatCard(title: "Jobs", value: "\(jobs.count)", color: .blue)
+            StatCard(title: "Jobs", value: "\(totalJobs)", color: .blue)
             StatCard(title: "Applied", value: "\(appliedCount)", color: .green)
             StatCard(title: "Saved", value: "\(savedCount)", color: .orange)
             StatCard(title: "Apps", value: "\(applications.count)", color: .purple)
@@ -134,15 +134,24 @@ struct DashboardView: View {
     }
 
     private func loadData() async {
-        isLoading = true
+        isLoading = jobs.isEmpty && applications.isEmpty && llmRuns.isEmpty
         error = nil
         do {
-            async let jobsResult = api.getJobs(limit: 200)
+            async let jobsResult = api.getJobs(limit: 5)
+            async let appliedResult = api.getJobs(limit: 1, status: "applied")
+            async let savedResult = api.getJobs(limit: 1, status: "saved")
             async let appsResult = api.getApplications()
             async let runsResult = api.getLLMRuns(limit: 200)
-            jobs = try await jobsResult.items
+            let recentJobs = try await jobsResult
+            jobs = recentJobs.items
+            totalJobs = recentJobs.total
+            appliedCount = try await appliedResult.total
+            savedCount = try await savedResult.total
             applications = try await appsResult
             llmRuns = try await runsResult.items
+        } catch let apiError as APIError where apiError.isCancelled {
+            isLoading = false
+            return
         } catch {
             self.error = error.localizedDescription
         }
