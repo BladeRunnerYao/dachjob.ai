@@ -488,9 +488,15 @@ jobs:
           NEW_TASK_DEF="$(echo "${TASK_DEF}" | jq \
             --arg IMAGE "${IMAGE}" \
             --arg WORKER_ENABLED "${WORKER_ENABLED}" \
-            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) |
+            'def setenv($name; $value):
+               .containerDefinitions[0].environment = (((.containerDefinitions[0].environment // []) | map(select(.name != $name))) + [{"name": $name, "value": $value}]);
+             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) |
              .containerDefinitions[0].image = $IMAGE |
-             (.containerDefinitions[0].environment[] | select(.name == "WORKER_ENABLED")).value = $WORKER_ENABLED')"
+             setenv("WORKER_ENABLED"; $WORKER_ENABLED) |
+             setenv("LLM_PROVIDER"; "deepseek") |
+             setenv("DEEPSEEK_MODEL_FAST"; "deepseek-v4-flash") |
+             setenv("DEEPSEEK_MODEL_QUALITY"; "deepseek-v4-flash") |
+             setenv("DEEPSEEK_MODEL_REASONING"; "deepseek-v4-flash")')"
 
           NEW_TASK_DEF_ARN="$(aws ecs register-task-definition \
             --cli-input-json "${NEW_TASK_DEF}" \
@@ -769,8 +775,14 @@ jobs:
 
           NEW_TASK_DEF="$(echo "${TASK_DEF}" | jq \
             --arg IMAGE "${IMAGE}" \
-            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) |
-             .containerDefinitions[0].image = $IMAGE')"
+            'def setenv($name; $value):
+               .containerDefinitions[0].environment = (((.containerDefinitions[0].environment // []) | map(select(.name != $name))) + [{"name": $name, "value": $value}]);
+             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) |
+             .containerDefinitions[0].image = $IMAGE |
+             setenv("LLM_PROVIDER"; "deepseek") |
+             setenv("DEEPSEEK_MODEL_FAST"; "deepseek-v4-flash") |
+             setenv("DEEPSEEK_MODEL_QUALITY"; "deepseek-v4-flash") |
+             setenv("DEEPSEEK_MODEL_REASONING"; "deepseek-v4-flash")')"
 
           NEW_TASK_DEF_ARN="$(aws ecs register-task-definition \
             --cli-input-json "${NEW_TASK_DEF}" \

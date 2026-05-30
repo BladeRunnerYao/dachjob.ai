@@ -25,6 +25,7 @@ import type {
   PaginatedLLMRuns,
   ResumeArtifact,
   JobStatus,
+  ResumeStyle,
 } from './types';
 
 export class ApiClient {
@@ -110,8 +111,8 @@ export class ApiClient {
     return matchingApi.getMatchReport(jobId);
   }
 
-  createResumeArtifact(jobId: string, confirmedSkills?: string[]): Promise<ResumeArtifact> {
-    return resumesApi.createResumeArtifact(jobId, confirmedSkills, this.workerEnabled);
+  createResumeArtifact(jobId: string, confirmedSkills?: string[], style?: ResumeStyle): Promise<ResumeArtifact> {
+    return resumesApi.createResumeArtifact(jobId, confirmedSkills, this.workerEnabled, style);
   }
 
   getLatestResumeArtifact(jobId: string): Promise<ResumeArtifact | null> {

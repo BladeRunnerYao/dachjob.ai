@@ -14,7 +14,9 @@ resource "azurerm_postgresql_flexible_server" "this" {
   backup_retention_days         = 7
   geo_redundant_backup_enabled  = false
   auto_grow_enabled             = true
-  public_network_access_enabled = true
+  delegated_subnet_id           = var.postgres_subnet_id
+  private_dns_zone_id           = var.postgres_private_dns_zone_id
+  public_network_access_enabled = false
 
   lifecycle {
     ignore_changes = [
@@ -36,11 +38,4 @@ resource "azurerm_postgresql_flexible_server_configuration" "pgvector" {
   name      = "azure.extensions"
   server_id = azurerm_postgresql_flexible_server.this.id
   value     = "vector"
-}
-
-resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure" {
-  name             = "${var.name_prefix}-allow-azure"
-  server_id        = azurerm_postgresql_flexible_server.this.id
-  start_ip_address = "0.0.0.0"
-  end_ip_address   = "0.0.0.0"
 }

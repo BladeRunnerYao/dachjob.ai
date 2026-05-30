@@ -83,6 +83,13 @@ variable "azure_openai_model_reasoning" {
   default     = "o1-mini"
 }
 
+variable "deepseek_api_key" {
+  description = "DeepSeek API key used by Azure Container Apps."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "jwt_secret" {
   description = "JWT signing secret for the API."
   type        = string

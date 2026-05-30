@@ -38,6 +38,7 @@ async def generate_resume(
     tenant: TenantContext,
     job_id: uuid.UUID,
     confirmed_skills: list[str] | None = None,
+    style: str = "german",
 ) -> ResumeArtifact:
     job = await get_job(db, job_id, tenant.id)
     if not job:
@@ -51,11 +52,11 @@ async def generate_resume(
     parsed_job = job.parsed_json or {"title": job.title, "company": job.company, "raw": job.raw_jd}
 
     html: str | None = None
-    provenance: dict[str, Any] = {"method": "template", "job_id": str(job_id)}
+    provenance: dict[str, Any] = {"method": "template", "job_id": str(job_id), "style": style}
 
     try:
         gateway = LLMGateway()
-        messages = build_llm_prompt(profile, parsed_job, confirmed_skills)
+        messages = build_llm_prompt(profile, parsed_job, confirmed_skills, style=style)
         result = await gateway.run_json(
             tenant_id=tenant.id,
             task="resume_generate",
@@ -69,6 +70,7 @@ async def generate_resume(
         provenance = {
             "method": "llm",
             "job_id": str(job_id),
+            "style": style,
             "provider": gateway.last_provider,
             "model": gateway.last_model,
         }
@@ -76,7 +78,7 @@ async def generate_resume(
         logger.exception("LLM resume generation failed, falling back to template renderer")
 
     if not html:
-        html, prov = render_resume_html(profile, parsed_job)
+        html, prov = render_resume_html(profile, parsed_job, style=style)
         provenance = {**provenance, **prov}
 
     pdf_bytes = render_resume_pdf(html)

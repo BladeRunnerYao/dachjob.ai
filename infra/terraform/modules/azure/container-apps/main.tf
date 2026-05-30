@@ -24,10 +24,12 @@ locals {
   database_url                = "postgresql+asyncpg://${var.postgres_administrator_login}:${var.postgres_administrator_password}@${var.postgres_host}:5432/dachjob"
   redis_url                   = "rediss://:${var.redis_primary_key}@${var.redis_hostname}:6380/0"
   has_azure_openai_api_key    = nonsensitive(var.azure_openai_api_key != "")
+  has_deepseek_api_key        = nonsensitive(var.deepseek_api_key != "")
   has_jwt_secret              = nonsensitive(var.jwt_secret != "")
   has_secret_key              = nonsensitive(var.secret_key != "")
   has_resend_api_key          = nonsensitive(var.resend_api_key != "")
   azure_openai_api_key_secret = "azure-openai-api-key"
+  deepseek_api_key_secret     = "deepseek-api-key"
   jwt_secret_name             = "jwt-secret"
   secret_key_name             = "secret-key"
   resend_api_key_secret       = "resend-api-key"
@@ -60,6 +62,14 @@ resource "azurerm_container_app" "api" {
     content {
       name  = local.azure_openai_api_key_secret
       value = var.azure_openai_api_key
+    }
+  }
+
+  dynamic "secret" {
+    for_each = local.has_deepseek_api_key ? [1] : []
+    content {
+      name  = local.deepseek_api_key_secret
+      value = var.deepseek_api_key
     }
   }
 
@@ -131,7 +141,19 @@ resource "azurerm_container_app" "api" {
       }
       env {
         name  = "LLM_PROVIDER"
-        value = "azure_openai"
+        value = "deepseek"
+      }
+      env {
+        name  = "DEEPSEEK_MODEL_FAST"
+        value = "deepseek-v4-flash"
+      }
+      env {
+        name  = "DEEPSEEK_MODEL_QUALITY"
+        value = "deepseek-v4-flash"
+      }
+      env {
+        name  = "DEEPSEEK_MODEL_REASONING"
+        value = "deepseek-v4-flash"
       }
       env {
         name  = "AZURE_OPENAI_ENDPOINT"
@@ -167,6 +189,14 @@ resource "azurerm_container_app" "api" {
         content {
           name        = "AZURE_OPENAI_API_KEY"
           secret_name = local.azure_openai_api_key_secret
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.has_deepseek_api_key ? [1] : []
+        content {
+          name        = "DEEPSEEK_API_KEY"
+          secret_name = local.deepseek_api_key_secret
         }
       }
 
@@ -319,6 +349,14 @@ resource "azurerm_container_app" "worker" {
   }
 
   dynamic "secret" {
+    for_each = local.has_deepseek_api_key ? [1] : []
+    content {
+      name  = local.deepseek_api_key_secret
+      value = var.deepseek_api_key
+    }
+  }
+
+  dynamic "secret" {
     for_each = local.has_jwt_secret ? [1] : []
     content {
       name  = local.jwt_secret_name
@@ -386,7 +424,19 @@ resource "azurerm_container_app" "worker" {
       }
       env {
         name  = "LLM_PROVIDER"
-        value = "azure_openai"
+        value = "deepseek"
+      }
+      env {
+        name  = "DEEPSEEK_MODEL_FAST"
+        value = "deepseek-v4-flash"
+      }
+      env {
+        name  = "DEEPSEEK_MODEL_QUALITY"
+        value = "deepseek-v4-flash"
+      }
+      env {
+        name  = "DEEPSEEK_MODEL_REASONING"
+        value = "deepseek-v4-flash"
       }
       env {
         name  = "AZURE_OPENAI_ENDPOINT"
@@ -418,6 +468,14 @@ resource "azurerm_container_app" "worker" {
         content {
           name        = "AZURE_OPENAI_API_KEY"
           secret_name = local.azure_openai_api_key_secret
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.has_deepseek_api_key ? [1] : []
+        content {
+          name        = "DEEPSEEK_API_KEY"
+          secret_name = local.deepseek_api_key_secret
         }
       }
 

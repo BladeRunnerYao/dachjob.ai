@@ -20,10 +20,28 @@ def test_resume_prompt_builder_preserves_context_and_confirmed_skills():
     )
 
     assert messages[0]["role"] == "system"
-    assert "DACH-format resume writer" in messages[0]["content"]
+    assert "German/DACH CV writer" in messages[0]["content"]
     assert "Ada Lovelace" in messages[1]["content"]
     assert "Platform Engineer" in messages[1]["content"]
     assert "Python, Kubernetes" in messages[1]["content"]
+
+
+def test_resume_prompt_builder_supports_american_rules():
+    profile = SimpleNamespace(
+        raw_cv_md="## Summary\nBackend engineer",
+        full_name="Ada Lovelace",
+        headline="Senior Backend Engineer",
+    )
+
+    messages = build_llm_prompt(
+        profile,
+        {"title": "Platform Engineer", "company": "Example Inc"},
+        style="american",
+    )
+
+    assert "US resume writer" in messages[0]["content"]
+    assert "Never include a photo" in messages[0]["content"]
+    assert "Requested CV style: american" in messages[1]["content"]
 
 
 def test_resume_html_renderer_includes_profile_job_and_sections():
@@ -44,11 +62,36 @@ def test_resume_html_renderer_includes_profile_job_and_sections():
         profile, {"title": "Platform Engineer", "company": "Example GmbH"}
     )
 
-    assert provenance == {}
+    assert provenance == {"style": "german"}
     assert "<h1>Ada Lovelace</h1>" in html
     assert "Platform Engineer &mdash; Example GmbH" in html
     assert "Qualifikationen &amp; Skills" in html
     assert "<li>Python</li>" in html
+
+
+def test_resume_html_renderer_supports_american_style():
+    profile = SimpleNamespace(
+        full_name="Ada Lovelace",
+        headline="Senior Backend Engineer",
+        location="Boston",
+        timezone="EST",
+        raw_cv_md=(
+            "## Summary\nBuilds reliable platforms.\n"
+            "## Skills\n- Python\n"
+            "## Experience\n- Built APIs\n"
+            "## Education\n- MSc Computer Science"
+        ),
+    )
+
+    html, provenance = render_resume_html(
+        profile, {"title": "Platform Engineer", "company": "Example Inc"}, style="american"
+    )
+
+    assert provenance == {"style": "american"}
+    assert '<html lang="en">' in html
+    assert "Professional Experience" in html
+    assert "Technical Skills" in html
+    assert "Berufserfahrung" not in html
 
 
 def test_resume_artifact_object_keys_are_stable():

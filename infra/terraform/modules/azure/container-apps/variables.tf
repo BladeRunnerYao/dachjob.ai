@@ -118,6 +118,12 @@ variable "azure_openai_model_reasoning" {
   default = "o1-mini"
 }
 
+variable "deepseek_api_key" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
 variable "jwt_secret" {
   type      = string
   default   = ""

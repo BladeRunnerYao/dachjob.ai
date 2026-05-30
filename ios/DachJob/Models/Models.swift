@@ -106,6 +106,34 @@ struct PaginatedLLMRuns: Codable {
     let total: Int
 }
 
+enum ResumeStyle: String, Codable, CaseIterable, Identifiable {
+    case american
+    case german
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .american: return "American CV"
+        case .german: return "German CV"
+        }
+    }
+}
+
+struct ResumeArtifact: Codable, Identifiable {
+    let id: String
+    let jobId: String
+    let htmlObjectKey: String
+    let pdfObjectKey: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case jobId = "job_id"
+        case htmlObjectKey = "html_object_key"
+        case pdfObjectKey = "pdf_object_key"
+    }
+}
+
 struct CandidateProfile: Codable {
     let id: String
     let fullName: String?
@@ -156,6 +184,16 @@ struct AuthResponse: Codable {
         case name
         case tenantId = "tenant_id"
         case passwordNeedsReset = "password_needs_reset"
+    }
+}
+
+struct PasswordResetResponse: Codable {
+    let message: String
+    let resetLink: String?
+
+    enum CodingKeys: String, CodingKey {
+        case message
+        case resetLink = "reset_link"
     }
 }
 

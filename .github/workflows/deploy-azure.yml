@@ -613,6 +613,7 @@ jobs:
               DEEPSEEK_API_KEY=secretref:deepseek-api-key \
               DEEPSEEK_MODEL_FAST=deepseek-v4-flash \
               DEEPSEEK_MODEL_QUALITY=deepseek-v4-flash \
+              DEEPSEEK_MODEL_REASONING=deepseek-v4-flash \
             --output none
 
       - name: Run Azure migrations
