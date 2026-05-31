@@ -266,8 +266,9 @@ const APPLICATION_LABELS: Array<{
 
 // ── Main page ───────────────────────────────────────────────────
 
-export default function JobDetailClient() {
-  const { id } = useParams<{ id: string }>();
+export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
+  const params = useParams<{ id?: string }>();
+  const id = jobId || params.id;
   const [job, setJob] = useState<JobPosting | null>(null);
   const [match, setMatch] = useState<MatchReport | null>(null);
   const [resume, setResume] = useState<ResumeArtifact | null>(null);
@@ -285,6 +286,7 @@ export default function JobDetailClient() {
   const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!id) return;
     Promise.all([
       api.getJob(id),
       api.getLatestMatchReport(id),
@@ -347,6 +349,7 @@ export default function JobDetailClient() {
     };
   }, [resume]);
 
+  if (!id) return <p className="text-sm text-red-500 p-8">Job not found</p>;
   if (loading) return <p className="text-sm text-slate-500 p-8">Loading...</p>;
   if (!job) return <p className="text-sm text-red-500 p-8">Job not found</p>;
 

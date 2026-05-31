@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { JobCard } from '@/components/jobs/job-card';
 import { JobForm } from '@/components/jobs/job-form';
 import { api } from '@/lib/api/client';
 import type { JobPosting } from '@/lib/api/types';
+import JobDetailClient from './[id]/job-detail-client';
 
 type FilterKey = 'all' | 'applied' | 'saved';
 
@@ -14,6 +16,8 @@ type JobCounts = Record<FilterKey, number>;
 const PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
 
 export default function JobsPage() {
+  const pathname = usePathname();
+  const routedJobId = pathname.match(/^\/jobs\/([^/?#]+)/)?.[1];
   const [jobs, setJobs] = useState<JobPosting[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -26,6 +30,7 @@ export default function JobsPage() {
   const [importError, setImportError] = useState<string | null>(null);
 
   const fetchJobs = useCallback(async () => {
+    if (routedJobId) return;
     setLoading(true);
     const status = filter === 'all' ? undefined : filter;
     const [result, allResult, appliedResult, savedResult] = await Promise.all([
@@ -38,9 +43,10 @@ export default function JobsPage() {
     setTotal(result.total);
     setCounts({ all: allResult.total, applied: appliedResult.total, saved: savedResult.total });
     setLoading(false);
-  }, [filter, page, pageSize]);
+  }, [filter, page, pageSize, routedJobId]);
 
   useEffect(() => {
+    if (routedJobId) return;
     let cancelled = false;
 
     async function loadJobs() {
@@ -64,7 +70,11 @@ export default function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [filter, page, pageSize]);
+  }, [filter, page, pageSize, routedJobId]);
+
+  if (routedJobId) {
+    return <JobDetailClient jobId={decodeURIComponent(routedJobId)} />;
+  }
 
   const handleSave = async (urlText: string) => {
     setImporting(true);

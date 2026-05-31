@@ -118,7 +118,7 @@ profilesRoutes.post("/import-url", async (c) => {
   const rawText = stripHtml(htmlText).slice(0, 30000);
 
   // Use LLM to convert to CV markdown
-  const cvMd = await convertToCvMarkdown(c.env, rawText, body.url);
+  const cvMd = await convertToCvMarkdown(c.env, userId, rawText, body.url, "profile_import_url");
 
   const name = extractNameFromMd(cvMd) || "Unknown";
   const headline = extractHeadlineFromMd(cvMd) || "Unknown";
@@ -173,7 +173,7 @@ profilesRoutes.post("/import-pdf", async (c) => {
   const arrayBuffer = await file.arrayBuffer();
   const rawText = extractTextFromPdfBasic(new Uint8Array(arrayBuffer));
 
-  const cvMd = await convertToCvMarkdown(c.env, rawText, file.name);
+  const cvMd = await convertToCvMarkdown(c.env, userId, rawText, file.name, "profile_import_pdf");
 
   const name = extractNameFromMd(cvMd) || "Unknown";
   const headline = extractHeadlineFromMd(cvMd) || "Unknown";
@@ -260,8 +260,16 @@ function extractTextFromPdfBasic(bytes: Uint8Array): string {
   return textChunks.join(" ").slice(0, 30000) || "Unable to extract text from PDF";
 }
 
-async function convertToCvMarkdown(env: Env, rawText: string, sourceLabel: string): Promise<string> {
+async function convertToCvMarkdown(
+  env: Env,
+  userId: string,
+  rawText: string,
+  sourceLabel: string,
+  task: string
+): Promise<string> {
+  const startTime = Date.now();
   if (!env.LLM_API_KEY) {
+    await logLLMRun(env, userId, task, startTime, "error", "LLM_API_KEY not configured");
     throw new AppError("LLM_NOT_CONFIGURED", "LLM_API_KEY not configured", 500);
   }
 
@@ -291,29 +299,64 @@ For each degree: **Degree — Institution (Year)**
 Preserve ALL original information. Do NOT invent or fabricate any details.
 Output ONLY the Markdown content — no additional commentary, no JSON wrapper, no code fences.`;
 
-  const response = await fetch("https://api.deepseek.com/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.LLM_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "deepseek-chat",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `Raw text to extract from (${sourceLabel}):\n\n${rawText}` },
-      ],
-      temperature: 0.3,
-    }),
-  });
+  try {
+    const response = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.LLM_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Raw text to extract from (${sourceLabel}):\n\n${rawText}` },
+        ],
+        temperature: 0.3,
+      }),
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new AppError("LLM_ERROR", `LLM API error: ${response.status} - ${errorText}`, 500);
+    if (!response.ok) {
+      const errorText = await response.text();
+      const message = `LLM API error: ${response.status} - ${errorText}`;
+      await logLLMRun(env, userId, task, startTime, "error", message);
+      throw new AppError("LLM_ERROR", message, 500);
+    }
+
+    const data = (await response.json()) as {
+      choices: { message: { content: string } }[];
+    };
+    await logLLMRun(env, userId, task, startTime, "success");
+    return data.choices[0].message.content.trim();
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    await logLLMRun(env, userId, task, startTime, "error", (err as Error).message);
+    throw err;
   }
+}
 
-  const data = (await response.json()) as {
-    choices: { message: { content: string } }[];
-  };
-  return data.choices[0].message.content.trim();
+async function logLLMRun(
+  env: Env,
+  userId: string,
+  task: string,
+  startTime: number,
+  status: "success" | "error",
+  errorMessage?: string
+) {
+  await env.DB.prepare(
+    `INSERT INTO llm_runs (id, user_id, provider, model, task, latency_ms, status, error_message, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(
+      generateId(),
+      userId,
+      "deepseek",
+      "deepseek-chat",
+      task,
+      Date.now() - startTime,
+      status,
+      errorMessage || null,
+      new Date().toISOString()
+    )
+    .run();
 }
