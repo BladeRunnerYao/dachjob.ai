@@ -3,6 +3,7 @@ import { Env } from "../types";
 import { authMiddleware } from "../middleware/auth";
 import { generateId } from "../db/utils";
 import { AppError } from "../middleware/error-handler";
+import { callDeepSeekChat, logLLMRun } from "../llm";
 
 export const jobsRoutes = new Hono<{ Bindings: Env }>();
 
@@ -96,6 +97,8 @@ jobsRoutes.post("/", async (c) => {
       now
     )
     .run();
+
+  await prepareJobAfterCreate(c.env, userId, id);
 
   const job = await c.env.DB.prepare("SELECT * FROM jobs WHERE id = ?").bind(id).first();
   return c.json(await formatJobResponse(c.env, userId, job!), 201);
@@ -278,43 +281,7 @@ jobsRoutes.post("/:id/parse", async (c) => {
     .first<{ id: string; raw_description: string }>();
   if (!job) throw new AppError("NOT_FOUND", "Job not found", 404);
 
-  if (!c.env.LLM_API_KEY) {
-    throw new AppError("LLM_NOT_CONFIGURED", "LLM_API_KEY not configured", 500);
-  }
-
-  const parsedJson = await parseJobDescription(c.env, job.raw_description);
-  const now = new Date().toISOString();
-  const parsedTitle = readParsedString(parsedJson, "title");
-  const parsedCompany = readParsedString(parsedJson, "company");
-  const parsedLocation = readParsedString(parsedJson, "location");
-  const parsedEmploymentType = readParsedString(parsedJson, "employment_type");
-  const parsedWorkplace = readParsedString(parsedJson, "workplace");
-  const parsedSalary = readParsedString(parsedJson, "salary_range") || readParsedString(parsedJson, "salary_text");
-
-  await c.env.DB.prepare(
-    `UPDATE jobs
-     SET parsed_json = ?,
-         title = COALESCE(NULLIF(?, ''), title),
-         company = COALESCE(NULLIF(?, ''), company),
-         location = COALESCE(NULLIF(?, ''), location),
-         employment_type = COALESCE(NULLIF(?, ''), employment_type),
-         workplace = COALESCE(NULLIF(?, ''), workplace),
-         salary_text = COALESCE(NULLIF(?, ''), salary_text),
-         updated_at = ?
-     WHERE id = ?`
-  )
-    .bind(
-      JSON.stringify(parsedJson),
-      parsedTitle || "",
-      parsedCompany || "",
-      parsedLocation || "",
-      parsedEmploymentType || "",
-      parsedWorkplace || "",
-      parsedSalary || "",
-      now,
-      jobId
-    )
-    .run();
+  const parsedJson = await parseAndStoreJobDetails(c.env, userId, jobId, job.raw_description);
 
   return c.json({ job_id: jobId, status: "parsed", parsed_json: parsedJson });
 });
@@ -519,23 +486,11 @@ Respond only as JSON:
 
   let parsed: Record<string, unknown>;
   try {
-    if (!env.LLM_API_KEY) throw new Error("LLM_API_KEY not configured");
-    const response = await fetch("https://api.deepseek.com/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.LLM_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-      }),
+    const content = await callDeepSeekChat(env, [{ role: "user", content: prompt }], {
+      temperature: 0.2,
+      json: true,
     });
-    if (!response.ok) throw new Error(`LLM API error: ${response.status}`);
-    const data = (await response.json()) as { choices: { message: { content: string } }[] };
-    parsed = JSON.parse(data.choices[0].message.content) as Record<string, unknown>;
+    parsed = JSON.parse(content) as Record<string, unknown>;
     await logLLMRun(env, userId, "job_match", startTime, "success");
   } catch (err) {
     parsed = {
@@ -610,22 +565,7 @@ Output only complete HTML.`;
 
   let html: string;
   try {
-    if (!env.LLM_API_KEY) throw new Error("LLM_API_KEY not configured");
-    const response = await fetch("https://api.deepseek.com/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.LLM_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.4,
-      }),
-    });
-    if (!response.ok) throw new Error(`LLM API error: ${response.status}`);
-    const data = (await response.json()) as { choices: { message: { content: string } }[] };
-    html = data.choices[0].message.content;
+    html = await callDeepSeekChat(env, [{ role: "user", content: prompt }], { temperature: 0.4 });
     await logLLMRun(env, userId, "resume_generate", startTime, "success");
   } catch (err) {
     html = fallbackResumeHtml(profile.name, profile.raw_cv_md);
@@ -670,32 +610,6 @@ function escapeHtml(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-async function logLLMRun(
-  env: Env,
-  userId: string,
-  task: string,
-  startTime: number,
-  status: "success" | "error",
-  errorMessage?: string
-) {
-  await env.DB.prepare(
-    `INSERT INTO llm_runs (id, user_id, provider, model, task, latency_ms, status, error_message, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(
-      generateId(),
-      userId,
-      "deepseek",
-      "deepseek-chat",
-      task,
-      Date.now() - startTime,
-      status,
-      errorMessage || null,
-      new Date().toISOString()
-    )
-    .run();
 }
 
 async function importSingleJobUrl(env: Env, userId: string, url: string): Promise<Record<string, unknown>> {
@@ -747,6 +661,8 @@ async function importSingleJobUrl(env: Env, userId: string, url: string): Promis
     .bind(id, userId, title, company, "", url, rawText, "url_import", now, now)
     .run();
 
+  await prepareJobAfterCreate(env, userId, id);
+
   const job = await env.DB.prepare("SELECT * FROM jobs WHERE id = ?").bind(id).first();
   return formatJobResponse(env, userId, job!);
 }
@@ -764,16 +680,44 @@ function stripHtml(html: string): string {
   return text.trim();
 }
 
-async function parseJobDescription(env: Env, rawDescription: string): Promise<Record<string, unknown>> {
-  const response = await fetch("https://api.deepseek.com/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.LLM_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "deepseek-chat",
-      messages: [
+async function prepareJobAfterCreate(env: Env, userId: string, jobId: string) {
+  const job = await env.DB.prepare(
+    "SELECT id, title, company, raw_description FROM jobs WHERE id = ? AND user_id = ?"
+  )
+    .bind(jobId, userId)
+    .first<{ id: string; title: string; company: string; raw_description: string }>();
+  if (!job) return;
+
+  try {
+    await parseAndStoreJobDetails(env, userId, job.id, job.raw_description);
+  } catch {
+    // Keep the add/import flow usable even if the model provider is temporarily unavailable.
+  }
+
+  const refreshed = await env.DB.prepare(
+    "SELECT id, title, company, raw_description FROM jobs WHERE id = ? AND user_id = ?"
+  )
+    .bind(jobId, userId)
+    .first<{ id: string; title: string; company: string; raw_description: string }>();
+  const profile = await getLatestProfile(env, userId);
+  if (!refreshed || !profile) return;
+
+  await computeAndStoreMatch(env, userId, refreshed, profile);
+}
+
+async function parseAndStoreJobDetails(
+  env: Env,
+  userId: string,
+  jobId: string,
+  rawDescription: string
+): Promise<Record<string, unknown> | null> {
+  if (!rawDescription.trim()) return null;
+
+  const startTime = Date.now();
+  try {
+    const content = await callDeepSeekChat(
+      env,
+      [
         {
           role: "system",
           content: `Extract structured job information from the description. Return JSON with:
@@ -795,15 +739,47 @@ async function parseJobDescription(env: Env, rawDescription: string): Promise<Re
         },
         { role: "user", content: rawDescription.slice(0, 8000) },
       ],
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-    }),
-  });
+      { temperature: 0.2, json: true }
+    );
+    const parsedJson = JSON.parse(content) as Record<string, unknown>;
+    const now = new Date().toISOString();
+    const parsedTitle = readParsedString(parsedJson, "title");
+    const parsedCompany = readParsedString(parsedJson, "company");
+    const parsedLocation = readParsedString(parsedJson, "location");
+    const parsedEmploymentType = readParsedString(parsedJson, "employment_type");
+    const parsedWorkplace = readParsedString(parsedJson, "workplace");
+    const parsedSalary = readParsedString(parsedJson, "salary_range") || readParsedString(parsedJson, "salary_text");
 
-  if (!response.ok) {
-    throw new AppError("LLM_ERROR", `LLM API error: ${response.status}`, 500);
+    await env.DB.prepare(
+      `UPDATE jobs
+       SET parsed_json = ?,
+           title = COALESCE(NULLIF(?, ''), title),
+           company = COALESCE(NULLIF(?, ''), company),
+           location = COALESCE(NULLIF(?, ''), location),
+           employment_type = COALESCE(NULLIF(?, ''), employment_type),
+           workplace = COALESCE(NULLIF(?, ''), workplace),
+           salary_text = COALESCE(NULLIF(?, ''), salary_text),
+           updated_at = ?
+       WHERE id = ? AND user_id = ?`
+    )
+      .bind(
+        JSON.stringify(parsedJson),
+        parsedTitle || "",
+        parsedCompany || "",
+        parsedLocation || "",
+        parsedEmploymentType || "",
+        parsedWorkplace || "",
+        parsedSalary || "",
+        now,
+        jobId,
+        userId
+      )
+      .run();
+
+    await logLLMRun(env, userId, "job_parse", startTime, "success");
+    return parsedJson;
+  } catch (err) {
+    await logLLMRun(env, userId, "job_parse", startTime, "error", (err as Error).message);
+    throw new AppError("LLM_ERROR", (err as Error).message, 500);
   }
-
-  const data = (await response.json()) as { choices: { message: { content: string } }[] };
-  return JSON.parse(data.choices[0].message.content);
 }

@@ -14,7 +14,6 @@ import {
   Clock,
   Plus,
   TrendingUp,
-  Sparkles,
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -275,7 +274,6 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
   const [htmlBlobUrl, setHtmlBlobUrl] = useState<string | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [parsing, setParsing] = useState(false);
   const [matching, setMatching] = useState(false);
   const [generatingResume, setGeneratingResume] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
@@ -376,16 +374,6 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
   const matchPercent = toPercent(match?.overall_score ?? job.score);
 
   // ── Actions ────────────────────────────────────────────────────
-  const runParse = async () => {
-    setParsing(true);
-    try {
-      const updated = await api.parseJob(id);
-      setJob(updated);
-    } finally {
-      setParsing(false);
-    }
-  };
-
   const runMatch = async () => {
     setMatching(true);
     try {
@@ -534,14 +522,9 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-6">
                 <TrendingUp className="h-8 w-8 text-slate-300" />
-                <p className="text-sm text-slate-500 text-center">No match score yet</p>
-                <button
-                  onClick={runMatch}
-                  disabled={matching}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50 w-full"
-                >
-                  {matching ? 'Analyzing...' : 'Run Match'}
-                </button>
+                <p className="text-sm text-slate-500 text-center">
+                  Match score will appear automatically after the job is added.
+                </p>
               </CardContent>
             </Card>
           )}
@@ -609,26 +592,6 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
           {/* Parse / CV generation card */}
           <Card>
             <CardContent className="py-4 space-y-3">
-              {!job.parsed_json && (
-                <button
-                  onClick={runParse}
-                  disabled={parsing}
-                  className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {parsing ? 'Parsing...' : 'Parse Job Details'}
-                </button>
-              )}
-              {job.parsed_json && !job.parsed_json.responsibilities && (
-                <button
-                  onClick={runParse}
-                  disabled={parsing}
-                  className="w-full rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {parsing ? 'Re-parsing...' : 'Re-parse for sections'}
-                </button>
-              )}
               {!generatingResume && (
                 <div className="grid grid-cols-1 gap-2">
                   <button
@@ -898,7 +861,7 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
               {/* No qualifications found */}
               {!hasParsedSkills && !hasStructuredSections && qualSections.length === 0 && (
                 <p className="text-sm text-slate-400 text-center py-4">
-                  No qualification details extracted yet. Click &quot;Parse Job Details&quot; to extract requirements.
+                  No qualification details extracted yet.
                 </p>
               )}
             </CardContent>

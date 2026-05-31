@@ -3,6 +3,8 @@ import { Env } from "../types";
 import { authMiddleware } from "../middleware/auth";
 import { generateId } from "../db/utils";
 import { AppError } from "../middleware/error-handler";
+import { callDeepSeekChat, logLLMRun } from "../llm";
+import { extractText, getDocumentProxy } from "unpdf";
 
 export const profilesRoutes = new Hono<{ Bindings: Env }>();
 
@@ -169,9 +171,8 @@ profilesRoutes.post("/import-pdf", async (c) => {
     throw new AppError("VALIDATION_ERROR", "Only PDF files are supported", 400);
   }
 
-  // Read the file as text (basic extraction — full PDF parsing not available in Workers)
   const arrayBuffer = await file.arrayBuffer();
-  const rawText = extractTextFromPdfBasic(new Uint8Array(arrayBuffer));
+  const rawText = await extractTextFromPdf(new Uint8Array(arrayBuffer));
 
   const cvMd = await convertToCvMarkdown(c.env, userId, rawText, file.name, "profile_import_pdf");
 
@@ -237,8 +238,28 @@ function extractHeadlineFromMd(md: string): string | null {
   return null;
 }
 
+async function extractTextFromPdf(bytes: Uint8Array): Promise<string> {
+  let text = "";
+  try {
+    const pdf = await getDocumentProxy(bytes);
+    const result = await extractText(pdf, { mergePages: true });
+    text = result.text;
+  } catch {
+    text = extractTextFromPdfBasic(bytes);
+  }
+
+  text = normalizeExtractedText(text).slice(0, 50000);
+  if (text.length < 100 || !/[a-zA-Z][a-zA-Z\s,.-]{40,}/.test(text)) {
+    throw new AppError(
+      "PDF_TEXT_EXTRACTION_FAILED",
+      "Could not extract enough readable text from this PDF. Please upload a text-based PDF or paste the CV markdown.",
+      400
+    );
+  }
+  return text;
+}
+
 function extractTextFromPdfBasic(bytes: Uint8Array): string {
-  // Basic text extraction from PDF binary — extract ASCII printable text streams
   const decoder = new TextDecoder("latin1");
   const raw = decoder.decode(bytes);
   const textChunks: string[] = [];
@@ -257,7 +278,16 @@ function extractTextFromPdfBasic(bytes: Uint8Array): string {
       }
     }
   }
-  return textChunks.join(" ").slice(0, 30000) || "Unable to extract text from PDF";
+  return textChunks.join(" ");
+}
+
+function normalizeExtractedText(text: string): string {
+  return text
+    .replace(/\u0000/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
 }
 
 async function convertToCvMarkdown(
@@ -297,66 +327,22 @@ For each degree: **Degree — Institution (Year)**
 ## Languages (if any)
 
 Preserve ALL original information. Do NOT invent or fabricate any details.
+If a field is not present in the raw text, omit it instead of guessing.
+Use only the supplied raw text as source material.
 Output ONLY the Markdown content — no additional commentary, no JSON wrapper, no code fences.`;
 
   try {
-    const response = await fetch("https://api.deepseek.com/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.LLM_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Raw text to extract from (${sourceLabel}):\n\n${rawText}` },
-        ],
-        temperature: 0.3,
-      }),
+    const content = await callDeepSeekChat(env, [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: `Raw text to extract from (${sourceLabel}):\n\n${rawText}` },
+    ], {
+      temperature: 0.1,
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      const message = `LLM API error: ${response.status} - ${errorText}`;
-      await logLLMRun(env, userId, task, startTime, "error", message);
-      throw new AppError("LLM_ERROR", message, 500);
-    }
-
-    const data = (await response.json()) as {
-      choices: { message: { content: string } }[];
-    };
     await logLLMRun(env, userId, task, startTime, "success");
-    return data.choices[0].message.content.trim();
+    return content.trim();
   } catch (err) {
     if (err instanceof AppError) throw err;
     await logLLMRun(env, userId, task, startTime, "error", (err as Error).message);
     throw err;
   }
-}
-
-async function logLLMRun(
-  env: Env,
-  userId: string,
-  task: string,
-  startTime: number,
-  status: "success" | "error",
-  errorMessage?: string
-) {
-  await env.DB.prepare(
-    `INSERT INTO llm_runs (id, user_id, provider, model, task, latency_ms, status, error_message, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(
-      generateId(),
-      userId,
-      "deepseek",
-      "deepseek-chat",
-      task,
-      Date.now() - startTime,
-      status,
-      errorMessage || null,
-      new Date().toISOString()
-    )
-    .run();
 }
