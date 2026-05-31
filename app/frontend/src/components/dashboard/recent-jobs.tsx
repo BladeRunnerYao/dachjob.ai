@@ -19,6 +19,9 @@ function scoreBadge(percent: number) {
 
 function statusBadge(status: string) {
   if (status === 'applied') return 'green';
+  if (status === 'interview') return 'blue';
+  if (status === 'offer') return 'green';
+  if (status === 'rejected') return 'red';
   if (status === 'saved') return 'yellow';
   return undefined;
 }
@@ -58,8 +61,11 @@ export function RecentJobs({ jobs }: RecentJobsProps) {
                   )}
                 </td>
                 <td className="px-4 py-2.5">
-                  {statusBadge(job.status) ? (
-                    <Badge variant={statusBadge(job.status)!}>{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</Badge>
+                  {job.saved ? <Badge variant="yellow" className="mr-1">Saved</Badge> : null}
+                  {statusBadge(job.application_status || job.status) ? (
+                    <Badge variant={statusBadge(job.application_status || job.status)!}>
+                      {(job.application_status || job.status).charAt(0).toUpperCase() + (job.application_status || job.status).slice(1)}
+                    </Badge>
                   ) : (
                     <span className="text-xs text-slate-400">New</span>
                   )}

@@ -15,7 +15,7 @@ dachjob.ai imports job descriptions, extracts structured requirements, compares 
 - Application tracker with generated resume links
 - Background task execution for long-running imports, matching, and resume workflows
 - LLM observability through persisted provider, model, latency, status, and error metadata
-- Multi-cloud deployment paths for Google Cloud and Azure, with AWS-oriented abstractions in the application layer
+- Multi-cloud deployment paths for Google Cloud, Azure, and AWS
 
 ## Architecture
 
@@ -44,7 +44,7 @@ LLM gateway: Vertex AI, Gemini API, Azure OpenAI, DeepSeek, OpenRouter
 | Artifact storage | GCS, Azure Blob Storage, or S3-compatible storage |
 | Resume export | HTML rendering with WeasyPrint PDF generation |
 | LLM access | Provider-ordered gateway with task-specific model tiers |
-| Deployment | Docker, Cloud Run/GKE, Azure Container Apps, Terraform modules |
+| Deployment | Docker, Cloud Run/GKE, Azure Container Apps, AWS ECS Fargate, Terraform modules |
 
 ## Repository Layout
 
@@ -55,7 +55,7 @@ docs/                 Requirements, plans, and deployment notes
 infra/deploy/         Cloud deployment and migration scripts
 infra/docker/         Docker Compose runtime
 infra/k8s/            Worker manifests
-infra/terraform/      GCP and Azure infrastructure modules
+infra/terraform/      GCP, Azure, and AWS infrastructure modules and live roots
 scripts/              Developer convenience scripts
 ```
 
@@ -109,26 +109,15 @@ Provider-specific variables include `VERTEX_AI_PROJECT_ID`, `GEMINI_API_KEY`, `A
 
 ## Multi-Cloud Architecture
 
-Every layer of the stack has been designed to run on either Google Cloud or Azure, with the same application code and interchangeable backends.
-
-| Concern | Google Cloud | Azure |
-| --- | --- | --- |
-| **API compute** | Cloud Run (serverless) | Azure Container Apps |
-| **Frontend compute** | Cloud Run (serverless) | Azure Container Apps |
-| **Worker compute** | GKE Autopilot (Kubernetes) | Azure Container Apps |
-| **Database** | Cloud SQL — PostgreSQL 16 + `pgvector` | PostgreSQL Flexible Server + `vector` extension |
-| **Cache & broker** | Memorystore (Redis 7.0) | Azure Cache for Redis |
-| **Object storage** | Cloud Storage (GCS) — S3-compatible | Azure Blob Storage |
-| **Container registry** | Artifact Registry (Docker) | Azure Container Registry |
-| **Secrets** | Secret Manager | Key Vault |
-| **LLM inference** | Vertex AI · Gemini API | Azure OpenAI Service |
-| **Monitoring & logging** | Cloud Monitoring · Cloud Logging | Application Insights · Log Analytics |
-| **Networking** | VPC · Serverless VPC Connector | Virtual Network · Private DNS Zones |
-| **IAM / workload identity** | Service Accounts · Workload Identity Federation | Managed Identity · Azure AD OIDC |
-| **Database migrations** | Cloud Run Jobs | Azure Container Apps Jobs |
-| **Terraform state** | Cloud Storage bucket | Azure Storage container |
-
 The application layer uses the same abstractions regardless of provider: `STORAGE_PROVIDER` selects between GCS, Azure Blob, or S3-compatible storage, and the LLM gateway transparently fails over across Vertex AI, Gemini, Azure OpenAI, DeepSeek, and OpenRouter.
+
+| Cloud | Runtime | Database | Cache | Storage | Terraform root used by deploy workflow | Deploy workflow | Environment implemented |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| GCP | Cloud Run API/frontend, GKE worker | Cloud SQL PostgreSQL 16 | Memorystore | GCS | `infra/terraform/live/gcp/dev` | `deploy-gcp.yml` | dev |
+| Azure | Container Apps API/frontend/worker | PostgreSQL Flexible Server | Azure Cache for Redis | Blob Storage | `infra/terraform/live/azure/dev` | `deploy-azure.yml` | dev |
+| AWS | ECS Fargate API/frontend/worker | RDS PostgreSQL | ElastiCache | S3 | `infra/terraform/live/aws/dev` | `deploy-aws.yml` | dev |
+
+Terraform roots also exist under `infra/terraform/live/{gcp,azure,aws}/{staging,prod}`. They are configuration roots, but the current deploy workflows still point at the dev roots and staging/prod require their own backend state, GitHub Environments, variables, and secrets before they are production-ready.
 
 ## Cloud Deployment
 
@@ -169,6 +158,19 @@ infra/deploy/scripts/deploy-azure.sh all <api-image> <frontend-image> <worker-im
 infra/deploy/scripts/run-migrations-azure.sh <api-image>
 ```
 
+### AWS
+
+The AWS path deploys:
+
+- API, frontend, and worker on ECS Fargate behind an ALB/CloudFront
+- PostgreSQL on RDS
+- Redis on ElastiCache
+- Resume artifacts in S3
+- Images in ECR
+- Secrets through AWS Secrets Manager
+
+Primary Terraform root: `infra/terraform/live/aws/dev`.
+
 ## Development
 
 Backend:
@@ -187,6 +189,15 @@ npm ci
 npm run lint
 npm run build
 ```
+
+Terraform:
+
+```bash
+terraform -chdir=infra/terraform/live/gcp/dev init -backend=false
+terraform -chdir=infra/terraform/live/gcp/dev validate
+```
+
+Use the corresponding Azure or AWS dev root for those clouds. Do not commit real `.tfvars`, state, or plan files.
 
 Live provider smoke tests are available when credentials are configured:
 

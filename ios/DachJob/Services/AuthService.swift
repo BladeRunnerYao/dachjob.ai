@@ -55,6 +55,19 @@ class AuthService {
         isAuthenticated = false
     }
 
+    func refreshAccount() async {
+        guard isAuthenticated else { return }
+        do {
+            let account = try await api.getCurrentUser()
+            accountEmail = account.email
+            accountName = account.name
+            UserDefaults.standard.set(account.email, forKey: emailKey)
+            UserDefaults.standard.set(account.name, forKey: nameKey)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func saveAccount(_ response: AuthResponse) {
         accountEmail = response.email
         accountName = response.name

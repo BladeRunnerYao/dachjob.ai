@@ -25,6 +25,9 @@ struct MainTabView: View {
                     Label("Settings", systemImage: "gearshape")
                 }
         }
+        .task {
+            await authService.refreshAccount()
+        }
     }
 }
 
@@ -35,8 +38,8 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("Account") {
-                    LabeledContent("Email", value: authService.accountEmail ?? "Unknown")
-                    LabeledContent("Username", value: authService.accountName ?? "Unknown")
+                    LabeledContent("Email", value: authService.accountEmail ?? "Loading...")
+                    LabeledContent("Username", value: authService.accountName ?? "Loading...")
                 }
 
                 Section("Server") {
@@ -52,6 +55,9 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .task {
+                await authService.refreshAccount()
+            }
         }
     }
 }

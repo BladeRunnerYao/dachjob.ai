@@ -1,14 +1,33 @@
 import { isBuildTime, isProduction, request } from './base-client';
 import { checkTaskResult, isBackgroundTaskResponse, pollTask } from './tasks';
 import { getMockJobs } from './mocks';
-import type { BackgroundTask, JobImportResponse, JobPosting, JobStatus, PaginatedJobs } from './types';
+import type {
+  BackgroundTask,
+  JobFilterStatus,
+  JobImportResponse,
+  JobPosting,
+  JobStatus,
+  PaginatedJobs,
+} from './types';
 
 /** Filter out jobs whose title contains "smoke test" (case-insensitive). */
 function filterSmokeTestJobs(jobs: JobPosting[]): JobPosting[] {
   return jobs.filter((j) => !/smoke\s*test/i.test(j.title ?? ''));
 }
 
-function buildJobsQuery(limit: number, offset: number, status?: JobStatus): string {
+function matchesStatusFilter(job: JobPosting, status?: JobFilterStatus): boolean {
+  if (!status) return true;
+  if (status === 'saved') return Boolean(job.saved) || job.status === 'saved';
+  if (status === 'applied') {
+    return ['applied', 'interview', 'rejected', 'offer'].includes(
+      job.application_status || job.status
+    );
+  }
+  if (status === 'new') return !job.application_status && job.status !== 'applied';
+  return (job.application_status || job.status) === status;
+}
+
+function buildJobsQuery(limit: number, offset: number, status?: JobFilterStatus): string {
   const q = new URLSearchParams();
   q.set('limit', String(limit));
   q.set('offset', String(offset));
@@ -16,7 +35,7 @@ function buildJobsQuery(limit: number, offset: number, status?: JobStatus): stri
   return q.toString();
 }
 
-export async function getJobs(limit?: number, offset?: number, status?: JobStatus): Promise<JobPosting[]> {
+export async function getJobs(limit?: number, offset?: number, status?: JobFilterStatus): Promise<JobPosting[]> {
   try {
     const query = buildJobsQuery(limit ?? 1000, offset ?? 0, status);
     const result = await request<PaginatedJobs>(`/api/jobs?${query}`);
@@ -24,11 +43,11 @@ export async function getJobs(limit?: number, offset?: number, status?: JobStatu
   } catch {
     if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
     const jobs = filterSmokeTestJobs(getMockJobs());
-    return status ? jobs.filter((job) => job.status === status) : jobs;
+    return jobs.filter((job) => matchesStatusFilter(job, status));
   }
 }
 
-export async function getJobsPaginated(limit: number, offset: number, status?: JobStatus): Promise<PaginatedJobs> {
+export async function getJobsPaginated(limit: number, offset: number, status?: JobFilterStatus): Promise<PaginatedJobs> {
   try {
     const query = buildJobsQuery(limit, offset, status);
     const result = await request<PaginatedJobs>(`/api/jobs?${query}`);
@@ -37,7 +56,7 @@ export async function getJobsPaginated(limit: number, offset: number, status?: J
   } catch {
     if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
     const allItems = filterSmokeTestJobs(getMockJobs());
-    const items = status ? allItems.filter((job) => job.status === status) : allItems;
+    const items = allItems.filter((job) => matchesStatusFilter(job, status));
     return { items, total: items.length, limit, offset };
   }
 }
@@ -66,10 +85,14 @@ export function createJob(rawJd: string): Promise<JobPosting> {
   });
 }
 
-export function updateJobStatus(jobId: string, status: JobStatus): Promise<JobPosting> {
+export function updateJobStatus(
+  jobId: string,
+  status?: JobStatus,
+  saved?: boolean
+): Promise<JobPosting> {
   return request<JobPosting>(`/api/jobs/${jobId}/status`, {
     method: 'PATCH',
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, saved }),
   });
 }
 

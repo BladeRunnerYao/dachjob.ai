@@ -90,9 +90,12 @@ struct JobDetailView: View {
                 }
             }
 
-            HStack(spacing: 10) {
-                statusButton(label: "Applied", targetStatus: "applied", currentStatus: job.status)
-                statusButton(label: "Saved", targetStatus: "saved", currentStatus: job.status)
+            FlowLayout(spacing: 8) {
+                savedButton(isActive: job.isSaved)
+                statusButton(label: "Applied", targetStatus: "applied", currentStatus: job.displayApplicationStatus)
+                statusButton(label: "Interview", targetStatus: "interview", currentStatus: job.displayApplicationStatus)
+                statusButton(label: "Rejected", targetStatus: "rejected", currentStatus: job.displayApplicationStatus)
+                statusButton(label: "Offer", targetStatus: "offer", currentStatus: job.displayApplicationStatus)
             }
 
             if let url = job.url, let link = URL(string: url) {
@@ -337,7 +340,7 @@ struct JobDetailView: View {
     @ViewBuilder
     private func statusButton(label: String, targetStatus: String, currentStatus: String?) -> some View {
         let isActive = currentStatus == targetStatus
-        let activeColor: Color = targetStatus == "applied" ? .green : .yellow
+        let activeColor = statusColor(targetStatus)
         let inactiveColor: Color = .blue
         Button {
             Task {
@@ -359,6 +362,39 @@ struct JobDetailView: View {
                 .clipShape(.rect(cornerRadius: 8))
         }
         .disabled(updatingStatus)
+    }
+
+    @ViewBuilder
+    private func savedButton(isActive: Bool) -> some View {
+        Button {
+            Task {
+                updatingStatus = true
+                if let updated = try? await api.updateJobStatus(id: jobId, saved: !isActive) {
+                    job = updated
+                }
+                updatingStatus = false
+            }
+        } label: {
+            Text("Saved")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(isActive ? Color.orange : Color.orange.opacity(0.12))
+                .foregroundColor(isActive ? .white : .orange)
+                .clipShape(.rect(cornerRadius: 8))
+        }
+        .disabled(updatingStatus)
+    }
+
+    private func statusColor(_ status: String) -> Color {
+        switch status {
+        case "applied": return .green
+        case "interview": return .blue
+        case "rejected": return .red
+        case "offer": return .purple
+        default: return .gray
+        }
     }
 }
 

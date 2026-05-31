@@ -16,6 +16,7 @@ Instructions for AI coding assistants working on this project.
 - Use `git worktree` for changes — create a feature branch from main in a separate worktree, make changes there, then PR back to main.
 - The platform deploys to Google Cloud, Azure, and AWS. Changes to CI workflows, Terraform, or deployment scripts may affect all three clouds.
 - Azure deployments sometimes experience transient OIDC federation failures (`No subscriptions found` during `az login`). The deploy workflow already includes retry logic for this.
+- Deploy workflows currently use the dev Terraform roots even though workflow inputs expose `staging` and `prod`. Treat staging/prod as requiring separate backend state, GitHub Environments, variables, and secrets before production use.
 
 ## Cloud Architectures
 
@@ -32,9 +33,19 @@ Instructions for AI coding assistants working on this project.
 | CI Auth | WIF | Azure AD OIDC | IAM OIDC |
 | Terraform State | GCS bucket | Azure Storage blob | S3 bucket + DynamoDB lock |
 
+## Environment Model
+
+| Cloud | Terraform root used by deploy workflow | Deploy workflow | Implemented environment |
+|---|---|---|---|
+| GCP | `infra/terraform/live/gcp/dev/` | `deploy-gcp.yml` | dev |
+| Azure | `infra/terraform/live/azure/dev/` | `deploy-azure.yml` | dev |
+| AWS | `infra/terraform/live/aws/dev/` | `deploy-aws.yml` | dev |
+
+Terraform roots for `staging` and `prod` exist under each cloud in `infra/terraform/live/`, but they are not fully wired to dedicated CI variables/secrets in the current workflows.
+
 ## AWS Details
 
-Full reference: `docs/aws-setup.md`
+AWS operational references live here and in `infra/terraform/README.md`.
 
 **Authentication** — use the `dachjob-admin` IAM profile (AdministratorAccess):
 ```bash

@@ -5,32 +5,33 @@ import { StatsCards } from './stats-cards';
 import { RecentJobs } from './recent-jobs';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { api } from '@/lib/api/client';
-import type { JobPosting, Application, LLMRun } from '@/lib/api/types';
+import type { JobPosting, LLMRun } from '@/lib/api/types';
+import Link from 'next/link';
 
 export function DashboardContent() {
   const [jobs, setJobs] = useState<JobPosting[]>([]);
   const [totalJobs, setTotalJobs] = useState(0);
   const [appliedCount, setAppliedCount] = useState(0);
   const [savedCount, setSavedCount] = useState(0);
-  const [apps, setApps] = useState<Application[]>([]);
+  const [recentApplied, setRecentApplied] = useState<JobPosting[]>([]);
   const [runs, setRuns] = useState<LLMRun[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [jobsData, appliedData, savedData, appsData, runsData] = await Promise.all([
+        const [jobsData, appliedData, savedData, recentAppliedData, runsData] = await Promise.all([
           api.getJobsPaginated(5, 0),
           api.getJobsPaginated(1, 0, 'applied'),
           api.getJobsPaginated(1, 0, 'saved'),
-          api.getApplications(),
+          api.getJobsPaginated(3, 0, 'applied'),
           api.getLLMRuns({ limit: 200 }),
         ]);
         setJobs(jobsData.items);
         setTotalJobs(jobsData.total);
         setAppliedCount(appliedData.total);
         setSavedCount(savedData.total);
-        setApps(appsData);
+        setRecentApplied(recentAppliedData.items);
         setRuns(runsData.items || []);
       } catch {
         // In production, leave state as empty if API is unreachable
@@ -64,7 +65,6 @@ export function DashboardContent() {
         totalJobs={totalJobs}
         appliedCount={appliedCount}
         savedCount={savedCount}
-        totalApplications={apps.length}
         totalRuns={runs.length}
       />
 
@@ -73,18 +73,25 @@ export function DashboardContent() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <h2 className="text-sm font-semibold text-slate-900">Recent Applications</h2>
+            <h2 className="text-sm font-semibold text-slate-900">Recent Applied</h2>
           </CardHeader>
           <CardContent className="space-y-3">
-            {apps.slice(0, 3).map((app) => (
-              <div key={app.id} className="flex items-center justify-between text-sm">
+            {recentApplied.map((job) => (
+              <div key={job.id} className="flex items-center justify-between text-sm">
                 <div>
-                  <p className="font-medium text-slate-900">{app.job_title}</p>
-                  <p className="text-xs text-slate-500">{app.company}</p>
+                  <Link href={`/jobs/${job.id}`} className="font-medium text-slate-900 hover:text-blue-600">
+                    {job.title}
+                  </Link>
+                  <p className="text-xs text-slate-500">{job.company}</p>
                 </div>
-                <span className="text-xs text-slate-400 capitalize">{app.status}</span>
+                <span className="text-xs text-slate-400 capitalize">
+                  {job.application_status || 'applied'}
+                </span>
               </div>
             ))}
+            {recentApplied.length === 0 && (
+              <p className="text-sm text-slate-500">No applied jobs yet.</p>
+            )}
           </CardContent>
         </Card>
 

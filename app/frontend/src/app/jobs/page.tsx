@@ -7,11 +7,11 @@ import { JobForm } from '@/components/jobs/job-form';
 import { api } from '@/lib/api/client';
 import type { JobPosting } from '@/lib/api/types';
 
-const PAGE_SIZE = 15;
-
 type FilterKey = 'all' | 'applied' | 'saved';
 
 type JobCounts = Record<FilterKey, number>;
+
+const PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<JobPosting[]>([]);
@@ -21,6 +21,7 @@ export default function JobsPage() {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [counts, setCounts] = useState<JobCounts>({ all: 0, applied: 0, saved: 0 });
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(15);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
@@ -28,7 +29,7 @@ export default function JobsPage() {
     setLoading(true);
     const status = filter === 'all' ? undefined : filter;
     const [result, allResult, appliedResult, savedResult] = await Promise.all([
-      api.getJobsPaginated(PAGE_SIZE, page * PAGE_SIZE, status),
+      api.getJobsPaginated(pageSize, page * pageSize, status),
       api.getJobsPaginated(1, 0),
       api.getJobsPaginated(1, 0, 'applied'),
       api.getJobsPaginated(1, 0, 'saved'),
@@ -37,7 +38,7 @@ export default function JobsPage() {
     setTotal(result.total);
     setCounts({ all: allResult.total, applied: appliedResult.total, saved: savedResult.total });
     setLoading(false);
-  }, [filter, page]);
+  }, [filter, page, pageSize]);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +47,7 @@ export default function JobsPage() {
       setLoading(true);
       const status = filter === 'all' ? undefined : filter;
       const [result, allResult, appliedResult, savedResult] = await Promise.all([
-        api.getJobsPaginated(PAGE_SIZE, page * PAGE_SIZE, status),
+        api.getJobsPaginated(pageSize, page * pageSize, status),
         api.getJobsPaginated(1, 0),
         api.getJobsPaginated(1, 0, 'applied'),
         api.getJobsPaginated(1, 0, 'saved'),
@@ -63,7 +64,7 @@ export default function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [filter, page]);
+  }, [filter, page, pageSize]);
 
   const handleSave = async (urlText: string) => {
     setImporting(true);
@@ -91,11 +92,23 @@ export default function JobsPage() {
     setPage(nextPage);
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const paginationPages = Array.from({ length: Math.min(totalPages, 5) }, (_, index) => {
+    const start = Math.min(Math.max(page - 2, 0), Math.max(totalPages - 5, 0));
+    return start + index;
+  });
 
   const selectFilter = (nextFilter: FilterKey) => {
     setFilter(nextFilter);
     setPage(0);
+  };
+
+  const updatePageSize = (nextPageSize: number) => {
+    if (PAGE_SIZE_OPTIONS.includes(nextPageSize as (typeof PAGE_SIZE_OPTIONS)[number])) {
+      setPageSize(nextPageSize as (typeof PAGE_SIZE_OPTIONS)[number]);
+      setPage(0);
+    }
   };
 
   if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
@@ -132,21 +145,24 @@ export default function JobsPage() {
             </span>
           </button>
         ))}
-        <span className="ml-auto shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500">
-          {PAGE_SIZE} / page
-        </span>
       </div>
 
-      <div className="space-y-2">
-        {jobs.map((job) => (
-          <JobCard key={job.id} job={job} />
-        ))}
-        {jobs.length === 0 && (
-          <p className="text-sm text-slate-500 py-8 text-center">No jobs match this filter.</p>
-        )}
-      </div>
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-500">Jobs per page</span>
+          <select
+            value={pageSize}
+            onChange={(event) => updatePageSize(Number(event.target.value))}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 text-sm flex-wrap">
           <button
             onClick={() => goToPage(p => Math.max(0, p - 1))}
@@ -156,13 +172,13 @@ export default function JobsPage() {
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => (
+          {paginationPages.map((pageNumber) => (
             <button
-              key={i}
-              onClick={() => goToPage(i)}
-              className={`px-3 py-1.5 rounded border ${i === page ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-300 hover:bg-slate-50'}`}
+              key={pageNumber}
+              onClick={() => goToPage(pageNumber)}
+              className={`px-3 py-1.5 rounded border ${pageNumber === page ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-300 hover:bg-slate-50'}`}
             >
-              {i + 1}
+              {pageNumber + 1}
             </button>
           ))}
           <button
@@ -174,8 +190,16 @@ export default function JobsPage() {
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-      )}
+      </div>
 
+      <div className="space-y-2">
+        {jobs.map((job) => (
+          <JobCard key={job.id} job={job} />
+        ))}
+        {jobs.length === 0 && (
+          <p className="text-sm text-slate-500 py-8 text-center">No jobs match this filter.</p>
+        )}
+      </div>
       {showForm && (
         <JobForm
           onClose={() => setShowForm(false)}

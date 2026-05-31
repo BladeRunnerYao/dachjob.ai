@@ -3,9 +3,18 @@ from uuid import UUID
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import JobPosting, JobSkill, MatchReport
+from app.db.models import Application, JobPosting, JobSkill, MatchReport
 
-VALID_JOB_STATUSES = {"new", "saved", "applied"}
+APPLICATION_JOB_STATUSES = {"applied", "interview", "rejected", "offer"}
+VALID_JOB_STATUSES = {"new", *APPLICATION_JOB_STATUSES}
+VALID_JOB_FILTERS = {None, "saved", *VALID_JOB_STATUSES}
+
+TRACKER_STATUS_BY_JOB_STATUS = {
+    "applied": "Applied",
+    "interview": "Interview",
+    "rejected": "Rejected",
+    "offer": "Offer",
+}
 
 
 def _job_filters(
@@ -14,8 +23,14 @@ def _job_filters(
     exclude_smoke_test: bool = True,
 ):
     filters = [JobPosting.tenant_id == tenant_id]
-    if status:
-        filters.append(JobPosting.status == status)
+    if status == "saved":
+        filters.append(JobPosting.saved.is_(True))
+    elif status == "applied":
+        filters.append(JobPosting.application_status.in_(APPLICATION_JOB_STATUSES))
+    elif status in APPLICATION_JOB_STATUSES:
+        filters.append(JobPosting.application_status == status)
+    elif status == "new":
+        filters.append(JobPosting.application_status.is_(None))
     if exclude_smoke_test:
         filters.append(~JobPosting.title.ilike("%smoke test%"))
     return filters
@@ -113,16 +128,59 @@ async def get_job(
     return job
 
 
+async def _get_latest_application_for_job(
+    db: AsyncSession, job_id: UUID, tenant_id: UUID
+) -> Application | None:
+    result = await db.execute(
+        select(Application)
+        .where(Application.job_id == job_id, Application.tenant_id == tenant_id)
+        .order_by(Application.updated_at.desc(), Application.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _sync_application_for_job_status(db: AsyncSession, job: JobPosting) -> None:
+    app = await _get_latest_application_for_job(db, job.id, job.tenant_id)
+    tracker_status = TRACKER_STATUS_BY_JOB_STATUS.get(job.application_status)
+    if tracker_status is None:
+        if app and app.status in TRACKER_STATUS_BY_JOB_STATUS.values():
+            app.status = "Discarded"
+        return
+    if app:
+        app.status = tracker_status
+        return
+    db.add(
+        Application(
+            tenant_id=job.tenant_id,
+            job_id=job.id,
+            status=tracker_status,
+            score=getattr(job, "score", None),
+        )
+    )
+
+
 async def update_job_status(
-    db: AsyncSession, job_id: UUID, tenant_id: UUID, status: str
+    db: AsyncSession,
+    job_id: UUID,
+    tenant_id: UUID,
+    status: str | None = None,
+    saved: bool | None = None,
 ) -> JobPosting | None:
     stmt = select(JobPosting).where(JobPosting.id == job_id, JobPosting.tenant_id == tenant_id)
     result = await db.execute(stmt)
     job = result.scalar_one_or_none()
     if not job:
         return None
-    job.status = status
+    if saved is not None:
+        job.saved = saved
+    if status == "saved":
+        job.saved = True
+    elif status is not None:
+        job.application_status = None if status == "new" else status
+        await _sync_application_for_job_status(db, job)
     await db.flush()
+    await db.refresh(job)
     await _attach_latest_match(db, [job])
     await _attach_skills(db, [job])
     return job

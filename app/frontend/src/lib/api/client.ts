@@ -24,6 +24,7 @@ import type {
   PaginatedJobs,
   PaginatedLLMRuns,
   ResumeArtifact,
+  JobFilterStatus,
   JobStatus,
   ResumeStyle,
 } from './types';
@@ -51,11 +52,11 @@ export class ApiClient {
     return resumesApi.getResumePdfUrl(artifactId);
   }
 
-  getJobs(limit?: number, offset?: number, status?: JobStatus): Promise<JobPosting[]> {
+  getJobs(limit?: number, offset?: number, status?: JobFilterStatus): Promise<JobPosting[]> {
     return jobsApi.getJobs(limit, offset, status);
   }
 
-  getJobsPaginated(limit: number, offset: number, status?: JobStatus): Promise<PaginatedJobs> {
+  getJobsPaginated(limit: number, offset: number, status?: JobFilterStatus): Promise<PaginatedJobs> {
     return jobsApi.getJobsPaginated(limit, offset, status);
   }
 
@@ -67,8 +68,8 @@ export class ApiClient {
     return jobsApi.createJob(rawJd);
   }
 
-  updateJobStatus(jobId: string, status: JobStatus): Promise<JobPosting> {
-    return jobsApi.updateJobStatus(jobId, status);
+  updateJobStatus(jobId: string, status?: JobStatus, saved?: boolean): Promise<JobPosting> {
+    return jobsApi.updateJobStatus(jobId, status, saved);
   }
 
   parseJob(jobId: string): Promise<JobPosting> {
@@ -81,6 +82,10 @@ export class ApiClient {
 
   getApplications(): Promise<Application[]> {
     return applicationsApi.getApplications();
+  }
+
+  updateApplication(applicationId: string, updates: { status?: string; notes?: string }): Promise<Application> {
+    return applicationsApi.updateApplication(applicationId, updates);
   }
 
   getProfile(): Promise<CandidateProfile> {
