@@ -1,9 +1,12 @@
 import uuid
+from unittest.mock import AsyncMock
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
 from app.db.models import JobPosting
+from app.modules.jobs import repository as jobs_repository
 from app.modules.jobs.repository import (
     APPLICATION_JOB_STATUSES,
     VALID_JOB_STATUSES,
@@ -55,3 +58,40 @@ def test_job_filters_omit_status_for_all_jobs():
 
 def test_job_status_set_matches_public_api_contract():
     assert VALID_JOB_STATUSES == {"new", "applied", "interview", "rejected", "offer"}
+
+
+@pytest.mark.asyncio
+async def test_update_job_status_refreshes_job_before_serialization(monkeypatch):
+    tenant_id = uuid.uuid4()
+    job = JobPosting(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id,
+        title="Backend Engineer",
+        company="Example GmbH",
+        raw_jd="Build APIs",
+        status="new",
+        saved=False,
+    )
+
+    class Result:
+        def scalar_one_or_none(self):
+            return job
+
+    async def passthrough(_db, jobs):
+        return jobs
+
+    async def noop_sync(_db, _job):
+        return None
+
+    db = AsyncMock()
+    db.execute.return_value = Result()
+    monkeypatch.setattr(jobs_repository, "_attach_latest_match", passthrough)
+    monkeypatch.setattr(jobs_repository, "_attach_skills", passthrough)
+    monkeypatch.setattr(jobs_repository, "_sync_application_for_job_status", noop_sync)
+
+    updated = await jobs_repository.update_job_status(db, job.id, tenant_id, status="applied")
+
+    assert updated is job
+    assert job.application_status == "applied"
+    db.flush.assert_awaited_once()
+    db.refresh.assert_awaited_once_with(job)

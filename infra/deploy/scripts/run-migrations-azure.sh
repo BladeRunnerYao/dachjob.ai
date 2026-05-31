@@ -36,7 +36,7 @@ if az containerapp job show \
 fi
 
 secret_args=()
-env_args=("APP_ENV=production")
+env_args=("APP_ENV=production" "ALEMBIC_CONFIG=app/db/migrations/alembic.ini")
 if [[ -n "${AZURE_DATABASE_URL:-}" ]]; then
   secret_args+=("db-url=${AZURE_DATABASE_URL}")
   env_args+=("DATABASE_URL=secretref:db-url")
@@ -91,13 +91,56 @@ fi
     --replica-timeout 300 \
     --replica-retry-limit 0 \
     --command alembic \
-    --args="--config=app/db/migrations/alembic.ini" --args="upgrade" --args="head" \
+    --args "upgrade" "head" \
     "${secret_flags[@]}" \
     "${env_flags[@]}" \
     --output none
 
-az containerapp job start \
+start_output="$(az containerapp job start \
   --name "${AZURE_MIGRATION_JOB_NAME}" \
   --resource-group "${AZURE_RESOURCE_GROUP}" \
-  --output none
+  --output json)"
+
+execution_name="$(jq -r '.name // empty' <<< "${start_output}")"
+if [[ -z "${execution_name}" ]]; then
+  execution_name="$(az containerapp job execution list \
+    --name "${AZURE_MIGRATION_JOB_NAME}" \
+    --resource-group "${AZURE_RESOURCE_GROUP}" \
+    --query 'sort_by(@, &properties.startTime)[-1].name' \
+    -o tsv)"
+fi
+
+if [[ -z "${execution_name}" ]]; then
+  echo "::error::Azure migration job was started, but no execution name was returned."
+  echo "::endgroup::"
+  exit 1
+fi
+
+echo "Waiting for Azure migration execution ${execution_name}"
+for _ in {1..60}; do
+  status="$(az containerapp job execution show \
+    --name "${AZURE_MIGRATION_JOB_NAME}" \
+    --resource-group "${AZURE_RESOURCE_GROUP}" \
+    --job-execution-name "${execution_name}" \
+    --query 'properties.status' \
+    -o tsv)"
+  case "${status}" in
+    Succeeded)
+      echo "Azure migration execution ${execution_name} succeeded."
+      echo "::endgroup::"
+      exit 0
+      ;;
+    Failed|Canceled)
+      echo "::error::Azure migration execution ${execution_name} ended with status ${status}."
+      echo "::endgroup::"
+      exit 1
+      ;;
+    *)
+      sleep 5
+      ;;
+  esac
+done
+
+echo "::error::Timed out waiting for Azure migration execution ${execution_name} to complete."
 echo "::endgroup::"
+exit 1

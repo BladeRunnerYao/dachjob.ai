@@ -180,6 +180,7 @@ async def update_job_status(
         job.application_status = None if status == "new" else status
         await _sync_application_for_job_status(db, job)
     await db.flush()
+    await db.refresh(job)
     await _attach_latest_match(db, [job])
     await _attach_skills(db, [job])
     return job
