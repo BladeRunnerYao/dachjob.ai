@@ -9,7 +9,7 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 APP_ENV = "production"
 JWT_EXPIRY_HOURS = "72"
-CORS_ORIGIN = "https://app.dachjob.ai,*.dachjob-web.pages.dev"
+CORS_ORIGIN = "https://app.dachjob.ai,https://dachjob-web.pages.dev,*.dachjob-web.pages.dev"
 
 # D1 Database binding
 [[d1_databases]]
