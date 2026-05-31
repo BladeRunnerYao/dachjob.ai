@@ -69,7 +69,9 @@ class RedisCache:
         "tenant:slug": 600,
         "tenant:id": 600,
         "jobs:list": 600,
+        "jobs:list:v2": 600,
         "job:detail": 300,
+        "job:detail:v2": 300,
         "profile": 600,
     }
 

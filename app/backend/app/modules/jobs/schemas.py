@@ -25,6 +25,8 @@ class JobResponse(BaseModel):
     scraped_json: Any = None
     skills: list["JobSkillResponse"] = Field(default_factory=list)
     status: str
+    saved: bool = False
+    application_status: str | None = None
     score: float | None = None
     recommendation: str | None = None
     created_at: datetime
@@ -42,7 +44,8 @@ class JobCreateRequest(BaseModel):
 
 
 class JobStatusUpdateRequest(BaseModel):
-    status: str = Field(..., pattern=r"^(new|saved|applied)$")
+    status: str | None = Field(None, pattern=r"^(new|applied|interview|rejected|offer|saved)$")
+    saved: bool | None = None
 
 
 class JobImportRequest(BaseModel):

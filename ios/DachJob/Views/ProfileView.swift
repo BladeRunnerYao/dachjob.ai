@@ -336,15 +336,91 @@ struct ProfileView: View {
 struct MarkdownPreview: View {
     let markdown: String
 
-    private var rendered: AttributedString {
-        (try? AttributedString(markdown: markdown)) ?? AttributedString(markdown)
+    private enum MarkdownBlock {
+        case heading(level: Int, text: String)
+        case paragraph(String)
+        case bullets([String])
+    }
+
+    private var blocks: [MarkdownBlock] {
+        var result: [MarkdownBlock] = []
+        var paragraphLines: [String] = []
+        var bulletLines: [String] = []
+
+        func flushParagraph() {
+            let text = paragraphLines.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                result.append(.paragraph(text))
+            }
+            paragraphLines.removeAll()
+        }
+
+        func flushBullets() {
+            if !bulletLines.isEmpty {
+                result.append(.bullets(bulletLines))
+            }
+            bulletLines.removeAll()
+        }
+
+        for rawLine in markdown.replacingOccurrences(of: "\r\n", with: "\n").split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty {
+                flushParagraph()
+                flushBullets()
+                continue
+            }
+            if line.hasPrefix("#") {
+                flushParagraph()
+                flushBullets()
+                let level = line.prefix(while: { $0 == "#" }).count
+                let text = String(line.drop(while: { $0 == "#" }))
+                    .trimmingCharacters(in: .whitespaces)
+                result.append(.heading(level: level, text: text))
+            } else if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("• ") {
+                flushParagraph()
+                bulletLines.append(String(line.dropFirst(2)))
+            } else {
+                flushBullets()
+                paragraphLines.append(String(line))
+            }
+        }
+        flushParagraph()
+        flushBullets()
+        return result
     }
 
     var body: some View {
-        Text(rendered)
-            .font(.body)
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .heading(let level, let text):
+                    Text(text)
+                        .font(level <= 1 ? .title3.bold() : level == 2 ? .headline : .subheadline.bold())
+                        .foregroundColor(.primary)
+                        .padding(.top, level <= 2 ? 6 : 2)
+                case .paragraph(let text):
+                    Text(text)
+                        .font(.body)
+                        .lineSpacing(4)
+                        .foregroundColor(.secondary)
+                case .bullets(let items):
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(items, id: \.self) { item in
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("•")
+                                    .fontWeight(.semibold)
+                                Text(item)
+                                    .lineSpacing(3)
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+        }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
+            .padding(14)
             .background(Color(.systemBackground))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)

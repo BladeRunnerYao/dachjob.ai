@@ -9,70 +9,82 @@ struct LoginView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Spacer()
+            ZStack {
+                AuthGradientBackground()
 
-                VStack(spacing: 8) {
-                    Text("dachjob.ai")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    Text("AI-powered job matching for DACH")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
+                VStack(spacing: 22) {
+                    Spacer()
 
-                VStack(spacing: 16) {
-                    TextField("Email", text: $email)
-                        .textFieldStyle(.roundedBorder)
-                        .textContentType(.emailAddress)
-                        .autocapitalization(.none)
-                        .keyboardType(.emailAddress)
-
-                    SecureField("Password", text: $password)
-                        .textFieldStyle(.roundedBorder)
-                        .textContentType(.password)
-                }
-                .padding(.horizontal)
-
-                if let error = authService.errorMessage {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                }
-
-                Button {
-                    Task {
-                        await authService.login(email: email, password: password)
+                    VStack(spacing: 10) {
+                        Text("dachjob.ai")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        Text("AI-powered job matching for DACH")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.78))
                     }
-                } label: {
-                    if authService.isLoading {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        Text("Sign In")
-                            .frame(maxWidth: .infinity)
+
+                    VStack(spacing: 16) {
+                        TextField("Email", text: $email)
+                            .textFieldStyle(.roundedBorder)
+                            .textContentType(.emailAddress)
+                            .autocapitalization(.none)
+                            .keyboardType(.emailAddress)
+
+                        SecureField("Password", text: $password)
+                            .textFieldStyle(.roundedBorder)
+                            .textContentType(.password)
+
+                        if let error = authService.errorMessage {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .multilineTextAlignment(.center)
+                        }
+
+                        Button {
+                            Task {
+                                await authService.login(email: email, password: password)
+                            }
+                        } label: {
+                            if authService.isLoading {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                Text("Sign In")
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(email.isEmpty || password.isEmpty || authService.isLoading)
                     }
+                    .padding(20)
+                    .background(.ultraThinMaterial)
+                    .clipShape(.rect(cornerRadius: 24))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(.white.opacity(0.22), lineWidth: 1)
+                    )
+                    .padding(.horizontal)
+
+                    Button("Create Account") {
+                        showRegister = true
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+
+                    Button("Forgot password?") {
+                        showForgotPassword = true
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.85))
+
+                    Spacer()
+
+                    SettingsLink()
+                        .padding(.bottom)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(email.isEmpty || password.isEmpty || authService.isLoading)
-                .padding(.horizontal)
-
-                Button("Create Account") {
-                    showRegister = true
-                }
-                .font(.subheadline)
-
-                Button("Forgot password?") {
-                    showForgotPassword = true
-                }
-                .font(.subheadline)
-
-                Spacer()
-
-                SettingsLink()
-                    .padding(.bottom)
             }
             .sheet(isPresented: $showRegister) {
                 RegisterView()
@@ -82,6 +94,48 @@ struct LoginView: View {
                 ForgotPasswordView(initialEmail: email)
             }
         }
+    }
+}
+
+private struct AuthGradientBackground: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.03, green: 0.09, blue: 0.22),
+                    Color(red: 0.08, green: 0.23, blue: 0.55),
+                    Color(red: 0.02, green: 0.32, blue: 0.25),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            Circle()
+                .fill(Color.blue.opacity(0.35))
+                .frame(width: 260, height: 260)
+                .blur(radius: 42)
+                .offset(x: -120, y: -220)
+            Circle()
+                .fill(Color.green.opacity(0.28))
+                .frame(width: 300, height: 300)
+                .blur(radius: 50)
+                .offset(x: 130, y: 260)
+            VStack {
+                Spacer()
+                HStack {
+                    Text("DACH")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                    Spacer()
+                    Text("AI Matching")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                }
+                .foregroundColor(.white.opacity(0.18))
+                .padding(.horizontal, 30)
+                .padding(.bottom, 80)
+            }
+        }
+        .ignoresSafeArea()
     }
 }
 

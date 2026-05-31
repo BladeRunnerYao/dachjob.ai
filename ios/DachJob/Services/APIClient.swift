@@ -56,6 +56,11 @@ private struct PasswordResetRequest: Encodable {
     let email: String
 }
 
+private struct JobStatusUpdateRequest: Encodable {
+    let status: String?
+    let saved: Bool?
+}
+
 @MainActor
 class APIClient {
     static let shared = APIClient()
@@ -104,6 +109,10 @@ class APIClient {
         return try await post("/api/auth/forgot-password", body: PasswordResetRequest(email: email))
     }
 
+    func getCurrentUser() async throws -> UserAccount {
+        return try await get("/api/auth/me")
+    }
+
     func logout() {
         authToken = nil
     }
@@ -132,8 +141,8 @@ class APIClient {
         return try await post("/api/jobs/import", body: body)
     }
 
-    func updateJobStatus(id: String, status: String) async throws -> JobPosting {
-        let body: [String: String] = ["status": status]
+    func updateJobStatus(id: String, status: String? = nil, saved: Bool? = nil) async throws -> JobPosting {
+        let body = JobStatusUpdateRequest(status: status, saved: saved)
         return try await patch("/api/jobs/\(id)/status", body: body)
     }
 

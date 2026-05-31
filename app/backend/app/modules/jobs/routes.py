@@ -12,6 +12,7 @@ from app.modules.background_tasks.execution import run_or_enqueue
 from app.modules.background_tasks.schemas import BackgroundTaskResponse
 from app.modules.jobs.importer import import_job_urls
 from app.modules.jobs.repository import (
+    VALID_JOB_FILTERS,
     VALID_JOB_STATUSES,
     count_jobs_by_tenant,
     create_job,
@@ -33,9 +34,9 @@ router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 
 async def _invalidate_jobs_cache(tenant_id: UUID, job_id: UUID | None = None):
-    await cache.delete_pattern(f"jobs:list:{tenant_id}")
+    await cache.delete_pattern(f"jobs:list:v2:{tenant_id}")
     if job_id:
-        await cache.delete("job:detail", str(job_id))
+        await cache.delete("job:detail:v2", str(job_id))
 
 
 @router.get("", response_model=PaginatedJobResponse)
@@ -44,12 +45,16 @@ async def list_jobs(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(15, ge=1, le=200, description="Number of jobs per page"),
     offset: int = Query(0, ge=0, description="Number of jobs to skip"),
-    status: str | None = Query(None, pattern=r"^(new|saved|applied)$"),
+    status: str | None = Query(None, pattern=r"^(new|saved|applied|interview|rejected|offer)$"),
 ):
     if tenant.id is None:
         return PaginatedJobResponse(items=[], total=0, limit=limit, offset=offset)
     status_key = status or "all"
-    cached = await cache.get_json("jobs:list", str(tenant.id), status_key, str(limit), str(offset))
+    if status not in VALID_JOB_FILTERS:
+        raise AppError("invalid_job_filter", "Status filter is not supported", status_code=422)
+    cached = await cache.get_json(
+        "jobs:list:v2", str(tenant.id), status_key, str(limit), str(offset)
+    )
     if cached is not None:
         return PaginatedJobResponse.model_validate(cached)
     total = await count_jobs_by_tenant(db, tenant.id, status=status)
@@ -61,7 +66,7 @@ async def list_jobs(
         offset=offset,
     )
     await cache.set_json(
-        "jobs:list",
+        "jobs:list:v2",
         str(tenant.id),
         status_key,
         str(limit),
@@ -133,7 +138,7 @@ async def get_job_endpoint(
     db: AsyncSession = Depends(get_db),
 ):
     if tenant.id is not None:
-        cached = await cache.get_json("job:detail", str(job_id))
+        cached = await cache.get_json("job:detail:v2", str(job_id))
         if cached is not None:
             return JobResponse.model_validate(cached)
     job = await get_job(db, job_id, tenant.id)
@@ -141,7 +146,7 @@ async def get_job_endpoint(
         raise AppError("job_not_found", "Job posting not found", status_code=404)
     if tenant.id is not None:
         serialized = JobResponse.model_validate(job).model_dump(mode="json")
-        await cache.set_json("job:detail", str(job_id), value=serialized)
+        await cache.set_json("job:detail:v2", str(job_id), value=serialized)
     return job
 
 
@@ -154,11 +159,23 @@ async def update_job_status_endpoint(
 ):
     if tenant.id is None:
         raise AppError("tenant_not_found", "Tenant context is required")
-    if body.status not in VALID_JOB_STATUSES:
+    if body.status is None and body.saved is None:
+        raise AppError("empty_job_status_update", "Provide status or saved", status_code=422)
+    if body.status == "saved":
+        body.saved = True
+    if body.status is not None and body.status != "saved" and body.status not in VALID_JOB_STATUSES:
         raise AppError(
-            "invalid_job_status", "Status must be one of new, saved, applied", status_code=422
+            "invalid_job_status",
+            "Status must be one of new, applied, interview, rejected, offer",
+            status_code=422,
         )
-    job = await update_job_status(db, job_id, tenant.id, body.status)
+    job = await update_job_status(
+        db,
+        job_id,
+        tenant.id,
+        status=body.status if body.status != "saved" else None,
+        saved=body.saved,
+    )
     if not job:
         raise AppError("job_not_found", "Job posting not found", status_code=404)
     await _invalidate_jobs_cache(tenant.id, job_id)

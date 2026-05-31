@@ -6,13 +6,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Application, JobPosting
 from app.modules.tracker.schemas import VALID_STATUSES
 
+ACTIVE_APPLICATION_STATUSES = {"Applied", "Interview", "Rejected", "Offer"}
+JOB_STATUS_BY_APPLICATION_STATUS = {
+    "Applied": "applied",
+    "Interview": "interview",
+    "Rejected": "rejected",
+    "Offer": "offer",
+}
+
 
 async def list_applications(db: AsyncSession, tenant_id: UUID) -> list[Application]:
     result = await db.execute(
         select(Application, JobPosting.title, JobPosting.company)
         .join(JobPosting, Application.job_id == JobPosting.id, isouter=True)
-        .where(Application.tenant_id == tenant_id)
-        .order_by(Application.created_at.desc())
+        .where(
+            Application.tenant_id == tenant_id, Application.status.in_(ACTIVE_APPLICATION_STATUSES)
+        )
+        .order_by(Application.updated_at.desc(), Application.created_at.desc())
     )
     rows = result.all()
     applications = []
@@ -59,6 +69,7 @@ async def create_application(
         notes=notes,
     )
     db.add(app)
+    await _sync_job_application_status(db, tenant_id, job_id, status)
     await db.flush()
     return app
 
@@ -81,5 +92,22 @@ async def update_application(
     for key, value in updates.items():
         if value is not None:
             setattr(app, key, value)
+    if "status" in updates and updates["status"] is not None:
+        await _sync_job_application_status(db, app.tenant_id, app.job_id, updates["status"])
     await db.flush()
     return app
+
+
+async def _sync_job_application_status(
+    db: AsyncSession,
+    tenant_id: UUID,
+    job_id: UUID,
+    application_status: str,
+) -> None:
+    result = await db.execute(
+        select(JobPosting).where(JobPosting.id == job_id, JobPosting.tenant_id == tenant_id)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        return
+    job.application_status = JOB_STATUS_BY_APPLICATION_STATUS.get(application_status)

@@ -8,13 +8,16 @@ struct JobPosting: Codable, Identifiable {
     let score: Double?
     let recommendation: String?
     let status: String?
+    let saved: Bool?
+    let applicationStatus: String?
     let url: String?
     let rawJd: String?
     let parsedJson: ParsedJobDescription?
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, company, location, score, recommendation, status, url
+        case id, title, company, location, score, recommendation, status, saved, url
+        case applicationStatus = "application_status"
         case rawJd = "raw_jd"
         case parsedJson = "parsed_json"
         case createdAt = "created_at"
@@ -32,6 +35,14 @@ struct JobPosting: Codable, Identifiable {
             || !parsedJson.niceToHaveSkills.isEmpty
             || !parsedJson.requiredQualifications.isEmpty
             || !parsedJson.preferredQualifications.isEmpty
+    }
+
+    var displayApplicationStatus: String? {
+        applicationStatus ?? (["applied", "interview", "rejected", "offer"].contains(status ?? "") ? status : nil)
+    }
+
+    var isSaved: Bool {
+        saved == true || status == "saved"
     }
 }
 
@@ -185,6 +196,12 @@ struct AuthResponse: Codable {
         case tenantId = "tenant_id"
         case passwordNeedsReset = "password_needs_reset"
     }
+}
+
+struct UserAccount: Codable {
+    let id: String
+    let email: String
+    let name: String
 }
 
 struct PasswordResetResponse: Codable {

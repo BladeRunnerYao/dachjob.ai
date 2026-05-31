@@ -179,7 +179,10 @@ struct JobRow: View {
                         .fontWeight(.bold)
                         .foregroundColor(percent >= 84 ? .green : percent >= 72 ? .orange : .red)
                 }
-                if let status = job.status, status != "new" {
+                if job.isSaved {
+                    StatusBadge(status: "saved")
+                }
+                if let status = job.displayApplicationStatus {
                     StatusBadge(status: status)
                 } else if let rec = job.recommendation {
                     RecommendationBadge(recommendation: rec)
@@ -216,7 +219,10 @@ struct StatusBadge: View {
     var color: Color {
         switch status {
         case "applied": return .green
+        case "interview": return .blue
         case "saved": return .orange
+        case "rejected": return .red
+        case "offer": return .purple
         default: return .gray
         }
     }

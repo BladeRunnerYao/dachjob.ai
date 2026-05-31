@@ -5,6 +5,7 @@ struct DashboardView: View {
     @State private var totalJobs = 0
     @State private var appliedCount = 0
     @State private var savedCount = 0
+    @State private var filter = "all"
     @State private var isLoading = true
     @State private var error: String?
 
@@ -31,6 +32,7 @@ struct DashboardView: View {
                 } else {
                     VStack(spacing: 20) {
                         statsGrid
+                        filterBar
                         recentJobsSection
                     }
                     .padding()
@@ -56,7 +58,7 @@ struct DashboardView: View {
 
     private var recentJobsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Recent Jobs")
+            Text(sectionTitle)
                 .font(.headline)
             ForEach(jobs.prefix(5)) { job in
                 NavigationLink(destination: JobDetailView(jobId: job.id)) {
@@ -78,7 +80,10 @@ struct DashboardView: View {
                                 .fontWeight(.bold)
                                 .foregroundColor(percent >= 84 ? .green : percent >= 72 ? .orange : .red)
                         }
-                        if let status = job.status, status != "new" {
+                        if job.isSaved {
+                            StatusBadge(status: "saved")
+                        }
+                        if let status = job.displayApplicationStatus {
                             StatusBadge(status: status)
                         } else if let rec = job.recommendation {
                             RecommendationBadge(recommendation: rec)
@@ -94,11 +99,37 @@ struct DashboardView: View {
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
     }
 
+    private var filterBar: some View {
+        HStack(spacing: 8) {
+            FilterChip(label: "All", count: totalJobs, isSelected: filter == "all") {
+                selectFilter("all")
+            }
+            FilterChip(label: "Applied", count: appliedCount, isSelected: filter == "applied") {
+                selectFilter("applied")
+            }
+            FilterChip(label: "Saved", count: savedCount, isSelected: filter == "saved") {
+                selectFilter("saved")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var sectionTitle: String {
+        switch filter {
+        case "applied": return "Recent Applied"
+        case "saved": return "Recent Saved"
+        default: return "Recent Jobs"
+        }
+    }
+
     private func loadData() async {
         isLoading = jobs.isEmpty
         error = nil
         do {
-            async let jobsResult = api.getJobs(limit: 5)
+            async let jobsResult = api.getJobs(
+                limit: 5,
+                status: filter == "all" ? nil : filter
+            )
             async let appliedResult = api.getJobs(limit: 1, status: "applied")
             async let savedResult = api.getJobs(limit: 1, status: "saved")
             let recentJobs = try await jobsResult
@@ -113,6 +144,12 @@ struct DashboardView: View {
             self.error = error.localizedDescription
         }
         isLoading = false
+    }
+
+    private func selectFilter(_ nextFilter: String) {
+        guard filter != nextFilter else { return }
+        filter = nextFilter
+        Task { await loadData() }
     }
 }
 

@@ -9,21 +9,17 @@ type BadgeVariant = 'default' | 'green' | 'yellow' | 'red' | 'blue';
 
 interface TrackerTableProps {
   applications: Application[];
-  onStatusChange: (id: string, status: string) => void;
+  onStatusChange: (id: string, status: string) => Promise<void>;
 }
 
 const statusColors: Record<string, BadgeVariant> = {
-  Evaluated: 'blue',
   Applied: 'green',
-  Responded: 'yellow',
-  Interview: 'yellow',
+  Interview: 'blue',
   Offer: 'green',
   Rejected: 'red',
-  Discarded: 'red',
-  SKIP: 'red',
 };
 
-const statusOptions = ['Evaluated', 'Applied', 'Responded', 'Interview', 'Offer', 'Rejected', 'Discarded', 'SKIP'];
+const statusOptions = ['Applied', 'Interview', 'Rejected', 'Offer'];
 
 function toPercent(score: number): number {
   return Math.round((Math.min(Math.max(score, 1), 5) / 5) * 100);
@@ -74,7 +70,7 @@ export function TrackerTable({ applications, onStatusChange }: TrackerTableProps
                       {statusOptions.map((s) => (
                         <button
                           key={s}
-                          onClick={() => { onStatusChange(app.id, s); setOpenDropdown(null); }}
+                          onClick={() => { void onStatusChange(app.id, s); setOpenDropdown(null); }}
                           className={`block w-full px-3 py-1.5 text-left text-xs hover:bg-slate-100 ${
                             s === app.status ? 'font-semibold text-blue-600' : 'text-slate-700'
                           }`}

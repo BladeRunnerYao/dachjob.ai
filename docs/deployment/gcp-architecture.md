@@ -145,8 +145,6 @@ infra/terraform/
 │   │   └── outputs.tf
 │   ├── iam/                     # Service accounts & IAM bindings
 │   │   └── main.tf
-│   ├── cloud-dns/               # DNS zone + records (if custom domain)
-│   │   └── main.tf
 │   └── monitoring/              # Alerting policies + dashboards
 │       └── main.tf
 │

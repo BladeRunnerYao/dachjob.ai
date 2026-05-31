@@ -20,7 +20,14 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/api/client';
-import type { JobPosting, MatchReport, ResumeArtifact, CandidateProfile, ResumeStyle } from '@/lib/api/types';
+import type {
+  ApplicationJobStatus,
+  JobPosting,
+  MatchReport,
+  ResumeArtifact,
+  CandidateProfile,
+  ResumeStyle,
+} from '@/lib/api/types';
 
 // ── Section parsing (from raw JD — fallback only) ────────────────
 
@@ -225,6 +232,38 @@ function isSkillInProfile(skill: string, profile: CandidateProfile | null): bool
   return text.includes(skill.toLowerCase());
 }
 
+const APPLICATION_LABELS: Array<{
+  key: ApplicationJobStatus;
+  label: string;
+  activeClass: string;
+  inactiveClass: string;
+}> = [
+  {
+    key: 'applied',
+    label: 'Applied',
+    activeClass: 'border-emerald-500 bg-emerald-600 text-white',
+    inactiveClass: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+  },
+  {
+    key: 'interview',
+    label: 'Interview',
+    activeClass: 'border-blue-500 bg-blue-600 text-white',
+    inactiveClass: 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
+  },
+  {
+    key: 'rejected',
+    label: 'Rejected',
+    activeClass: 'border-red-500 bg-red-600 text-white',
+    inactiveClass: 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100',
+  },
+  {
+    key: 'offer',
+    label: 'Offer',
+    activeClass: 'border-violet-500 bg-violet-600 text-white',
+    inactiveClass: 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100',
+  },
+];
+
 // ── Main page ───────────────────────────────────────────────────
 
 export default function JobDetailPage() {
@@ -243,6 +282,7 @@ export default function JobDetailPage() {
   const [showCv, setShowCv] = useState(false);
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [ownedSkills, setOwnedSkills] = useState<Set<string>>(new Set());
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -364,13 +404,24 @@ export default function JobDetailPage() {
     });
   };
 
-  const handleStatusChange = async (status: 'saved' | 'applied') => {
-    const newStatus = job!.status === status ? 'new' : status;
+  const handleApplicationStatusChange = async (status: ApplicationJobStatus) => {
+    const newStatus = job!.application_status === status ? 'new' : status;
     try {
+      setStatusError(null);
       const updated = await api.updateJobStatus(id, newStatus);
       setJob(updated);
-    } catch {
-      // silently ignore
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : 'Could not update job status');
+    }
+  };
+
+  const handleSavedChange = async () => {
+    try {
+      setStatusError(null);
+      const updated = await api.updateJobStatus(id, undefined, !job!.saved);
+      setJob(updated);
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : 'Could not update saved label');
     }
   };
 
@@ -438,28 +489,33 @@ export default function JobDetailPage() {
         {job.salary_text && (
           <p className="mt-2 text-sm text-slate-500">{job.salary_text}</p>
         )}
-        <div className="flex gap-2 mt-3">
+        <div className="flex flex-wrap gap-2 mt-3">
           <button
-            onClick={() => handleStatusChange('applied')}
-            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-              job.status === 'applied'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-            }`}
-          >
-            Applied
-          </button>
-          <button
-            onClick={() => handleStatusChange('saved')}
-            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-              job.status === 'saved'
-                ? 'bg-amber-500 text-white'
-                : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+            onClick={handleSavedChange}
+            className={`rounded-lg border px-4 py-1.5 text-sm font-medium transition-colors ${
+              job.saved
+                ? 'border-amber-500 bg-amber-500 text-white'
+                : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
             }`}
           >
             Saved
           </button>
+          {APPLICATION_LABELS.map((label) => {
+            const isActive = job.application_status === label.key;
+            return (
+              <button
+                key={label.key}
+                onClick={() => handleApplicationStatusChange(label.key)}
+                className={`rounded-lg border px-4 py-1.5 text-sm font-medium transition-colors ${
+                  isActive ? label.activeClass : label.inactiveClass
+                }`}
+              >
+                {label.label}
+              </button>
+            );
+          })}
         </div>
+        {statusError && <p className="mt-2 text-sm text-red-600">{statusError}</p>}
       </div>
 
       {/* ── Two-column body ──────────────────────────────────── */}

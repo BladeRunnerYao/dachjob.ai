@@ -1,4 +1,6 @@
-export type JobStatus = 'new' | 'saved' | 'applied';
+export type ApplicationJobStatus = 'applied' | 'interview' | 'rejected' | 'offer';
+export type JobStatus = 'new' | ApplicationJobStatus;
+export type JobFilterStatus = JobStatus | 'saved';
 export type ResumeStyle = 'american' | 'german';
 
 export interface JobPosting {
@@ -22,6 +24,8 @@ export interface JobPosting {
   created_at: string;
   updated_at?: string;
   raw_jd?: string;
+  saved?: boolean;
+  application_status?: ApplicationJobStatus | null;
 }
 
 export interface JobSkill {
@@ -69,6 +73,7 @@ export interface Application {
   score?: number;
   notes?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface LLMRun {

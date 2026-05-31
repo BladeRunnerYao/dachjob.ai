@@ -10,3 +10,13 @@ export async function getApplications(): Promise<Application[]> {
     return getMockApplications();
   }
 }
+
+export function updateApplication(
+  applicationId: string,
+  updates: { status?: string; notes?: string }
+): Promise<Application> {
+  return request<Application>(`/api/applications/${applicationId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+}
