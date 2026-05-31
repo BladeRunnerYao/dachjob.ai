@@ -85,9 +85,11 @@ cd infra/cloudflare/worker-api
 # JWT signing key (generate a strong random string)
 echo "$(openssl rand -hex 32)" | npx wrangler secret put JWT_SECRET
 
-# LLM API key (OpenRouter or any OpenAI-compatible provider)
-# Get a free key from https://openrouter.ai/
-echo "your-openrouter-api-key" | npx wrangler secret put LLM_API_KEY
+# DeepSeek API key
+echo "your-deepseek-api-key" | npx wrangler secret put LLM_API_KEY
+
+# Optional: override the default model (deepseek-v4-flash)
+echo "deepseek-v4-flash" | npx wrangler secret put DEEPSEEK_MODEL
 ```
 
 ### 7. Deploy Worker API
@@ -149,7 +151,8 @@ In the Cloudflare dashboard:
 | Secret | Description |
 |--------|-------------|
 | `JWT_SECRET` | HMAC key for JWT signing (min 32 chars) |
-| `LLM_API_KEY` | API key for LLM provider (OpenRouter recommended) |
+| `LLM_API_KEY` | DeepSeek API key |
+| `DEEPSEEK_MODEL` | Optional DeepSeek model override; defaults to `deepseek-v4-flash` |
 
 ### Frontend (build-time environment)
 
@@ -238,7 +241,7 @@ Ensure `JWT_SECRET` is set via `wrangler secret put` (not in wrangler.toml).
 Run migrations: `npx wrangler d1 execute dachjob-db --remote --file=../migrations/0001_initial.sql`
 
 ### LLM not working
-Ensure `LLM_API_KEY` is set. The app gracefully degrades (returns fallback results) when LLM is unavailable.
+Ensure `LLM_API_KEY` is set to a DeepSeek API key. The app defaults to `deepseek-v4-flash` and gracefully degrades (returns fallback results) when LLM is unavailable.
 
 ## CI/CD (GitHub Actions)
 

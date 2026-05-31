@@ -19,18 +19,38 @@ interface ApplicationRow {
   notes?: string;
   created_at: string;
   updated_at: string;
+  job_title?: string | null;
+  company?: string | null;
+  job_application_status?: string | null;
 }
 
 function formatApplicationResponse(app: ApplicationRow) {
+  const effectiveStatus =
+    app.status === "draft" && app.job_application_status ? app.job_application_status : app.status;
   return {
     id: app.id,
     job_id: app.job_id,
-    status: app.status,
+    job_title: app.job_title || "",
+    company: app.company || "",
+    status: displayStatus(effectiveStatus),
+    score: app.match_score,
     match_score: app.match_score,
     notes: app.notes || null,
     created_at: app.created_at,
     updated_at: app.updated_at,
   };
+}
+
+function normalizeStatus(status: string | undefined): string {
+  const normalized = (status || "draft").trim().toLowerCase();
+  if (!VALID_STATUSES.includes(normalized)) {
+    throw new AppError("VALIDATION_ERROR", `Invalid status: ${status}. Must be one of ${VALID_STATUSES.join(", ")}`, 422);
+  }
+  return normalized;
+}
+
+function displayStatus(status: string): string {
+  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 // GET /api/applications - List user's applications
@@ -39,7 +59,15 @@ applicationsRoutes.get("/", async (c) => {
   if (!userId) return c.json([]);
 
   const result = await c.env.DB.prepare(
-    "SELECT * FROM applications WHERE user_id = ? ORDER BY created_at DESC"
+    `SELECT
+       applications.*,
+       jobs.title AS job_title,
+       jobs.company AS company,
+       jobs.application_status AS job_application_status
+     FROM applications
+     LEFT JOIN jobs ON jobs.id = applications.job_id AND jobs.user_id = applications.user_id
+     WHERE applications.user_id = ?
+     ORDER BY applications.created_at DESC`
   )
     .bind(userId)
     .all<ApplicationRow>();
@@ -57,10 +85,7 @@ applicationsRoutes.post("/", async (c) => {
     throw new AppError("VALIDATION_ERROR", "job_id is required", 400);
   }
 
-  const status = body.status || "draft";
-  if (!VALID_STATUSES.includes(status)) {
-    throw new AppError("VALIDATION_ERROR", `Invalid status: ${status}. Must be one of ${VALID_STATUSES.join(", ")}`, 422);
-  }
+  const status = normalizeStatus(body.status);
 
   // Get user's profile (if exists)
   const profile = await c.env.DB.prepare(
@@ -80,14 +105,20 @@ applicationsRoutes.post("/", async (c) => {
     .bind(id, userId, body.job_id, profileId, status, now, now)
     .run();
 
-  // Update job application_status
-  await c.env.DB.prepare(
-    "UPDATE jobs SET application_status = ?, updated_at = ? WHERE id = ? AND user_id = ?"
-  )
-    .bind(status, now, body.job_id, userId)
-    .run();
+  if (status !== "draft") {
+    await c.env.DB.prepare(
+      "UPDATE jobs SET application_status = ?, updated_at = ? WHERE id = ? AND user_id = ?"
+    )
+      .bind(status, now, body.job_id, userId)
+      .run();
+  }
 
-  const app = await c.env.DB.prepare("SELECT * FROM applications WHERE id = ?")
+  const app = await c.env.DB.prepare(
+    `SELECT applications.*, jobs.title AS job_title, jobs.company AS company, jobs.application_status AS job_application_status
+     FROM applications
+     LEFT JOIN jobs ON jobs.id = applications.job_id AND jobs.user_id = applications.user_id
+     WHERE applications.id = ?`
+  )
     .bind(id)
     .first<ApplicationRow>();
 
@@ -112,17 +143,15 @@ applicationsRoutes.patch("/:id", async (c) => {
     throw new AppError("NOT_FOUND", "Application not found", 404);
   }
 
-  if (body.status && !VALID_STATUSES.includes(body.status)) {
-    throw new AppError("VALIDATION_ERROR", `Invalid status: ${body.status}`, 422);
-  }
+  const normalizedStatus = body.status ? normalizeStatus(body.status) : undefined;
 
   const now = new Date().toISOString();
   const updates: string[] = ["updated_at = ?"];
   const values: (string | number)[] = [now];
 
-  if (body.status) {
+  if (normalizedStatus) {
     updates.push("status = ?");
-    values.push(body.status);
+    values.push(normalizedStatus);
   }
   if (body.notes !== undefined) {
     updates.push("notes = ?");
@@ -135,15 +164,20 @@ applicationsRoutes.patch("/:id", async (c) => {
     .run();
 
   // Update job application_status if status changed
-  if (body.status && app.job_id) {
+  if (normalizedStatus && app.job_id) {
     await c.env.DB.prepare(
-      "UPDATE jobs SET application_status = ?, updated_at = ? WHERE id = ?"
+      "UPDATE jobs SET application_status = ?, updated_at = ? WHERE id = ? AND user_id = ?"
     )
-      .bind(body.status, now, app.job_id)
+      .bind(normalizedStatus === "draft" ? null : normalizedStatus, now, app.job_id, userId)
       .run();
   }
 
-  const updated = await c.env.DB.prepare("SELECT * FROM applications WHERE id = ?")
+  const updated = await c.env.DB.prepare(
+    `SELECT applications.*, jobs.title AS job_title, jobs.company AS company, jobs.application_status AS job_application_status
+     FROM applications
+     LEFT JOIN jobs ON jobs.id = applications.job_id AND jobs.user_id = applications.user_id
+     WHERE applications.id = ?`
+  )
     .bind(applicationId)
     .first<ApplicationRow>();
 
@@ -157,7 +191,10 @@ applicationsRoutes.get("/:id", async (c) => {
 
   const applicationId = c.req.param("id");
   const app = await c.env.DB.prepare(
-    "SELECT * FROM applications WHERE id = ? AND user_id = ?"
+    `SELECT applications.*, jobs.title AS job_title, jobs.company AS company, jobs.application_status AS job_application_status
+     FROM applications
+     LEFT JOIN jobs ON jobs.id = applications.job_id AND jobs.user_id = applications.user_id
+     WHERE applications.id = ? AND applications.user_id = ?`
   )
     .bind(applicationId, userId)
     .first<ApplicationRow>();

@@ -9,6 +9,7 @@ export interface Env {
   APP_ENV: string;
   JWT_EXPIRY_HOURS: string;
   CORS_ORIGIN: string;
+  DEEPSEEK_MODEL?: string;
 }
 
 export interface JwtPayload {

@@ -3,6 +3,7 @@ import { Env } from "../types";
 import { authMiddleware } from "../middleware/auth";
 import { generateId } from "../db/utils";
 import { AppError } from "../middleware/error-handler";
+import { callDeepSeekChat, logLLMRun } from "../llm";
 
 export const resumesRoutes = new Hono<{ Bindings: Env }>();
 
@@ -37,7 +38,7 @@ resumesRoutes.post("/generate", async (c) => {
   if (!job || !profile) throw new AppError("NOT_FOUND", "Related data not found", 404);
 
   // Generate CV using LLM
-  const cvHtml = await generateCV(c.env, job, profile, application.match_result);
+  const cvHtml = await generateCV(c.env, userId, job, profile, application.match_result);
 
   // Store in R2
   const r2Key = `applications/${application.id}/cv.html`;
@@ -105,6 +106,7 @@ resumesRoutes.get("/:id/pdf", async (c) => {
 
 async function generateCV(
   env: Env,
+  userId: string,
   job: { title: string; company: string; raw_description: string },
   profile: { name: string; raw_cv_md: string; profile_json: string | null },
   matchResult: string | null
@@ -129,43 +131,12 @@ Output ONLY the HTML content (starting with <!DOCTYPE html>), no markdown fences
       return generateFallbackCV(profile.name, profile.raw_cv_md);
     }
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.LLM_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "deepseek/deepseek-chat-v3-0324:free",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.4,
-      }),
-    });
-
-    if (!response.ok) throw new Error(`LLM error: ${response.status}`);
-
-    const data = (await response.json()) as {
-      choices: { message: { content: string } }[];
-    };
-    const content = data.choices[0].message.content;
-    const latencyMs = Date.now() - startTime;
-
-    await env.DB.prepare(
-      `INSERT INTO llm_runs (id, provider, model, task, latency_ms, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(generateId(), "openrouter", "default", "cv_generation", latencyMs, "success", new Date().toISOString())
-      .run();
+    const content = await callDeepSeekChat(env, [{ role: "user", content: prompt }], { temperature: 0.4 });
+    await logLLMRun(env, userId, "cv_generation", startTime, "success");
 
     return content;
   } catch (err) {
-    const latencyMs = Date.now() - startTime;
-    await env.DB.prepare(
-      `INSERT INTO llm_runs (id, provider, model, task, latency_ms, status, error_message, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(generateId(), "openrouter", "default", "cv_generation", latencyMs, "error", (err as Error).message, new Date().toISOString())
-      .run();
+    await logLLMRun(env, userId, "cv_generation", startTime, "error", (err as Error).message);
 
     return generateFallbackCV(profile.name, profile.raw_cv_md);
   }
