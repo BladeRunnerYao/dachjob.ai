@@ -1,7 +1,7 @@
 import { isBuildTime, isProduction, request, requestBlob } from './base-client';
 import { getMockResume } from './mocks';
 import { checkTaskResult, isBackgroundTaskResponse, pollTask } from './tasks';
-import type { BackgroundTask, ResumeArtifact } from './types';
+import type { BackgroundTask, ResumeArtifact, ResumeStyle } from './types';
 
 const RESUME_GENERATE_TIMEOUT_MS = 120_000;
 
@@ -33,10 +33,15 @@ export function toResumeArtifact(artifact: ResumeArtifactApiResponse): ResumeArt
   };
 }
 
-export async function createResumeArtifact(jobId: string, confirmedSkills: string[] | undefined, workerEnabled: boolean): Promise<ResumeArtifact> {
+export async function createResumeArtifact(
+  jobId: string,
+  confirmedSkills: string[] | undefined,
+  workerEnabled: boolean,
+  style: ResumeStyle = 'german'
+): Promise<ResumeArtifact> {
   const result = await request<ResumeArtifactApiResponse | BackgroundTask>(`/api/jobs/${jobId}/resume`, {
     method: 'POST',
-    body: JSON.stringify({ confirmed_skills: confirmedSkills || [] }),
+    body: JSON.stringify({ confirmed_skills: confirmedSkills || [], style }),
     timeoutMs: workerEnabled ? undefined : RESUME_GENERATE_TIMEOUT_MS,
   });
   if (isBackgroundTaskResponse(result)) {

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ResumeResponse(BaseModel):
@@ -19,3 +19,4 @@ class ResumeResponse(BaseModel):
 
 class GenerateResumeRequest(BaseModel):
     confirmed_skills: list[str] | None = None
+    style: str = Field("german", pattern=r"^(american|german)$")

@@ -35,6 +35,7 @@ async def create_resume(
 ):
     settings = get_settings()
     confirmed_skills = body.confirmed_skills or []
+    style = body.style
     if settings.worker_enabled:
         mode, result = await run_or_enqueue(
             db,
@@ -46,12 +47,13 @@ async def create_resume(
                 "user_id": str(tenant.user_id) if tenant.user_id else None,
                 "job_id": str(job_id),
                 "confirmed_skills": confirmed_skills,
+                "style": style,
             },
             celery_task=__import__(
                 "app.workers.tasks", fromlist=["generate_resume_task"]
             ).generate_resume_task,
             sync_runner=lambda: generate_resume(
-                db, tenant, job_id, confirmed_skills=confirmed_skills
+                db, tenant, job_id, confirmed_skills=confirmed_skills, style=style
             ),
             result_serializer=lambda r: {
                 "resume_artifact_id": str(r.id),
@@ -63,7 +65,9 @@ async def create_resume(
             return result
         artifact = result
     else:
-        artifact = await generate_resume(db, tenant, job_id, confirmed_skills=confirmed_skills)
+        artifact = await generate_resume(
+            db, tenant, job_id, confirmed_skills=confirmed_skills, style=style
+        )
     return artifact
 
 

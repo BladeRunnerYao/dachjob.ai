@@ -1,20 +1,31 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+private enum CVDisplayMode: String, CaseIterable, Identifiable {
+    case preview = "Preview"
+    case markdown = "Markdown"
+
+    var id: String { rawValue }
+}
+
 struct ProfileView: View {
     @Environment(AuthService.self) var authService
     @State private var profile: CandidateProfile?
     @State private var isLoading = true
+    @State private var isLoadingProfile = false
     @State private var isSavingCv = false
     @State private var showMarkdownEditor = false
     @State private var showPdfImporter = false
     @State private var showUrlImporter = false
     @State private var urlDraft = ""
     @State private var markdownDraft = ""
+    @State private var cvDisplayMode: CVDisplayMode = .preview
+    @State private var lastLoadedAt: Date?
     @State private var uploadMessage: String?
     @State private var error: String?
 
     private let api = APIClient.shared
+    private let profileReloadInterval: TimeInterval = 30
 
     var body: some View {
         NavigationStack {
@@ -31,7 +42,7 @@ struct ProfileView: View {
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
-                        Button("Retry") { Task { await loadProfile() } }
+                        Button("Retry") { Task { await loadProfile(force: true) } }
                     }
                     .padding(.top, 60)
                 } else if let profile {
@@ -117,7 +128,7 @@ struct ProfileView: View {
             } message: {
                 Text("Enter your LinkedIn profile or personal website URL to create your CV.")
             }
-            .refreshable { await loadProfile() }
+            .refreshable { await loadProfile(force: true) }
             .task { await loadProfile() }
         }
     }
@@ -199,16 +210,31 @@ struct ProfileView: View {
 
             if !profile.rawCvMd.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("CV Markdown")
-                        .font(.headline)
-                    Text(profile.rawCvMd)
-                        .font(.footnote.monospaced())
-                        .foregroundColor(.secondary)
-                        .lineLimit(18)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                        .background(Color(.systemGray6))
-                        .clipShape(.rect(cornerRadius: 8))
+                    HStack {
+                        Text("CV")
+                            .font(.headline)
+                        Spacer()
+                        Button("Edit") { openMarkdownEditor() }
+                            .font(.caption)
+                    }
+                    Picker("CV View", selection: $cvDisplayMode) {
+                        ForEach(CVDisplayMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if cvDisplayMode == .preview {
+                        MarkdownPreview(markdown: profile.rawCvMd)
+                    } else {
+                        Text(profile.rawCvMd)
+                            .font(.footnote.monospaced())
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                            .background(Color(.systemGray6))
+                            .clipShape(.rect(cornerRadius: 8))
+                    }
                 }
             }
         }
@@ -230,6 +256,7 @@ struct ProfileView: View {
 
         do {
             profile = try await api.uploadCvMarkdown(markdown)
+            lastLoadedAt = Date()
             uploadMessage = "CV markdown saved."
             showMarkdownEditor = false
         } catch let apiError as APIError where apiError.isCancelled {
@@ -247,6 +274,7 @@ struct ProfileView: View {
 
         do {
             profile = try await api.importProfileFromPdf(fileURL: url)
+            lastLoadedAt = Date()
             uploadMessage = "PDF CV imported."
         } catch let apiError as APIError where apiError.isCancelled {
             return
@@ -268,6 +296,7 @@ struct ProfileView: View {
 
         do {
             profile = try await api.importProfileFromUrl(url)
+            lastLoadedAt = Date()
             uploadMessage = "Profile imported from URL."
         } catch let apiError as APIError where apiError.isCancelled {
             return
@@ -276,18 +305,51 @@ struct ProfileView: View {
         }
     }
 
-    private func loadProfile() async {
-        isLoading = true
+    private func loadProfile(force: Bool = false) async {
+        if isLoadingProfile { return }
+        if !force,
+           profile != nil,
+           let lastLoadedAt,
+           Date().timeIntervalSince(lastLoadedAt) < profileReloadInterval {
+            isLoading = false
+            return
+        }
+
+        isLoadingProfile = true
+        isLoading = profile == nil
         error = nil
+        defer {
+            isLoadingProfile = false
+            isLoading = false
+        }
         do {
             profile = try await api.getProfile()
+            lastLoadedAt = Date()
         } catch let apiError as APIError where apiError.isCancelled {
-            isLoading = false
             return
         } catch {
             self.error = error.localizedDescription
         }
-        isLoading = false
+    }
+}
+
+struct MarkdownPreview: View {
+    let markdown: String
+
+    private var rendered: AttributedString {
+        (try? AttributedString(markdown: markdown)) ?? AttributedString(markdown)
+    }
+
+    var body: some View {
+        Text(rendered)
+            .font(.body)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(Color(.systemBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color(.systemGray4), lineWidth: 1)
+            )
     }
 }
 

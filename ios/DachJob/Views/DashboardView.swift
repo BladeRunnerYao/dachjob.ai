@@ -5,8 +5,6 @@ struct DashboardView: View {
     @State private var totalJobs = 0
     @State private var appliedCount = 0
     @State private var savedCount = 0
-    @State private var applications: [Application] = []
-    @State private var llmRuns: [LLMRun] = []
     @State private var isLoading = true
     @State private var error: String?
 
@@ -34,7 +32,6 @@ struct DashboardView: View {
                     VStack(spacing: 20) {
                         statsGrid
                         recentJobsSection
-                        recentApplicationsSection
                     }
                     .padding()
                 }
@@ -54,8 +51,6 @@ struct DashboardView: View {
             StatCard(title: "Jobs", value: "\(totalJobs)", color: .blue)
             StatCard(title: "Applied", value: "\(appliedCount)", color: .green)
             StatCard(title: "Saved", value: "\(savedCount)", color: .orange)
-            StatCard(title: "Apps", value: "\(applications.count)", color: .purple)
-            StatCard(title: "LLM Runs", value: "\(llmRuns.count)", color: .indigo)
         }
     }
 
@@ -99,56 +94,18 @@ struct DashboardView: View {
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
     }
 
-    private var recentApplicationsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Recent Applications")
-                .font(.headline)
-            if applications.isEmpty {
-                Text("No applications yet")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            } else {
-                ForEach(applications.prefix(3)) { app in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(app.jobTitle)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Text(app.company)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Text(app.status.capitalized)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(.rect(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
-    }
-
     private func loadData() async {
-        isLoading = jobs.isEmpty && applications.isEmpty && llmRuns.isEmpty
+        isLoading = jobs.isEmpty
         error = nil
         do {
             async let jobsResult = api.getJobs(limit: 5)
             async let appliedResult = api.getJobs(limit: 1, status: "applied")
             async let savedResult = api.getJobs(limit: 1, status: "saved")
-            async let appsResult = api.getApplications()
-            async let runsResult = api.getLLMRuns(limit: 200)
             let recentJobs = try await jobsResult
             jobs = recentJobs.items
             totalJobs = recentJobs.total
             appliedCount = try await appliedResult.total
             savedCount = try await savedResult.total
-            applications = try await appsResult
-            llmRuns = try await runsResult.items
         } catch let apiError as APIError where apiError.isCancelled {
             isLoading = false
             return

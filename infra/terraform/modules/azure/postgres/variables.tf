@@ -35,6 +35,16 @@ variable "storage_mb" {
   default = 32768
 }
 
+variable "postgres_subnet_id" {
+  type        = string
+  description = "ID of the delegated subnet used for PostgreSQL Flexible Server private access."
+}
+
+variable "postgres_private_dns_zone_id" {
+  type        = string
+  description = "ID of the private DNS zone linked to the PostgreSQL virtual network."
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

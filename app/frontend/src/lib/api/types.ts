@@ -1,4 +1,5 @@
 export type JobStatus = 'new' | 'saved' | 'applied';
+export type ResumeStyle = 'american' | 'german';
 
 export interface JobPosting {
   id: string;

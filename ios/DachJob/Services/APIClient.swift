@@ -15,6 +15,9 @@ enum APIError: LocalizedError {
         case .unauthorized:
             return "Session expired. Please log in again."
         case .serverError(let code, let message):
+            if code == 429 {
+                return "Too many requests. Please wait a moment and try again."
+            }
             return "Server error (\(code)): \(message)"
         case .networkError(let error):
             return "Network error: \(error.localizedDescription)"
@@ -37,6 +40,20 @@ private struct CVMarkdownUpload: Encodable {
     enum CodingKeys: String, CodingKey {
         case rawCvMd = "raw_cv_md"
     }
+}
+
+private struct ResumeGenerateRequest: Encodable {
+    let confirmedSkills: [String]
+    let style: ResumeStyle
+
+    enum CodingKeys: String, CodingKey {
+        case confirmedSkills = "confirmed_skills"
+        case style
+    }
+}
+
+private struct PasswordResetRequest: Encodable {
+    let email: String
 }
 
 @MainActor
@@ -83,6 +100,10 @@ class APIClient {
         return response
     }
 
+    func requestPasswordReset(email: String) async throws -> PasswordResetResponse {
+        return try await post("/api/auth/forgot-password", body: PasswordResetRequest(email: email))
+    }
+
     func logout() {
         authToken = nil
     }
@@ -114,6 +135,13 @@ class APIClient {
     func updateJobStatus(id: String, status: String) async throws -> JobPosting {
         let body: [String: String] = ["status": status]
         return try await patch("/api/jobs/\(id)/status", body: body)
+    }
+
+    func createResumeArtifact(jobId: String, style: ResumeStyle, confirmedSkills: [String]) async throws -> ResumeArtifact {
+        return try await post(
+            "/api/jobs/\(jobId)/resume",
+            body: ResumeGenerateRequest(confirmedSkills: confirmedSkills, style: style)
+        )
     }
 
     // MARK: - Profile
