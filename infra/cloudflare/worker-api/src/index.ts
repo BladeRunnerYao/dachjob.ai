@@ -11,6 +11,16 @@ import { errorHandler } from "./middleware/error-handler";
 
 const app = new Hono<{ Bindings: Env }>();
 
+function originMatches(pattern: string, origin: string): boolean {
+  if (pattern === "*") return true;
+  if (pattern.startsWith("*.")) {
+    // wildcard subdomain: *.example.com matches a.example.com
+    const suffix = pattern.slice(1); // ".example.com"
+    return origin.endsWith(suffix);
+  }
+  return pattern === origin;
+}
+
 // Global CORS
 app.use(
   "*",
@@ -19,7 +29,10 @@ app.use(
       const allowed = c.env.CORS_ORIGIN || "*";
       if (allowed === "*") return "*";
       const origins = allowed.split(",").map((o: string) => o.trim());
-      return origins.includes(origin) ? origin : origins[0];
+      // Return the original origin if it matches any allowed pattern,
+      // otherwise return the first allowed origin as fallback
+      const match = origins.find((o: string) => originMatches(o, origin));
+      return match ? origin : origins[0] || "";
     },
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],

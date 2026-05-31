@@ -6,6 +6,23 @@ import { AppError } from "../middleware/error-handler";
 
 export const authRoutes = new Hono<{ Bindings: Env }>();
 
+// GET /api/auth/me
+authRoutes.get("/me", async (c) => {
+  const { authMiddleware } = await import("../middleware/auth");
+  const userId = await authMiddleware(c);
+  if (!userId) {
+    return c.json({ error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+
+  const user = await c.env.DB.prepare("SELECT id, email, name, created_at FROM users WHERE id = ?")
+    .bind(userId)
+    .first<{ id: string; email: string; name: string; created_at: string }>();
+  if (!user) {
+    return c.json({ error: { code: "NOT_FOUND", message: "User not found" } }, 404);
+  }
+  return c.json({ id: user.id, email: user.email, name: user.name });
+});
+
 // POST /api/auth/register
 authRoutes.post("/register", async (c) => {
   const body = await c.req.json<{ email: string; password: string; name?: string }>();
