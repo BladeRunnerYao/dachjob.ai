@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS applications (
     job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     profile_id TEXT NOT NULL REFERENCES candidate_profiles(id),
     status TEXT NOT NULL DEFAULT 'draft',
+    notes TEXT DEFAULT '',
     match_score REAL DEFAULT NULL,
     match_result TEXT DEFAULT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
