@@ -7,6 +7,7 @@ import { profilesRoutes } from "./profiles/routes";
 import { matchingRoutes } from "./matching/routes";
 import { resumesRoutes } from "./resumes/routes";
 import { artifactsRoutes } from "./artifacts/routes";
+import { applicationsRoutes } from "./applications/routes";
 import { errorHandler } from "./middleware/error-handler";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -34,7 +35,7 @@ app.use(
       const match = origins.find((o: string) => originMatches(o, origin));
       return match ? origin : origins[0] || "";
     },
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     exposeHeaders: ["Content-Length"],
     maxAge: 86400,
@@ -53,10 +54,11 @@ app.get("/api/health", (c) => {
 // Mount routes
 app.route("/api/auth", authRoutes);
 app.route("/api/jobs", jobsRoutes);
-app.route("/api/profiles", profilesRoutes);
+app.route("/api/profile", profilesRoutes);
 app.route("/api/match", matchingRoutes);
 app.route("/api/resumes", resumesRoutes);
 app.route("/api/artifacts", artifactsRoutes);
+app.route("/api/applications", applicationsRoutes);
 
 // User info endpoint
 app.get("/api/me", async (c) => {

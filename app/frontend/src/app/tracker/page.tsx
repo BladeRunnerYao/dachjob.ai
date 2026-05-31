@@ -13,6 +13,9 @@ export default function TrackerPage() {
   useEffect(() => {
     api.getApplications().then((data) => {
       setApplications(data);
+    }).catch((err) => {
+      setError(err instanceof Error ? err.message : 'Failed to load applications');
+    }).finally(() => {
       setLoading(false);
     });
   }, []);
