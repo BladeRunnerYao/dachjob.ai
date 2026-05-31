@@ -68,6 +68,41 @@ resumesRoutes.post("/generate", async (c) => {
   });
 });
 
+// GET /api/resumes/:id/html - Download generated resume HTML
+resumesRoutes.get("/:id/html", async (c) => {
+  const userId = await authMiddleware(c);
+  if (!userId) return c.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, 401);
+
+  const artifactId = c.req.param("id");
+  const artifact = await c.env.DB.prepare(
+    "SELECT id, r2_key, content_type FROM artifacts WHERE id = ? AND user_id = ? AND type = 'cv_html'"
+  )
+    .bind(artifactId, userId)
+    .first<{ id: string; r2_key: string; content_type: string }>();
+
+  if (!artifact) {
+    throw new AppError("NOT_FOUND", "Resume artifact not found", 404);
+  }
+
+  const object = await c.env.STORAGE.get(artifact.r2_key);
+  if (!object) {
+    throw new AppError("NOT_FOUND", "Resume HTML not found", 404);
+  }
+
+  const headers = new Headers();
+  headers.set("Content-Type", artifact.content_type || "text/html; charset=utf-8");
+  headers.set("Cache-Control", "private, max-age=3600");
+  object.writeHttpMetadata(headers);
+  return new Response(object.body, { headers });
+});
+
+// GET /api/resumes/:id/pdf - Cloudflare generation currently stores HTML only
+resumesRoutes.get("/:id/pdf", async (c) => {
+  const userId = await authMiddleware(c);
+  if (!userId) return c.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, 401);
+  throw new AppError("NOT_FOUND", "PDF not available for this artifact", 404);
+});
+
 async function generateCV(
   env: Env,
   job: { title: string; company: string; raw_description: string },

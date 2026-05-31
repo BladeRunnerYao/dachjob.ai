@@ -25,6 +25,7 @@ export default function LLMRunsPage() {
   const [pageSize, setPageSize] = useState(50);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,11 +38,21 @@ export default function LLMRunsPage() {
       if (taskFilter !== 'all') params.task = taskFilter;
       if (statusFilter !== 'all') params.status = statusFilter;
 
-      const result = await api.getLLMRuns(params);
-      if (!cancelled) {
-        setRuns(result.items);
-        setTotal(result.total);
-        setLoading(false);
+      try {
+        setError(null);
+        const result = await api.getLLMRuns(params);
+        if (!cancelled) {
+          setRuns(result.items);
+          setTotal(result.total);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setRuns([]);
+          setTotal(0);
+          setError(err instanceof Error ? err.message : 'Could not load LLM runs');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
 
@@ -55,9 +66,13 @@ export default function LLMRunsPage() {
     let cancelled = false;
 
     async function loadTasks() {
-      const result = await api.getLLMRuns({ limit: 200 });
-      if (!cancelled) {
-        setTasks([...new Set(result.items.map((run) => run.task))]);
+      try {
+        const result = await api.getLLMRuns({ limit: 200 });
+        if (!cancelled) {
+          setTasks([...new Set(result.items.map((run) => run.task))]);
+        }
+      } catch {
+        if (!cancelled) setTasks([]);
       }
     }
 
@@ -129,6 +144,9 @@ export default function LLMRunsPage() {
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
+          {error && (
+            <p className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+          )}
           <table className="w-full text-sm min-w-[600px]">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs text-slate-500">

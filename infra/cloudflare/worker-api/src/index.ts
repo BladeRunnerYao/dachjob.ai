@@ -8,6 +8,7 @@ import { matchingRoutes } from "./matching/routes";
 import { resumesRoutes } from "./resumes/routes";
 import { artifactsRoutes } from "./artifacts/routes";
 import { applicationsRoutes } from "./applications/routes";
+import { llmRunsRoutes } from "./llm-runs/routes";
 import { errorHandler } from "./middleware/error-handler";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -59,6 +60,7 @@ app.route("/api/match", matchingRoutes);
 app.route("/api/resumes", resumesRoutes);
 app.route("/api/artifacts", artifactsRoutes);
 app.route("/api/applications", applicationsRoutes);
+app.route("/api/llm-runs", llmRunsRoutes);
 
 // User info endpoint
 app.get("/api/me", async (c) => {
