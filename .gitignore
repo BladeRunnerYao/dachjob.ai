@@ -35,3 +35,8 @@ ios/.build/
 *.tfstate
 *.tfstate.*
 **/backend.conf
+
+
+# Cloudflare
+.wrangler/
+.dev.vars

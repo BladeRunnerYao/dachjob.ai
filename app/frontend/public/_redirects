@@ -1,0 +1,3 @@
+# Cloudflare Pages SPA routing
+# Serve jobs page for dynamic routes (client-side navigation handles the rest)
+/jobs/:id /jobs.html 200

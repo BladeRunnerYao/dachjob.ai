@@ -22,6 +22,28 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function getErrorMessage(data: unknown, fallback: string): string {
+  if (data && typeof data === 'object') {
+    const body = data as { detail?: string; error?: { message?: string } };
+    return body.error?.message || body.detail || fallback;
+  }
+  return fallback;
+}
+
+function getUserFromAuthResponse(data: {
+  user?: User;
+  user_id?: string;
+  email?: string;
+  name?: string;
+}): User {
+  if (data.user) return data.user;
+  return {
+    id: data.user_id || '',
+    email: data.email || '',
+    name: data.name || '',
+  };
+}
+
 function getApiBase() {
   // In production (cloud deployments), NEXT_PUBLIC_API_BASE_URL should be
   // empty/relative so the frontend calls the API on the same origin.
@@ -68,13 +90,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ email, password }),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Login failed' }));
-      throw new Error(err.detail || 'Login failed');
+      const err = await res.json().catch(() => null);
+      throw new Error(getErrorMessage(err, 'Login failed'));
     }
     const data = await res.json();
     localStorage.setItem('auth_token', data.token);
     setToken(data.token);
-    setUser({ id: data.user_id, email: data.email, name: data.name });
+    setUser(getUserFromAuthResponse(data));
     if (!data.password_needs_reset) {
       router.push('/');
     }
@@ -88,13 +110,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ email, password, name }),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Registration failed' }));
-      throw new Error(err.detail || 'Registration failed');
+      const err = await res.json().catch(() => null);
+      throw new Error(getErrorMessage(err, 'Registration failed'));
     }
     const data = await res.json();
     localStorage.setItem('auth_token', data.token);
     setToken(data.token);
-    setUser({ id: data.user_id, email: data.email, name: data.name });
+    setUser(getUserFromAuthResponse(data));
     router.push('/');
   }, [router]);
 
@@ -118,8 +140,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ token, new_password: newPassword }),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Password reset failed' }));
-      throw new Error(err.detail || 'Password reset failed');
+      const err = await res.json().catch(() => null);
+      throw new Error(getErrorMessage(err, 'Password reset failed'));
     }
   }, []);
 
