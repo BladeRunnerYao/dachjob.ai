@@ -1,0 +1,8 @@
+name = "dachjob-web"
+pages_build_output_dir = "app/frontend/out"
+
+# The frontend is deployed as a static site to Cloudflare Pages.
+# Next.js is configured with `output: 'export'` for static generation.
+
+[vars]
+NEXT_PUBLIC_API_BASE_URL = "https://api.dachjob.ai"

@@ -1,0 +1,27 @@
+name = "dachjob-api"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Custom domain - configure after first deploy
+# routes = [{ pattern = "api.dachjob.ai", custom_domain = true }]
+
+[vars]
+APP_ENV = "production"
+JWT_EXPIRY_HOURS = "72"
+CORS_ORIGIN = "https://app.dachjob.ai"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "dachjob-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+# R2 Storage binding
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "dachjob-storage"
+
+# Secrets (set via `wrangler secret put`):
+# - JWT_SECRET
+# - LLM_API_KEY
