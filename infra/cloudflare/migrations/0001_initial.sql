@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 -- Jobs table
 CREATE TABLE IF NOT EXISTS jobs (
@@ -34,8 +34,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_jobs_user_id ON jobs(user_id);
-CREATE INDEX idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 
 -- Candidate profiles
 CREATE TABLE IF NOT EXISTS candidate_profiles (
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS candidate_profiles (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_profiles_user_id ON candidate_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON candidate_profiles(user_id);
 
 -- Evidence chunks for matching
 CREATE TABLE IF NOT EXISTS evidence_chunks (
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS evidence_chunks (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_chunks_profile_id ON evidence_chunks(profile_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_profile_id ON evidence_chunks(profile_id);
 
 -- Applications
 CREATE TABLE IF NOT EXISTS applications (
@@ -75,8 +75,8 @@ CREATE TABLE IF NOT EXISTS applications (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_applications_user_id ON applications(user_id);
-CREATE INDEX idx_applications_job_id ON applications(job_id);
+CREATE INDEX IF NOT EXISTS idx_applications_user_id ON applications(user_id);
+CREATE INDEX IF NOT EXISTS idx_applications_job_id ON applications(job_id);
 
 -- Artifacts (metadata for files in R2)
 CREATE TABLE IF NOT EXISTS artifacts (
@@ -90,8 +90,8 @@ CREATE TABLE IF NOT EXISTS artifacts (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_artifacts_user_id ON artifacts(user_id);
-CREATE INDEX idx_artifacts_application_id ON artifacts(application_id);
+CREATE INDEX IF NOT EXISTS idx_artifacts_user_id ON artifacts(user_id);
+CREATE INDEX IF NOT EXISTS idx_artifacts_application_id ON artifacts(application_id);
 
 -- LLM runs (observability)
 CREATE TABLE IF NOT EXISTS llm_runs (
@@ -108,5 +108,5 @@ CREATE TABLE IF NOT EXISTS llm_runs (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_llm_runs_user_id ON llm_runs(user_id);
-CREATE INDEX idx_llm_runs_created_at ON llm_runs(created_at);
+CREATE INDEX IF NOT EXISTS idx_llm_runs_user_id ON llm_runs(user_id);
+CREATE INDEX IF NOT EXISTS idx_llm_runs_created_at ON llm_runs(created_at);
