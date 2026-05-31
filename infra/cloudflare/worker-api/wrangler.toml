@@ -15,7 +15,7 @@ CORS_ORIGIN = "https://app.dachjob.ai"
 [[d1_databases]]
 binding = "DB"
 database_name = "dachjob-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "1dbd2312-dd23-4dc8-9986-d464582b60df"
 
 # R2 Storage binding
 [[r2_buckets]]
