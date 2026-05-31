@@ -40,7 +40,7 @@ struct DashboardView: View {
             }
             .navigationTitle("Dashboard")
             .refreshable { await loadData() }
-            .task { await loadData() }
+            .task(id: filter) { await loadData(debounced: !jobs.isEmpty) }
         }
     }
 
@@ -122,25 +122,38 @@ struct DashboardView: View {
         }
     }
 
-    private func loadData() async {
+    private func loadData(debounced: Bool = false) async {
+        let selectedFilter = filter
+        if debounced {
+            do {
+                try await Task.sleep(nanoseconds: 250_000_000)
+            } catch {
+                return
+            }
+        }
+        guard !Task.isCancelled else { return }
+
         isLoading = jobs.isEmpty
         error = nil
         do {
             async let jobsResult = api.getJobs(
                 limit: 5,
-                status: filter == "all" ? nil : filter
+                status: selectedFilter == "all" ? nil : selectedFilter
             )
             async let appliedResult = api.getJobs(limit: 1, status: "applied")
             async let savedResult = api.getJobs(limit: 1, status: "saved")
             let recentJobs = try await jobsResult
+            guard !Task.isCancelled, selectedFilter == filter else { return }
             jobs = recentJobs.items
             totalJobs = recentJobs.total
             appliedCount = try await appliedResult.total
             savedCount = try await savedResult.total
         } catch let apiError as APIError where apiError.isCancelled {
-            isLoading = false
+            return
+        } catch let apiError as APIError where apiError.isRateLimited && !jobs.isEmpty {
             return
         } catch {
+            guard !Task.isCancelled, selectedFilter == filter else { return }
             self.error = error.localizedDescription
         }
         isLoading = false
@@ -149,7 +162,6 @@ struct DashboardView: View {
     private func selectFilter(_ nextFilter: String) {
         guard filter != nextFilter else { return }
         filter = nextFilter
-        Task { await loadData() }
     }
 }
 

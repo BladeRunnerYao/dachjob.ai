@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     cors_origins: str = ""
 
     rate_limit_requests: int = 60
+    authenticated_rate_limit_requests: int = 180
     rate_limit_window_seconds: int = 60
 
     smtp_host: str = ""

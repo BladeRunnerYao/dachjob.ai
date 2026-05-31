@@ -91,6 +91,7 @@ app.add_middleware(
 app.add_middleware(
     RateLimitMiddleware,
     max_requests=settings.rate_limit_requests,
+    authenticated_max_requests=settings.authenticated_rate_limit_requests,
     window_seconds=settings.rate_limit_window_seconds,
     redis_url=settings.redis_url if settings.redis_enabled else None,
     exempt_routes=is_rate_limit_exempt_route,

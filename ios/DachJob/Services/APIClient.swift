@@ -32,6 +32,11 @@ enum APIError: LocalizedError {
         if case .cancelled = self { return true }
         return false
     }
+
+    var isRateLimited: Bool {
+        if case .serverError(let code, _) = self, code == 429 { return true }
+        return false
+    }
 }
 
 private struct CVMarkdownUpload: Encodable {
