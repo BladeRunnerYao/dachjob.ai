@@ -17,6 +17,10 @@ struct JobsListView: View {
         max(1, Int(ceil(Double(total) / Double(pageSize))))
     }
 
+    private var loadTaskID: String {
+        "\(filter):\(page)"
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -66,7 +70,7 @@ struct JobsListView: View {
                 }
             }
             .refreshable { await loadJobs() }
-            .task { await loadJobs() }
+            .task(id: loadTaskID) { await loadJobs(debounced: !jobs.isEmpty) }
         }
     }
 
@@ -87,7 +91,6 @@ struct JobsListView: View {
         HStack(spacing: 16) {
             Button {
                 page = max(0, page - 1)
-                Task { await loadJobs() }
             } label: {
                 Image(systemName: "chevron.left")
                     .frame(width: 36, height: 36)
@@ -101,7 +104,6 @@ struct JobsListView: View {
 
             Button {
                 page = min(totalPages - 1, page + 1)
-                Task { await loadJobs() }
             } label: {
                 Image(systemName: "chevron.right")
                     .frame(width: 36, height: 36)
@@ -114,15 +116,31 @@ struct JobsListView: View {
         .background(Color(.systemBackground))
     }
 
-    private func loadJobs() async {
+    private func loadJobs(debounced: Bool = false) async {
+        let selectedFilter = filter
+        let selectedPage = page
+        if debounced {
+            do {
+                try await Task.sleep(nanoseconds: 250_000_000)
+            } catch {
+                return
+            }
+        }
+        guard !Task.isCancelled else { return }
+
         isLoading = jobs.isEmpty
         error = nil
         do {
-            async let selectedResult = api.getJobs(limit: pageSize, offset: page * pageSize, status: filter == "all" ? nil : filter)
+            async let selectedResult = api.getJobs(
+                limit: pageSize,
+                offset: selectedPage * pageSize,
+                status: selectedFilter == "all" ? nil : selectedFilter
+            )
             async let allResult = api.getJobs(limit: 1)
             async let appliedResult = api.getJobs(limit: 1, status: "applied")
             async let savedResult = api.getJobs(limit: 1, status: "saved")
             let result = try await selectedResult
+            guard !Task.isCancelled, selectedFilter == filter, selectedPage == page else { return }
             jobs = result.items
             total = result.total
             counts = [
@@ -131,9 +149,11 @@ struct JobsListView: View {
                 "saved": try await savedResult.total,
             ]
         } catch let apiError as APIError where apiError.isCancelled {
-            isLoading = false
+            return
+        } catch let apiError as APIError where apiError.isRateLimited && !jobs.isEmpty {
             return
         } catch {
+            guard !Task.isCancelled, selectedFilter == filter, selectedPage == page else { return }
             self.error = error.localizedDescription
         }
         isLoading = false
@@ -143,7 +163,6 @@ struct JobsListView: View {
         guard filter != nextFilter else { return }
         filter = nextFilter
         page = 0
-        Task { await loadJobs() }
     }
 }
 
