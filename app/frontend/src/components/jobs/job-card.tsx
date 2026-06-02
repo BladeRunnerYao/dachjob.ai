@@ -24,6 +24,7 @@ function recBadge(rec: string) {
 }
 
 function statusBadge(status: string) {
+  if (status === 'received' || status === 'new') return 'default';
   if (status === 'applied') return 'green';
   if (status === 'interview') return 'blue';
   if (status === 'offer') return 'green';
@@ -34,6 +35,7 @@ function statusBadge(status: string) {
 
 function displayStatus(status?: string | null) {
   if (!status) return '';
+  if (status === 'new') return 'Received';
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -50,12 +52,14 @@ export function JobCard({ job }: JobCardProps) {
             {job.score != null && <Badge variant={scoreBadge(toPercent(job.score))}>{toPercent(job.score)}%</Badge>}
             {job.recommendation && <Badge variant={recBadge(job.recommendation)}>{job.recommendation}</Badge>}
             {job.saved && <Badge variant="yellow">Saved</Badge>}
-            {statusBadge(job.application_status || job.status) && (
-              <Badge variant={statusBadge(job.application_status || job.status)!}>
-                {displayStatus(job.application_status || job.status)}
+            {statusBadge(job.application_status || 'received') && (
+              <Badge variant={statusBadge(job.application_status || 'received')!}>
+                {displayStatus(job.application_status || 'received')}
               </Badge>
             )}
-            <span className="text-xs text-slate-400 hidden sm:inline">{new Date(job.created_at).toLocaleDateString()}</span>
+            <span className="text-xs text-slate-400 hidden sm:inline">
+              Added {new Date(job.pipeline_added_at || job.created_at).toLocaleDateString()}
+            </span>
           </div>
         </CardContent>
       </Card>

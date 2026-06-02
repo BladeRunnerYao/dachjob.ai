@@ -6,7 +6,7 @@ import { AppError } from "../middleware/error-handler";
 
 export const applicationsRoutes = new Hono<{ Bindings: Env }>();
 
-const VALID_STATUSES = ["draft", "applied", "interview", "offer", "rejected", "withdrawn"];
+const VALID_STATUSES = ["draft", "received", "applied", "interview", "offer", "rejected", "withdrawn"];
 
 interface ApplicationRow {
   id: string;
@@ -21,6 +21,7 @@ interface ApplicationRow {
   updated_at: string;
   job_title?: string | null;
   company?: string | null;
+  job_added_at?: string | null;
   job_application_status?: string | null;
 }
 
@@ -36,6 +37,7 @@ function formatApplicationResponse(app: ApplicationRow) {
     score: app.match_score,
     match_score: app.match_score,
     notes: app.notes || null,
+    added_at: app.job_added_at || app.created_at,
     created_at: app.created_at,
     updated_at: app.updated_at,
   };
@@ -46,10 +48,11 @@ function normalizeStatus(status: string | undefined): string {
   if (!VALID_STATUSES.includes(normalized)) {
     throw new AppError("VALIDATION_ERROR", `Invalid status: ${status}. Must be one of ${VALID_STATUSES.join(", ")}`, 422);
   }
-  return normalized;
+  return normalized === "received" ? "draft" : normalized;
 }
 
 function displayStatus(status: string): string {
+  if (status === "draft") return "Received";
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -63,6 +66,7 @@ applicationsRoutes.get("/", async (c) => {
        applications.*,
        jobs.title AS job_title,
        jobs.company AS company,
+       COALESCE(jobs.pipeline_added_at, jobs.created_at) AS job_added_at,
        jobs.application_status AS job_application_status
      FROM applications
      LEFT JOIN jobs ON jobs.id = applications.job_id AND jobs.user_id = applications.user_id
@@ -114,7 +118,9 @@ applicationsRoutes.post("/", async (c) => {
   }
 
   const app = await c.env.DB.prepare(
-    `SELECT applications.*, jobs.title AS job_title, jobs.company AS company, jobs.application_status AS job_application_status
+    `SELECT applications.*, jobs.title AS job_title, jobs.company AS company,
+            COALESCE(jobs.pipeline_added_at, jobs.created_at) AS job_added_at,
+            jobs.application_status AS job_application_status
      FROM applications
      LEFT JOIN jobs ON jobs.id = applications.job_id AND jobs.user_id = applications.user_id
      WHERE applications.id = ?`
@@ -173,7 +179,9 @@ applicationsRoutes.patch("/:id", async (c) => {
   }
 
   const updated = await c.env.DB.prepare(
-    `SELECT applications.*, jobs.title AS job_title, jobs.company AS company, jobs.application_status AS job_application_status
+    `SELECT applications.*, jobs.title AS job_title, jobs.company AS company,
+            COALESCE(jobs.pipeline_added_at, jobs.created_at) AS job_added_at,
+            jobs.application_status AS job_application_status
      FROM applications
      LEFT JOIN jobs ON jobs.id = applications.job_id AND jobs.user_id = applications.user_id
      WHERE applications.id = ?`
@@ -191,7 +199,9 @@ applicationsRoutes.get("/:id", async (c) => {
 
   const applicationId = c.req.param("id");
   const app = await c.env.DB.prepare(
-    `SELECT applications.*, jobs.title AS job_title, jobs.company AS company, jobs.application_status AS job_application_status
+    `SELECT applications.*, jobs.title AS job_title, jobs.company AS company,
+            COALESCE(jobs.pipeline_added_at, jobs.created_at) AS job_added_at,
+            jobs.application_status AS job_application_status
      FROM applications
      LEFT JOIN jobs ON jobs.id = applications.job_id AND jobs.user_id = applications.user_id
      WHERE applications.id = ? AND applications.user_id = ?`

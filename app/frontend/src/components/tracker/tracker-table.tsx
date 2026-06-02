@@ -13,13 +13,14 @@ interface TrackerTableProps {
 }
 
 const statusColors: Record<string, BadgeVariant> = {
+  Received: 'default',
   Applied: 'green',
   Interview: 'blue',
   Offer: 'green',
   Rejected: 'red',
 };
 
-const statusOptions = ['Applied', 'Interview', 'Rejected', 'Offer'];
+const statusOptions = ['Received', 'Applied', 'Interview', 'Rejected', 'Offer'];
 
 function toPercent(score: number): number {
   return Math.round((Math.min(Math.max(score, 1), 5) / 5) * 100);
@@ -40,7 +41,7 @@ export function TrackerTable({ applications, onStatusChange }: TrackerTableProps
               <th className="px-4 py-3 font-medium">Score</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Notes</th>
-              <th className="px-4 py-3 font-medium">Created</th>
+              <th className="px-4 py-3 font-medium">Added</th>
             </tr>
           </thead>
           <tbody>
@@ -82,7 +83,7 @@ export function TrackerTable({ applications, onStatusChange }: TrackerTableProps
                   )}
                 </td>
                 <td className="px-4 py-3 text-slate-500 max-w-[200px] truncate">{app.notes || '-'}</td>
-                <td className="px-4 py-3 text-slate-500">{new Date(app.created_at).toLocaleDateString()}</td>
+                <td className="px-4 py-3 text-slate-500">{new Date(app.added_at || app.created_at).toLocaleDateString()}</td>
               </tr>
             ))}
           </tbody>

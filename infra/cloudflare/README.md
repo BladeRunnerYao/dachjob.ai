@@ -154,6 +154,56 @@ In the Cloudflare dashboard:
 | `LLM_API_KEY` | DeepSeek API key |
 | `DEEPSEEK_MODEL` | Optional DeepSeek model override; defaults to `deepseek-v4-flash` |
 
+### Pipeline Importer Worker
+
+`infra/cloudflare/pipeline-importer-worker` is a separate scheduled Worker that checks
+`BladeRunnerYao/career-ops:data/pipeline.md` hourly and imports newly discovered unchecked job links through
+`dachjob-api`'s `/api/jobs/import` endpoint. It also slowly retries unparsed imported jobs through
+`/api/jobs/:id/parse` so newly imported records eventually receive structured metadata without a large LLM burst.
+
+Runtime state is stored in KV (`STATE`) so each canonical job URL is processed once. LinkedIn URLs are deduplicated by
+job ID. Duplicate imports are recorded as `cache_hit` LLM runs. Imports are sent in batches of 10 because the API
+accepts at most 10 URLs per request. Jobs with hard C/C++ or unrelated firmware/embedded requirements are skipped
+before insertion; TypeScript and Node.js roles are not treated as hard mismatches.
+
+Important configuration:
+
+| Setting | Description |
+|---------|-------------|
+| `MIN_IMPORTS_PER_RUN` / `MAX_IMPORTS_PER_RUN` | Randomized hourly import range, currently `4`-`5` |
+| `MIN_PARSES_PER_RUN` / `MAX_PARSES_PER_RUN` | Randomized hourly parse retry range, currently `3`-`5` |
+| `MAX_ATTEMPTS_PER_URL` | Failed URLs are retried until this count, currently `12` |
+| `BOOTSTRAP_MODE` | `import` imports existing links gradually; `mark_seen` records existing links without importing |
+| `DACHJOB_USER_ID` / `DACHJOB_USER_EMAIL` | User that receives imported jobs |
+
+The importer uses account-level Secrets Store bindings:
+
+| Secret Store name | Description |
+|-------------------|-------------|
+| `career_ops_github_token` | GitHub token that can read `career-ops` |
+| `dachjob_jwt_secret` | Same JWT signing secret used by `dachjob-api` |
+| `dachjob_pipeline_importer_manual_secret` | Bearer token for manually calling `/run` |
+
+Deploy and test:
+
+```bash
+cd infra/cloudflare/pipeline-importer-worker
+npm ci
+npx wrangler deploy
+
+# Manual dry run after setting the manual trigger secret:
+curl -H "Authorization: Bearer $MANUAL_TRIGGER_SECRET" \
+  "https://dachjob-pipeline-importer.<your-subdomain>.workers.dev/run?dry_run=1"
+
+# Manual backfill with a temporary per-run limit:
+curl -H "Authorization: Bearer $MANUAL_TRIGGER_SECRET" \
+  "https://dachjob-pipeline-importer.<your-subdomain>.workers.dev/run?limit=10"
+
+# Manual parse-only-ish run without importing new links:
+curl -H "Authorization: Bearer $MANUAL_TRIGGER_SECRET" \
+  "https://dachjob-pipeline-importer.<your-subdomain>.workers.dev/run?limit=0&parse_limit=5"
+```
+
 ### Frontend (build-time environment)
 
 | Variable | Description |

@@ -3,8 +3,10 @@ import { checkTaskResult, isBackgroundTaskResponse, pollTask } from './tasks';
 import { getMockJobs } from './mocks';
 import type {
   BackgroundTask,
+  JobFilterOptions,
   JobFilterStatus,
   JobImportResponse,
+  JobQueryOptions,
   JobPosting,
   JobStatus,
   PaginatedJobs,
@@ -27,37 +29,75 @@ function matchesStatusFilter(job: JobPosting, status?: JobFilterStatus): boolean
   return (job.application_status || job.status) === status;
 }
 
-function buildJobsQuery(limit: number, offset: number, status?: JobFilterStatus): string {
+function matchesQueryFilters(job: JobPosting, options: JobQueryOptions = {}): boolean {
+  if (!matchesStatusFilter(job, options.status)) return false;
+  if (options.company && job.company !== options.company) return false;
+  if (options.stage && options.stage !== 'all') {
+    const stage = job.application_status || 'received';
+    return stage === options.stage;
+  }
+  return true;
+}
+
+function buildJobsQuery(limit: number, offset: number, options: JobFilterStatus | JobQueryOptions = {}): string {
+  const queryOptions: JobQueryOptions = typeof options === 'string' ? { status: options } : options;
   const q = new URLSearchParams();
   q.set('limit', String(limit));
   q.set('offset', String(offset));
-  if (status) q.set('status', status);
+  if (queryOptions.status) q.set('status', queryOptions.status);
+  if (queryOptions.stage && queryOptions.stage !== 'all') q.set('stage', queryOptions.stage);
+  if (queryOptions.company) q.set('company', queryOptions.company);
   return q.toString();
 }
 
-export async function getJobs(limit?: number, offset?: number, status?: JobFilterStatus): Promise<JobPosting[]> {
+export async function getJobs(limit?: number, offset?: number, options?: JobFilterStatus | JobQueryOptions): Promise<JobPosting[]> {
   try {
-    const query = buildJobsQuery(limit ?? 1000, offset ?? 0, status);
+    const query = buildJobsQuery(limit ?? 1000, offset ?? 0, options);
     const result = await request<PaginatedJobs>(`/api/jobs?${query}`);
     return filterSmokeTestJobs(result.items);
   } catch {
     if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
     const jobs = filterSmokeTestJobs(getMockJobs());
-    return jobs.filter((job) => matchesStatusFilter(job, status));
+    const queryOptions: JobQueryOptions = typeof options === 'string' ? { status: options } : (options || {});
+    return jobs.filter((job) => matchesQueryFilters(job, queryOptions));
   }
 }
 
-export async function getJobsPaginated(limit: number, offset: number, status?: JobFilterStatus): Promise<PaginatedJobs> {
+export async function getJobsPaginated(limit: number, offset: number, options?: JobFilterStatus | JobQueryOptions): Promise<PaginatedJobs> {
   try {
-    const query = buildJobsQuery(limit, offset, status);
+    const query = buildJobsQuery(limit, offset, options);
     const result = await request<PaginatedJobs>(`/api/jobs?${query}`);
     const filtered = filterSmokeTestJobs(result.items);
     return { items: filtered, total: result.total - (result.items.length - filtered.length), limit, offset };
   } catch {
     if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
     const allItems = filterSmokeTestJobs(getMockJobs());
-    const items = allItems.filter((job) => matchesStatusFilter(job, status));
+    const queryOptions: JobQueryOptions = typeof options === 'string' ? { status: options } : (options || {});
+    const items = allItems.filter((job) => matchesQueryFilters(job, queryOptions));
     return { items, total: items.length, limit, offset };
+  }
+}
+
+export async function getJobFilters(): Promise<JobFilterOptions> {
+  try {
+    return await request<JobFilterOptions>('/api/jobs/filters');
+  } catch {
+    if (isProduction() && !isBuildTime()) throw new Error('API unreachable');
+    const jobs = filterSmokeTestJobs(getMockJobs());
+    const companyCounts = new Map<string, number>();
+    const statusCounts = new Map<string, number>();
+    for (const job of jobs) {
+      if (job.company) companyCounts.set(job.company, (companyCounts.get(job.company) || 0) + 1);
+      const status = job.application_status || 'received';
+      statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+    }
+    return {
+      companies: [...companyCounts.entries()].map(([value, count]) => ({ value, count })),
+      statuses: (['received', 'applied', 'interview', 'rejected', 'offer'] as const).map((value) => ({
+        value,
+        count: statusCounts.get(value) || 0,
+      })),
+    };
   }
 }
 

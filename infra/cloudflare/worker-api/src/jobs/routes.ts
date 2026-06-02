@@ -8,6 +8,7 @@ import { callDeepSeekChat, logLLMRun } from "../llm";
 export const jobsRoutes = new Hono<{ Bindings: Env }>();
 
 const APPLICATION_JOB_STATUSES = ["applied", "interview", "rejected", "offer"];
+const PROFILE_MISMATCH_ERROR_PREFIX = "PROFILE_MISMATCH:";
 
 interface ApplicationMatchRow {
   id: string;
@@ -25,32 +26,54 @@ interface ProfileRow {
   profile_json: string | null;
 }
 
+interface JobImportItem {
+  url: string;
+  added_at?: string;
+  status?: string | null;
+  source_sha?: string;
+  title?: string;
+  company?: string;
+  location?: string;
+  prepare?: boolean;
+}
+
+interface JobImportBody {
+  urls?: string[];
+  jobs?: JobImportItem[];
+}
+
 // POST /api/jobs/import - Import jobs from URLs
 jobsRoutes.post("/import", async (c) => {
   const userId = await authMiddleware(c);
   if (!userId) return c.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, 401);
 
-  const body = await c.req.json<{ urls: string[] }>();
-  if (!body.urls || body.urls.length === 0) {
+  const body = await c.req.json<JobImportBody>();
+  const items = normalizeImportItems(body);
+  if (items.length === 0) {
     throw new AppError("VALIDATION_ERROR", "Provide at least one job URL", 400);
   }
-  if (body.urls.length > 10) {
+  if (items.length > 10) {
     throw new AppError("VALIDATION_ERROR", "Import at most 10 job URLs at a time", 400);
   }
 
   const imported: Record<string, unknown>[] = [];
+  const cacheHits: Record<string, unknown>[] = [];
   const errors: { url: string; error: string }[] = [];
 
-  for (const url of body.urls) {
+  for (const item of items) {
     try {
-      const result = await importSingleJobUrl(c.env, userId, url.trim());
-      imported.push(result);
+      const result = await importSingleJobUrl(c.env, userId, item);
+      if (result.cacheHit) {
+        cacheHits.push(result.job);
+      } else {
+        imported.push(result.job);
+      }
     } catch (err) {
-      errors.push({ url, error: (err as Error).message });
+      errors.push({ url: item.url, error: (err as Error).message });
     }
   }
 
-  return c.json({ imported, errors }, 201);
+  return c.json({ imported, cache_hits: cacheHits, errors }, 201);
 });
 
 // POST /api/jobs - Create a job
@@ -76,10 +99,11 @@ jobsRoutes.post("/", async (c) => {
 
   const id = generateId();
   const now = new Date().toISOString();
+  const jobKey = body.url ? canonicalJobKey(body.url) : null;
 
   await c.env.DB.prepare(
-    `INSERT INTO jobs (id, user_id, title, company, location, job_url, raw_description, source, employment_type, workplace, salary_text, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO jobs (id, user_id, title, company, location, job_url, job_key, raw_description, source, employment_type, workplace, salary_text, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -88,6 +112,7 @@ jobsRoutes.post("/", async (c) => {
       body.company || "",
       body.location || "",
       body.url || "",
+      jobKey,
       body.raw_jd || "",
       body.source || "",
       body.employment_type || "",
@@ -110,42 +135,23 @@ jobsRoutes.get("/", async (c) => {
   if (!userId) return c.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, 401);
 
   const status = c.req.query("status");
+  const stage = c.req.query("stage");
+  const company = c.req.query("company");
   const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 200);
   const offset = parseInt(c.req.query("offset") || "0", 10);
 
   let query = "SELECT * FROM jobs WHERE user_id = ?";
   const params: (string | number)[] = [userId];
 
-  if (status && status !== "all") {
-    if (status === "saved") {
-      query += " AND saved = 1";
-    } else if (status === "applied") {
-      query += " AND application_status IN (?, ?, ?, ?)";
-      params.push(...APPLICATION_JOB_STATUSES);
-    } else if (status === "new") {
-      query += " AND application_status IS NULL";
-    } else {
-      query += " AND application_status = ?";
-      params.push(status);
-    }
-  }
+  const filterSql = buildJobFilterSql({ status, stage, company });
+  query += filterSql.sql;
+  params.push(...filterSql.params);
 
   // Count total
   let countQuery = "SELECT COUNT(*) as cnt FROM jobs WHERE user_id = ?";
   const countParams: (string | number)[] = [userId];
-  if (status && status !== "all") {
-    if (status === "saved") {
-      countQuery += " AND saved = 1";
-    } else if (status === "applied") {
-      countQuery += " AND application_status IN (?, ?, ?, ?)";
-      countParams.push(...APPLICATION_JOB_STATUSES);
-    } else if (status === "new") {
-      countQuery += " AND application_status IS NULL";
-    } else {
-      countQuery += " AND application_status = ?";
-      countParams.push(status);
-    }
-  }
+  countQuery += filterSql.sql;
+  countParams.push(...filterSql.params);
   const countResult = await c.env.DB.prepare(countQuery).bind(...countParams).first<{ cnt: number }>();
   const total = countResult?.cnt || 0;
 
@@ -155,6 +161,59 @@ jobsRoutes.get("/", async (c) => {
   const result = await c.env.DB.prepare(query).bind(...params).all();
   const items = await Promise.all((result.results || []).map((job) => formatJobResponse(c.env, userId, job)));
   return c.json({ items, total, limit, offset });
+});
+
+// GET /api/jobs/filters - Distinct filter options for Jobs page
+jobsRoutes.get("/filters", async (c) => {
+  const userId = await authMiddleware(c);
+  if (!userId) return c.json({ companies: [], statuses: [] });
+
+  const companyRows = await c.env.DB.prepare(
+    `SELECT company, COUNT(*) AS count
+     FROM jobs
+     WHERE user_id = ? AND company IS NOT NULL AND TRIM(company) != ''
+     GROUP BY company
+     ORDER BY LOWER(company)`
+  )
+    .bind(userId)
+    .all<{ company: string; count: number }>();
+
+  const statusRows = await c.env.DB.prepare(
+    `SELECT COALESCE(application_status, 'received') AS status, COUNT(*) AS count
+     FROM jobs
+     WHERE user_id = ?
+     GROUP BY COALESCE(application_status, 'received')`
+  )
+    .bind(userId)
+    .all<{ status: string; count: number }>();
+
+  return c.json({
+    companies: (companyRows.results || []).map((row) => ({ value: row.company, count: row.count })),
+    statuses: normalizeStatusCounts(statusRows.results || []),
+  });
+});
+
+// GET /api/jobs/unparsed - Latest imported jobs that still need LLM parsing
+jobsRoutes.get("/unparsed", async (c) => {
+  const userId = await authMiddleware(c);
+  if (!userId) return c.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, 401);
+
+  const limit = Math.min(parseInt(c.req.query("limit") || "5", 10), 25);
+  const offset = parseInt(c.req.query("offset") || "0", 10);
+  const result = await c.env.DB.prepare(
+    `SELECT id, title, company, job_url, pipeline_added_at, created_at
+     FROM jobs
+     WHERE user_id = ?
+       AND raw_description IS NOT NULL
+       AND TRIM(raw_description) != ''
+       AND (parsed_json IS NULL OR TRIM(parsed_json) = '')
+     ORDER BY COALESCE(pipeline_added_at, created_at) DESC
+     LIMIT ? OFFSET ?`
+  )
+    .bind(userId, limit, offset)
+    .all();
+
+  return c.json({ items: result.results || [], limit, offset });
 });
 
 // PATCH /api/jobs/:id/status - Update job status
@@ -276,12 +335,24 @@ jobsRoutes.post("/:id/parse", async (c) => {
   if (!userId) return c.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, 401);
 
   const jobId = c.req.param("id");
-  const job = await c.env.DB.prepare("SELECT * FROM jobs WHERE id = ? AND user_id = ?")
+  const job = await c.env.DB.prepare("SELECT id, title, company, job_url, raw_description FROM jobs WHERE id = ? AND user_id = ?")
     .bind(jobId, userId)
-    .first<{ id: string; raw_description: string }>();
+    .first<{ id: string; title: string; company: string; job_url: string; raw_description: string }>();
   if (!job) throw new AppError("NOT_FOUND", "Job not found", 404);
 
-  const parsedJson = await parseAndStoreJobDetails(c.env, userId, jobId, job.raw_description);
+  let rawDescription = job.raw_description;
+  if (isLimitedLinkedInJobText(job.job_url, rawDescription, job.title, job.company)) {
+    const refreshed = await fetchJobPage(job.job_url);
+    if (isLimitedLinkedInJobText(job.job_url, refreshed.rawText, job.title, job.company)) {
+      throw new AppError("FETCH_RETRY", "LinkedIn returned limited job content; retry later", 503);
+    }
+    rawDescription = refreshed.rawText;
+    await c.env.DB.prepare("UPDATE jobs SET raw_description = ?, updated_at = ? WHERE id = ? AND user_id = ?")
+      .bind(rawDescription, new Date().toISOString(), jobId, userId)
+      .run();
+  }
+
+  const parsedJson = await parseAndStoreJobDetails(c.env, userId, jobId, rawDescription);
 
   return c.json({ job_id: jobId, status: "parsed", parsed_json: parsedJson });
 });
@@ -327,6 +398,7 @@ async function formatJobResponse(env: Env, userId: string, job: Record<string, a
   const matchResponse = match ? formatMatchResponse(match) : null;
   return {
     id: job.id,
+    job_key: job.job_key,
     title: job.title,
     company: job.company,
     location: job.location,
@@ -342,9 +414,151 @@ async function formatJobResponse(env: Env, userId: string, job: Record<string, a
     application_status: job.application_status,
     score: matchResponse?.overall_score ?? null,
     recommendation: matchResponse?.recommendation ?? null,
+    pipeline_added_at: job.pipeline_added_at,
+    pipeline_source_sha: job.pipeline_source_sha,
     created_at: job.created_at,
     updated_at: job.updated_at,
   };
+}
+
+function normalizeImportItems(body: JobImportBody): JobImportItem[] {
+  if (Array.isArray(body.jobs) && body.jobs.length > 0) {
+    return body.jobs
+      .map((job) => ({ ...job, url: job.url?.trim() || "" }))
+      .filter((job) => /^https?:\/\//i.test(job.url));
+  }
+  return (body.urls || [])
+    .map((url) => ({ url: url.trim() }))
+    .filter((job) => /^https?:\/\//i.test(job.url));
+}
+
+function buildJobFilterSql(filters: {
+  status?: string;
+  stage?: string;
+  company?: string;
+}): { sql: string; params: (string | number)[] } {
+  let sql = "";
+  const params: (string | number)[] = [];
+
+  if (filters.status && filters.status !== "all") {
+    const status = normalizeStageFilter(filters.status);
+    if (status === "saved") {
+      sql += " AND saved = 1";
+    } else if (status === "applied") {
+      sql += " AND application_status IN (?, ?, ?, ?)";
+      params.push(...APPLICATION_JOB_STATUSES);
+    } else if (status === "received") {
+      sql += " AND application_status IS NULL";
+    } else if (status) {
+      sql += " AND application_status = ?";
+      params.push(status);
+    }
+  }
+
+  const stage = normalizeStageFilter(filters.stage);
+  if (stage && stage !== "all") {
+    if (stage === "received") {
+      sql += " AND application_status IS NULL";
+    } else {
+      sql += " AND application_status = ?";
+      params.push(stage);
+    }
+  }
+
+  const company = filters.company?.trim();
+  if (company) {
+    sql += " AND company = ?";
+    params.push(company);
+  }
+
+  return { sql, params };
+}
+
+function normalizeStageFilter(value?: string): string | null {
+  const normalized = (value || "").trim().toLowerCase();
+  if (!normalized || normalized === "new") return normalized ? "received" : null;
+  if (normalized === "all" || normalized === "saved") return normalized;
+  if (normalized === "received") return "received";
+  if (APPLICATION_JOB_STATUSES.includes(normalized)) return normalized;
+  return null;
+}
+
+function normalizeStatusCounts(rows: { status: string; count: number }[]) {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const status = normalizeStageFilter(row.status) || "received";
+    counts.set(status, (counts.get(status) || 0) + row.count);
+  }
+  return ["received", "applied", "interview", "rejected", "offer"].map((status) => ({
+    value: status,
+    count: counts.get(status) || 0,
+  }));
+}
+
+function canonicalJobKey(url: string): string {
+  const parsed = new URL(url);
+  const linkedInJobId = parsed.hostname.endsWith("linkedin.com")
+    ? parsed.pathname.match(/\/jobs\/view\/(?:[^/]+-)?(\d+)/)
+    : null;
+  if (linkedInJobId) return `linkedin:${linkedInJobId[1]}`;
+
+  const indeedId = parsed.hostname.endsWith("indeed.com") ? parsed.searchParams.get("jk") : null;
+  if (indeedId) return `indeed:${indeedId}`;
+
+  const greenhouseToken = parsed.searchParams.get("gh_jid");
+  if (greenhouseToken) return `${parsed.hostname.toLowerCase().replace(/^www\./, "")}:gh_jid:${greenhouseToken}`;
+
+  parsed.hash = "";
+  parsed.search = "";
+  parsed.hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+  return `${parsed.hostname}${parsed.pathname}`.toLowerCase();
+}
+
+function normalizeIsoDate(value?: string): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function normalizePipelineStatus(value?: string | null): string | null {
+  const normalized = (value || "").trim().toLowerCase();
+  if (!normalized || normalized === "received" || normalized === "new") return null;
+  return APPLICATION_JOB_STATUSES.includes(normalized) ? normalized : null;
+}
+
+async function updateExistingImportedJob(
+  env: Env,
+  userId: string,
+  jobId: string,
+  metadata: { jobKey: string; addedAt: string; status: string | null; sourceSha?: string }
+) {
+  await env.DB.prepare(
+    `UPDATE jobs
+     SET job_key = COALESCE(job_key, ?),
+         pipeline_added_at = COALESCE(pipeline_added_at, ?),
+         pipeline_source_sha = COALESCE(pipeline_source_sha, ?),
+         created_at = CASE
+           WHEN pipeline_added_at IS NULL AND created_at > ? THEN ?
+           ELSE created_at
+         END,
+         updated_at = ?
+     WHERE id = ? AND user_id = ?`
+  )
+    .bind(
+      metadata.jobKey,
+      metadata.addedAt,
+      metadata.sourceSha || null,
+      metadata.addedAt,
+      metadata.addedAt,
+      new Date().toISOString(),
+      jobId,
+      userId
+    )
+    .run();
+  if (metadata.status) {
+    await setJobApplicationStatus(env, userId, jobId, metadata.status);
+  }
 }
 
 function safeJsonParse(value: string | null): Record<string, unknown> | null {
@@ -456,6 +670,21 @@ async function syncApplicationForJobStatus(
   await env.DB.prepare("UPDATE applications SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?")
     .bind(status || "draft", now, applicationId, userId)
     .run();
+}
+
+async function setJobApplicationStatus(
+  env: Env,
+  userId: string,
+  jobId: string,
+  status: string
+) {
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    "UPDATE jobs SET application_status = ?, updated_at = ? WHERE id = ? AND user_id = ?"
+  )
+    .bind(status, now, jobId, userId)
+    .run();
+  await syncApplicationForJobStatus(env, userId, jobId, status);
 }
 
 async function computeAndStoreMatch(
@@ -612,20 +841,33 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-async function importSingleJobUrl(env: Env, userId: string, url: string): Promise<Record<string, unknown>> {
-  // Fetch the job page
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36",
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch URL: ${response.status}`);
+async function importSingleJobUrl(
+  env: Env,
+  userId: string,
+  item: JobImportItem
+): Promise<{ job: Record<string, unknown>; cacheHit: boolean }> {
+  const cleanedUrl = item.url.trim();
+  const jobKey = canonicalJobKey(cleanedUrl);
+  const addedAt = normalizeIsoDate(item.added_at) || new Date().toISOString();
+  const requestedStatus = normalizePipelineStatus(item.status);
+  const existing = await env.DB.prepare(
+    "SELECT * FROM jobs WHERE user_id = ? AND (job_key = ? OR job_url = ?)"
+  )
+    .bind(userId, jobKey, cleanedUrl)
+    .first();
+  if (existing) {
+    await updateExistingImportedJob(env, userId, String(existing.id), {
+      jobKey,
+      addedAt,
+      status: requestedStatus,
+      sourceSha: item.source_sha,
+    });
+    await logLLMRun(env, userId, "job_import", Date.now(), "cache_hit", `Duplicate job import: ${cleanedUrl}`);
+    const refreshed = await env.DB.prepare("SELECT * FROM jobs WHERE id = ?").bind(existing.id).first();
+    return { job: await formatJobResponse(env, userId, refreshed || existing), cacheHit: true };
   }
 
-  const html = await response.text();
-  const rawText = stripHtml(html).slice(0, 15000);
+  const { html, rawText } = await fetchJobPage(cleanedUrl);
 
   // Extract title from HTML
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
@@ -643,28 +885,168 @@ async function importSingleJobUrl(env: Env, userId: string, url: string): Promis
 
   if (!company) {
     try {
-      const urlObj = new URL(url);
+      const urlObj = new URL(cleanedUrl);
       company = urlObj.hostname.replace(/^www\./, "").split(".")[0];
       company = company.charAt(0).toUpperCase() + company.slice(1);
     } catch {
       company = "Unknown";
     }
   }
+  title = item.title?.trim() || title;
+  company = item.company?.trim() || company;
+
+  if (isLimitedLinkedInJobText(cleanedUrl, rawText, title, company)) {
+    throw new Error("RETRYABLE_FETCH: LinkedIn returned limited job content; retry later");
+  }
+
+  const mismatchReason = getProfileMismatchReason(`${title}\n${company}\n${rawText}`);
+  if (mismatchReason) {
+    await logLLMRun(env, userId, "job_import", Date.now(), "skipped", mismatchReason);
+    throw new Error(`${PROFILE_MISMATCH_ERROR_PREFIX} ${mismatchReason}`);
+  }
 
   const id = generateId();
   const now = new Date().toISOString();
+  const location = item.location?.trim() || "";
 
   await env.DB.prepare(
-    `INSERT INTO jobs (id, user_id, title, company, location, job_url, raw_description, source, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO jobs (
+       id, user_id, title, company, location, job_url, job_key, raw_description, source,
+       pipeline_added_at, pipeline_source_sha, created_at, updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
-    .bind(id, userId, title, company, "", url, rawText, "url_import", now, now)
+    .bind(
+      id,
+      userId,
+      title,
+      company,
+      location,
+      cleanedUrl,
+      jobKey,
+      rawText,
+      "pipeline_md",
+      addedAt,
+      item.source_sha || null,
+      addedAt,
+      now
+    )
     .run();
 
-  await prepareJobAfterCreate(env, userId, id);
+  if (item.prepare !== false) {
+    await prepareJobAfterCreate(env, userId, id);
+  }
+  if (requestedStatus) {
+    await setJobApplicationStatus(env, userId, id, requestedStatus);
+  }
 
   const job = await env.DB.prepare("SELECT * FROM jobs WHERE id = ?").bind(id).first();
-  return formatJobResponse(env, userId, job!);
+  return { job: await formatJobResponse(env, userId, job!), cacheHit: false };
+}
+
+function getProfileMismatchReason(text: string): string | null {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const title = normalized.slice(0, 240);
+  if (/(^|[^a-z0-9])(c\+\+|c\/c\+\+)([^a-z0-9]|$)/i.test(title) && /\b(engineer|developer|entwickler|programmer)\b/i.test(title)) {
+    return "Hard C/C++ role in title";
+  }
+
+  const sentences = normalized.split(/(?<=[.!?;])\s+|\n+/).slice(0, 120);
+  for (const sentence of sentences) {
+    if (sentence.length > 500) continue;
+    if (!/(^|[^a-z0-9])(c\+\+|c\/c\+\+|embedded c)([^a-z0-9]|$)/i.test(sentence)) continue;
+    if (
+      /\b(including,? but not limited to|not limited to|one or more|any of|desirable|nice to have|preferred|plus|bonus|such as)\b/i.test(
+        sentence
+      )
+    ) {
+      continue;
+    }
+    if (
+      /\b(required|required qualifications?|requirements?|must have|you have|we expect|professional experience|proven experience|strong experience|solid experience|hands[- ]on experience|expertise in|proficiency in|programming in|coding in|daily)\b/i.test(
+        sentence
+      )
+    ) {
+      return "Hard C/C++ requirement";
+    }
+  }
+
+  const firstText = normalized.slice(0, 1200);
+  const looksLikeFirmwareRole = /\b(firmware|embedded software|hardware validation|fpga)\b/i.test(firstText);
+  const hasTargetScope = /\b(cloud|platform|backend|data platform|ml platform|ai platform|infrastructure|kubernetes|distributed systems)\b/i.test(
+    firstText
+  );
+  if (looksLikeFirmwareRole && !hasTargetScope) {
+    return "Firmware/embedded role without backend, cloud, data, or platform scope";
+  }
+
+  return null;
+}
+
+async function fetchJobPage(url: string): Promise<{ html: string; rawText: string }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36",
+      },
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Timed out fetching URL after 15s");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!response.ok) {
+    throw new Error(`Failed to fetch URL: ${response.status}`);
+  }
+
+  const html = await response.text();
+  return { html, rawText: stripHtml(html).slice(0, 15000) };
+}
+
+function isLimitedLinkedInJobText(url: string, rawText: string, title?: string, company?: string): boolean {
+  if (!isLinkedInUrl(url)) return false;
+  const text = rawText.replace(/\s+/g, " ").trim();
+  if (text.length < 1200) return true;
+
+  const firstPage = normalizeComparableText(text.slice(0, 3500));
+  const normalizedTitle = normalizeTextNeedle(title);
+  const normalizedCompany = normalizeTextNeedle(company);
+  const hasTitle = !normalizedTitle || firstPage.includes(normalizedTitle);
+  const hasCompany = !normalizedCompany || firstPage.includes(normalizedCompany);
+  if (!hasTitle || !hasCompany) return true;
+
+  const authWallOnly =
+    /join or sign in to find your next job|sign in to create job alert|authwall|login to linkedin/i.test(text) &&
+    text.length < 2500;
+  return authWallOnly;
+}
+
+function isLinkedInUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname.toLowerCase().endsWith("linkedin.com");
+  } catch {
+    return false;
+  }
+}
+
+function normalizeTextNeedle(value?: string): string | null {
+  const normalized = normalizeComparableText(value || "");
+  return normalized.length >= 3 ? normalized : null;
+}
+
+function normalizeComparableText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9+.#]+/g, " ")
+    .trim();
 }
 
 function stripHtml(html: string): string {

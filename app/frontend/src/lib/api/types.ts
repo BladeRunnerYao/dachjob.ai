@@ -1,10 +1,12 @@
 export type ApplicationJobStatus = 'applied' | 'interview' | 'rejected' | 'offer';
-export type JobStatus = 'new' | ApplicationJobStatus;
+export type JobStageStatus = 'received' | ApplicationJobStatus;
+export type JobStatus = 'new' | 'received' | ApplicationJobStatus;
 export type JobFilterStatus = JobStatus | 'saved';
 export type ResumeStyle = 'american' | 'german';
 
 export interface JobPosting {
   id: string;
+  job_key?: string;
   title: string;
   company: string;
   location?: string;
@@ -26,6 +28,8 @@ export interface JobPosting {
   raw_jd?: string;
   saved?: boolean;
   application_status?: ApplicationJobStatus | null;
+  pipeline_added_at?: string | null;
+  pipeline_source_sha?: string | null;
 }
 
 export interface JobSkill {
@@ -72,6 +76,7 @@ export interface Application {
   status: string;
   score?: number;
   notes?: string;
+  added_at?: string;
   created_at: string;
   updated_at?: string;
 }
@@ -94,7 +99,19 @@ export interface ImportError {
 
 export interface JobImportResponse {
   imported: JobPosting[];
+  cache_hits?: JobPosting[];
   errors: ImportError[];
+}
+
+export interface JobFilterOptions {
+  companies: Array<{ value: string; count: number }>;
+  statuses: Array<{ value: JobStageStatus; count: number }>;
+}
+
+export interface JobQueryOptions {
+  status?: JobFilterStatus;
+  stage?: JobStageStatus | 'all';
+  company?: string;
 }
 
 export interface PaginatedLLMRuns {
