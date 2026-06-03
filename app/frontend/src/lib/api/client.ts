@@ -86,8 +86,8 @@ export class ApiClient {
     return jobsApi.importJobs(urlText);
   }
 
-  getApplications(): Promise<Application[]> {
-    return applicationsApi.getApplications();
+  getApplications(status?: string): Promise<Application[]> {
+    return applicationsApi.getApplications(status);
   }
 
   updateApplication(applicationId: string, updates: { status?: string; notes?: string }): Promise<Application> {

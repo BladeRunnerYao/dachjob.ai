@@ -85,8 +85,6 @@ struct DashboardView: View {
                         }
                         if let status = job.displayApplicationStatus {
                             StatusBadge(status: status)
-                        } else if let rec = job.recommendation {
-                            RecommendationBadge(recommendation: rec)
                         }
                     }
                     .padding(.vertical, 6)
@@ -136,11 +134,14 @@ struct DashboardView: View {
         isLoading = jobs.isEmpty
         error = nil
         do {
+            let listStatus = selectedFilter == "saved" ? "saved" : nil
+            let listStage = selectedFilter == "applied" ? "applied" : nil
             async let jobsResult = api.getJobs(
                 limit: 5,
-                status: selectedFilter == "all" ? nil : selectedFilter
+                status: listStatus,
+                stage: listStage
             )
-            async let appliedResult = api.getJobs(limit: 1, status: "applied")
+            async let appliedResult = api.getJobs(limit: 1, stage: "applied")
             async let savedResult = api.getJobs(limit: 1, status: "saved")
             let recentJobs = try await jobsResult
             guard !Task.isCancelled, selectedFilter == filter else { return }
@@ -185,28 +186,5 @@ struct StatCard: View {
         .background(Color(.systemBackground))
         .clipShape(.rect(cornerRadius: 10))
         .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
-    }
-}
-
-struct RecommendationBadge: View {
-    let recommendation: String
-
-    var color: Color {
-        switch recommendation {
-        case "apply": return .green
-        case "maybe": return .orange
-        default: return .red
-        }
-    }
-
-    var body: some View {
-        Text(recommendation.capitalized)
-            .font(.caption2)
-            .fontWeight(.semibold)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.15))
-            .foregroundColor(color)
-            .clipShape(.rect(cornerRadius: 4))
     }
 }

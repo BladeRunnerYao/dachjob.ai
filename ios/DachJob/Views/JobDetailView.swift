@@ -10,6 +10,10 @@ struct JobDetailView: View {
     @State private var generatingResumeStyle: ResumeStyle?
     @State private var resumeMessage: String?
     @State private var resumeError: String?
+    @State private var isParsing = false
+    @State private var parseError: String?
+    @State private var isMatching = false
+    @State private var matchError: String?
     @State private var selectedSkills: Set<String> = []
 
     private let api = APIClient.shared
@@ -32,10 +36,11 @@ struct JobDetailView: View {
             } else if let job {
                 VStack(alignment: .leading, spacing: 16) {
                     headerSection(job: job)
-                    resumeSection
-                    if let percent = matchReport?.scorePercent ?? job.scorePercent {
-                        matchSection(percent: percent)
+                    matchActionSection(job: job)
+                    if job.needsParsing || job.parsedJson == nil {
+                        parseSection
                     }
+                    resumeSection
                     if let parsed = job.parsedJson {
                         if !parsed.requiredQualifications.isEmpty || !parsed.preferredQualifications.isEmpty {
                             responsibilitiesSection(parsed: parsed)
@@ -85,8 +90,10 @@ struct JobDetailView: View {
                     }
                     .font(.subheadline)
                 }
-                if let rec = job.recommendation {
-                    RecommendationBadge(recommendation: rec)
+                if let added = job.addedDateText {
+                    Label("Added \(added)", systemImage: "calendar")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                 }
             }
 
@@ -107,26 +114,88 @@ struct JobDetailView: View {
         }
     }
 
-    private func matchSection(percent: Int) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(matchColor(percent).opacity(0.12))
-                Text("\(percent)%")
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .foregroundColor(matchColor(percent))
-            }
-            .frame(width: 72, height: 72)
+    private func matchActionSection(job: JobPosting) -> some View {
+        let percent = matchReport?.scorePercent ?? job.scorePercent
+        let color = percent.map { matchColor($0) } ?? Color.secondary
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.12))
+                    if let percent {
+                        Text("\(percent)%")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(color)
+                    } else {
+                        Image(systemName: "star")
+                            .font(.title3)
+                            .foregroundColor(color)
+                    }
+                }
+                .frame(width: 72, height: 72)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Match")
-                    .font(.headline)
-                Text("Latest database score")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Match")
+                        .font(.headline)
+                    Text(percent == nil ? "No score yet" : "Latest database score")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+
+                Button {
+                    Task { await runMatch() }
+                } label: {
+                    if isMatching {
+                        ProgressView()
+                    } else {
+                        Label(percent == nil ? "Run Match" : "Rematch", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isMatching)
             }
-            Spacer()
+
+            if let matchError {
+                Text(matchError)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .clipShape(.rect(cornerRadius: 12))
+    }
+
+    private var parseSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Job Details")
+                        .font(.headline)
+                    Text("Parse the job description when structured details are missing.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Button {
+                    Task { await runParse() }
+                } label: {
+                    if isParsing {
+                        ProgressView()
+                    } else {
+                        Label("Parse Job", systemImage: "doc.text.magnifyingglass")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(isParsing)
+            }
+            if let parseError {
+                Text(parseError)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
         }
         .padding()
         .background(Color(.systemGray6))
@@ -328,6 +397,31 @@ struct JobDetailView: View {
             resumeMessage = "\(style.title) generated."
         } catch {
             resumeError = error.localizedDescription
+        }
+    }
+
+    private func runParse() async {
+        isParsing = true
+        parseError = nil
+        defer { isParsing = false }
+
+        do {
+            job = try await api.parseJob(id: jobId)
+        } catch {
+            parseError = error.localizedDescription
+        }
+    }
+
+    private func runMatch() async {
+        isMatching = true
+        matchError = nil
+        defer { isMatching = false }
+
+        do {
+            matchReport = try await api.createMatchReport(jobId: jobId)
+            job = try? await api.getJob(id: jobId)
+        } catch {
+            matchError = error.localizedDescription
         }
     }
 

@@ -63,6 +63,19 @@ applicationsRoutes.get("/", async (c) => {
   const userId = await authMiddleware(c);
   if (!userId) return c.json([]);
 
+  const statusFilter = c.req.query("status")?.trim().toLowerCase();
+  if (statusFilter && !TRACKED_STATUSES.includes(statusFilter)) {
+    throw new AppError("VALIDATION_ERROR", `Invalid status filter: ${statusFilter}`, 422);
+  }
+
+  const filterSql = statusFilter
+    ? statusFilter === "saved"
+      ? " AND jobs.application_status IS NULL AND (jobs.saved = 1 OR applications.status = ?)"
+      : " AND (jobs.application_status = ? OR (jobs.application_status IS NULL AND COALESCE(jobs.saved, 0) != 1 AND applications.status = ?))"
+    : "";
+  const filterParams =
+    statusFilter ? (statusFilter === "saved" ? [statusFilter] : [statusFilter, statusFilter]) : [];
+
   const result = await c.env.DB.prepare(
     `SELECT
        applications.*,
@@ -79,9 +92,11 @@ applicationsRoutes.get("/", async (c) => {
          OR jobs.application_status IN ('applied', 'interview', 'offer', 'rejected')
          OR applications.status IN ('saved', 'applied', 'interview', 'offer', 'rejected')
        )
-     ORDER BY applications.created_at DESC`
+       ${filterSql}
+     ORDER BY COALESCE(jobs.pipeline_added_at, jobs.created_at, applications.created_at) DESC,
+              applications.created_at DESC`
   )
-    .bind(userId)
+    .bind(userId, ...filterParams)
     .all<ApplicationRow>();
 
   return c.json((result.results || []).map(formatApplicationResponse));
