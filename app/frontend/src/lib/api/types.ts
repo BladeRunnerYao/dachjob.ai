@@ -1,7 +1,8 @@
 export type ApplicationJobStatus = 'applied' | 'interview' | 'rejected' | 'offer';
-export type JobStageStatus = 'received' | ApplicationJobStatus;
-export type JobStatus = 'new' | 'received' | ApplicationJobStatus;
+export type JobStageStatus = ApplicationJobStatus;
+export type JobStatus = 'new' | ApplicationJobStatus;
 export type JobFilterStatus = JobStatus | 'saved';
+export type JobStatusFilterValue = ApplicationJobStatus | 'saved';
 export type ResumeStyle = 'american' | 'german';
 
 export interface JobPosting {
@@ -105,7 +106,7 @@ export interface JobImportResponse {
 
 export interface JobFilterOptions {
   companies: Array<{ value: string; count: number }>;
-  statuses: Array<{ value: JobStageStatus; count: number }>;
+  statuses: Array<{ value: JobStatusFilterValue; count: number }>;
 }
 
 export interface JobQueryOptions {

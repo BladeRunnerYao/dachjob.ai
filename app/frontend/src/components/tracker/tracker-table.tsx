@@ -13,14 +13,14 @@ interface TrackerTableProps {
 }
 
 const statusColors: Record<string, BadgeVariant> = {
-  Received: 'default',
+  Saved: 'yellow',
   Applied: 'green',
   Interview: 'blue',
   Offer: 'green',
   Rejected: 'red',
 };
 
-const statusOptions = ['Received', 'Applied', 'Interview', 'Rejected', 'Offer'];
+const statusOptions = ['Saved', 'Applied', 'Interview', 'Rejected', 'Offer'];
 
 function toPercent(score: number): number {
   return Math.round((Math.min(Math.max(score, 1), 5) / 5) * 100);

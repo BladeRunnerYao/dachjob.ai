@@ -33,8 +33,7 @@ function matchesQueryFilters(job: JobPosting, options: JobQueryOptions = {}): bo
   if (!matchesStatusFilter(job, options.status)) return false;
   if (options.company && job.company !== options.company) return false;
   if (options.stage && options.stage !== 'all') {
-    const stage = job.application_status || 'received';
-    return stage === options.stage;
+    return job.application_status === options.stage;
   }
   return true;
 }
@@ -86,16 +85,19 @@ export async function getJobFilters(): Promise<JobFilterOptions> {
     const jobs = filterSmokeTestJobs(getMockJobs());
     const companyCounts = new Map<string, number>();
     const statusCounts = new Map<string, number>();
+    let savedCount = 0;
     for (const job of jobs) {
       if (job.company) companyCounts.set(job.company, (companyCounts.get(job.company) || 0) + 1);
-      const status = job.application_status || 'received';
-      statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+      if (job.saved) savedCount += 1;
+      if (job.application_status) {
+        statusCounts.set(job.application_status, (statusCounts.get(job.application_status) || 0) + 1);
+      }
     }
     return {
       companies: [...companyCounts.entries()].map(([value, count]) => ({ value, count })),
-      statuses: (['received', 'applied', 'interview', 'rejected', 'offer'] as const).map((value) => ({
+      statuses: (['saved', 'applied', 'interview', 'rejected', 'offer'] as const).map((value) => ({
         value,
-        count: statusCounts.get(value) || 0,
+        count: value === 'saved' ? savedCount : statusCounts.get(value) || 0,
       })),
     };
   }

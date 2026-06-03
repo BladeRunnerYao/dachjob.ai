@@ -179,17 +179,21 @@ jobsRoutes.get("/filters", async (c) => {
     .all<{ company: string; count: number }>();
 
   const statusRows = await c.env.DB.prepare(
-    `SELECT COALESCE(application_status, 'received') AS status, COUNT(*) AS count
+    `SELECT
+       SUM(CASE WHEN saved = 1 THEN 1 ELSE 0 END) AS saved,
+       SUM(CASE WHEN application_status = 'applied' THEN 1 ELSE 0 END) AS applied,
+       SUM(CASE WHEN application_status = 'interview' THEN 1 ELSE 0 END) AS interview,
+       SUM(CASE WHEN application_status = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+       SUM(CASE WHEN application_status = 'offer' THEN 1 ELSE 0 END) AS offer
      FROM jobs
-     WHERE user_id = ?
-     GROUP BY COALESCE(application_status, 'received')`
+     WHERE user_id = ?`
   )
     .bind(userId)
-    .all<{ status: string; count: number }>();
+    .first<{ saved: number; applied: number; interview: number; rejected: number; offer: number }>();
 
   return c.json({
     companies: (companyRows.results || []).map((row) => ({ value: row.company, count: row.count })),
-    statuses: normalizeStatusCounts(statusRows.results || []),
+    statuses: normalizeStatusCounts(statusRows || { saved: 0, applied: 0, interview: 0, rejected: 0, offer: 0 }),
   });
 });
 
@@ -247,6 +251,10 @@ jobsRoutes.patch("/:id/status", async (c) => {
 
   values.push(jobId, userId);
   await c.env.DB.prepare(`UPDATE jobs SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`).bind(...values).run();
+
+  if (body.saved === true || body.status === "saved") {
+    await ensureApplicationForJob(c.env, userId, jobId);
+  }
 
   if (body.status !== undefined && body.status !== "saved") {
     await syncApplicationForJobStatus(c.env, userId, jobId, body.status === "new" ? null : body.status);
@@ -483,15 +491,10 @@ function normalizeStageFilter(value?: string): string | null {
   return null;
 }
 
-function normalizeStatusCounts(rows: { status: string; count: number }[]) {
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    const status = normalizeStageFilter(row.status) || "received";
-    counts.set(status, (counts.get(status) || 0) + row.count);
-  }
-  return ["received", "applied", "interview", "rejected", "offer"].map((status) => ({
+function normalizeStatusCounts(counts: { saved: number; applied: number; interview: number; rejected: number; offer: number }) {
+  return ["saved", "applied", "interview", "rejected", "offer"].map((status) => ({
     value: status,
-    count: counts.get(status) || 0,
+    count: counts[status as keyof typeof counts] || 0,
   }));
 }
 
@@ -656,6 +659,11 @@ async function getOrCreateApplication(env: Env, userId: string, jobId: string, p
     .bind(id, userId, jobId, profileId, "draft", now, now)
     .run();
   return id;
+}
+
+async function ensureApplicationForJob(env: Env, userId: string, jobId: string) {
+  const profile = await getLatestProfile(env, userId);
+  await getOrCreateApplication(env, userId, jobId, profile?.id || "");
 }
 
 async function syncApplicationForJobStatus(
