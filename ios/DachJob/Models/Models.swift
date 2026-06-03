@@ -103,6 +103,12 @@ struct JobFilterOption: Codable, Identifiable {
     var id: String { value }
 }
 
+extension JobFilterOptions {
+    func count(forStatus status: String) -> Int {
+        statuses.first { $0.value.lowercased() == status.lowercased() }?.count ?? 0
+    }
+}
+
 struct Application: Codable, Identifiable {
     let id: String
     let jobId: String

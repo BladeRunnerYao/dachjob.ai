@@ -87,6 +87,7 @@ private struct ApplicationUpdateRequest: Encodable {
 class APIClient {
     static let shared = APIClient()
     static let defaultBaseURL = "https://dachjob-api.yaoyaoyaoyao.workers.dev"
+    private var cachedAuthToken: String?
 
     private var baseURL: String {
         // Migrate old cloud defaults to the current Cloudflare Worker API.
@@ -102,8 +103,16 @@ class APIClient {
     }
 
     private var authToken: String? {
-        get { KeychainHelper.load(key: "auth_token") }
+        get {
+            if let cachedAuthToken {
+                return cachedAuthToken
+            }
+            let token = KeychainHelper.load(key: "auth_token")
+            cachedAuthToken = token
+            return token
+        }
         set {
+            cachedAuthToken = newValue
             if let token = newValue {
                 KeychainHelper.save(key: "auth_token", value: token)
             } else {

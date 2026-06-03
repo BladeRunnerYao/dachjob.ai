@@ -38,11 +38,11 @@ struct MainTabView: View {
 
 struct ApplicationTrackerView: View {
     @State private var applications: [Application] = []
-    @State private var selectedStatus = "saved"
+    @State private var selectedStatus = "applied"
     @State private var isLoading = true
     @State private var error: String?
     private let api = APIClient.shared
-    private let statuses = ["saved", "applied", "interview", "rejected", "offer"]
+    private let statuses = ["applied", "interview", "rejected", "offer"]
 
     var body: some View {
         NavigationStack {
@@ -148,7 +148,6 @@ struct ApplicationTrackerView: View {
         switch status {
         case "applied": return .green
         case "interview": return .blue
-        case "saved": return .orange
         case "rejected": return .red
         case "offer": return .purple
         default: return .gray

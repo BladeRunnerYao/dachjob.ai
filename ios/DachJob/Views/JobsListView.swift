@@ -13,6 +13,7 @@ struct JobsListView: View {
     @State private var error: String?
 
     private let api = APIClient.shared
+    private let statusFilters = ["saved", "applied", "interview", "rejected", "offer"]
 
     private var totalPages: Int {
         max(1, Int(ceil(Double(total) / Double(pageSize))))
@@ -101,8 +102,9 @@ struct JobsListView: View {
 
                 Menu {
                     Button("All statuses") { selectStatus("all") }
-                    ForEach(filterOptions.statuses) { status in
-                        Button("\(status.value.capitalized) (\(status.count))") { selectStatus(status.value) }
+                    ForEach(statusFilters, id: \.self) { status in
+                        let count = filterOptions.count(forStatus: status)
+                        Button("\(status.capitalized) (\(count))") { selectStatus(status) }
                     }
                 } label: {
                     Label(selectedStatus == "all" ? "All statuses" : selectedStatus.capitalized, systemImage: "line.3.horizontal.decrease.circle")
