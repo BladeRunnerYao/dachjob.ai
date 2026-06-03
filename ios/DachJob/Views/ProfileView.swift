@@ -339,13 +339,18 @@ struct MarkdownPreview: View {
     private enum MarkdownBlock {
         case heading(level: Int, text: String)
         case paragraph(String)
-        case bullets([String])
+        case bullets([MarkdownListItem])
+    }
+
+    private struct MarkdownListItem: Hashable {
+        let marker: String
+        let text: String
     }
 
     private var blocks: [MarkdownBlock] {
         var result: [MarkdownBlock] = []
         var paragraphLines: [String] = []
-        var bulletLines: [String] = []
+        var bulletLines: [MarkdownListItem] = []
 
         func flushParagraph() {
             let text = paragraphLines.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -378,7 +383,10 @@ struct MarkdownPreview: View {
                 result.append(.heading(level: level, text: text))
             } else if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("• ") {
                 flushParagraph()
-                bulletLines.append(String(line.dropFirst(2)))
+                bulletLines.append(MarkdownListItem(marker: "•", text: String(line.dropFirst(2))))
+            } else if let ordered = orderedListItem(from: line) {
+                flushParagraph()
+                bulletLines.append(ordered)
             } else {
                 flushBullets()
                 paragraphLines.append(String(line))
@@ -394,12 +402,12 @@ struct MarkdownPreview: View {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .heading(let level, let text):
-                    Text(text)
+                    markdownText(text)
                         .font(level <= 1 ? .title3.bold() : level == 2 ? .headline : .subheadline.bold())
                         .foregroundColor(.primary)
                         .padding(.top, level <= 2 ? 6 : 2)
                 case .paragraph(let text):
-                    Text(text)
+                    markdownText(text)
                         .font(.body)
                         .lineSpacing(4)
                         .foregroundColor(.secondary)
@@ -407,9 +415,10 @@ struct MarkdownPreview: View {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(items, id: \.self) { item in
                             HStack(alignment: .top, spacing: 8) {
-                                Text("•")
+                                Text(item.marker)
                                     .fontWeight(.semibold)
-                                Text(item)
+                                    .frame(minWidth: item.marker == "•" ? 8 : 22, alignment: .leading)
+                                markdownText(item.text)
                                     .lineSpacing(3)
                             }
                             .font(.subheadline)
@@ -426,6 +435,24 @@ struct MarkdownPreview: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color(.systemGray4), lineWidth: 1)
             )
+    }
+
+    private func orderedListItem(from line: String) -> MarkdownListItem? {
+        guard let dotIndex = line.firstIndex(of: ".") else { return nil }
+        let marker = line[..<dotIndex]
+        guard !marker.isEmpty, marker.allSatisfy({ $0.isNumber }) else { return nil }
+        let contentStart = line.index(after: dotIndex)
+        guard contentStart < line.endIndex, line[contentStart].isWhitespace else { return nil }
+        let text = line[contentStart...].trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return nil }
+        return MarkdownListItem(marker: "\(marker).", text: text)
+    }
+
+    private func markdownText(_ text: String) -> Text {
+        if let attributed = try? AttributedString(markdown: text, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+            return Text(attributed)
+        }
+        return Text(text)
     }
 }
 

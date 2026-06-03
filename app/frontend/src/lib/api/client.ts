@@ -19,6 +19,8 @@ import type {
   CandidateProfile,
   JobImportResponse,
   JobPosting,
+  JobFilterOptions,
+  JobQueryOptions,
   LLMRun,
   MatchReport,
   PaginatedJobs,
@@ -52,12 +54,16 @@ export class ApiClient {
     return resumesApi.getResumePdfUrl(artifactId);
   }
 
-  getJobs(limit?: number, offset?: number, status?: JobFilterStatus): Promise<JobPosting[]> {
-    return jobsApi.getJobs(limit, offset, status);
+  getJobs(limit?: number, offset?: number, options?: JobFilterStatus | JobQueryOptions): Promise<JobPosting[]> {
+    return jobsApi.getJobs(limit, offset, options);
   }
 
-  getJobsPaginated(limit: number, offset: number, status?: JobFilterStatus): Promise<PaginatedJobs> {
-    return jobsApi.getJobsPaginated(limit, offset, status);
+  getJobsPaginated(limit: number, offset: number, options?: JobFilterStatus | JobQueryOptions): Promise<PaginatedJobs> {
+    return jobsApi.getJobsPaginated(limit, offset, options);
+  }
+
+  getJobFilters(): Promise<JobFilterOptions> {
+    return jobsApi.getJobFilters();
   }
 
   getJob(id: string): Promise<JobPosting> {
@@ -80,8 +86,8 @@ export class ApiClient {
     return jobsApi.importJobs(urlText);
   }
 
-  getApplications(): Promise<Application[]> {
-    return applicationsApi.getApplications();
+  getApplications(status?: string): Promise<Application[]> {
+    return applicationsApi.getApplications(status);
   }
 
   updateApplication(applicationId: string, updates: { status?: string; notes?: string }): Promise<Application> {

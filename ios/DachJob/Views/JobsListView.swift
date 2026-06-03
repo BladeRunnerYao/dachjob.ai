@@ -5,20 +5,22 @@ struct JobsListView: View {
     @State private var total = 0
     @State private var isLoading = true
     @State private var showImport = false
-    @State private var filter: String = "all"
-    @State private var counts: [String: Int] = ["all": 0, "applied": 0, "saved": 0]
+    @State private var selectedCompany = ""
+    @State private var selectedStatus = "all"
+    @State private var filterOptions = JobFilterOptions(companies: [], statuses: [])
     @State private var page = 0
+    @State private var pageSize = 15
     @State private var error: String?
 
     private let api = APIClient.shared
-    private let pageSize = 7
+    private let statusFilters = ["saved", "applied", "interview", "rejected", "offer"]
 
     private var totalPages: Int {
         max(1, Int(ceil(Double(total) / Double(pageSize))))
     }
 
     private var loadTaskID: String {
-        "\(filter):\(page)"
+        "\(selectedCompany):\(selectedStatus):\(page):\(pageSize)"
     }
 
     var body: some View {
@@ -54,7 +56,7 @@ struct JobsListView: View {
                     }
                 }
             }
-            .navigationTitle("Jobs (\(counts["all"] ?? total))")
+            .navigationTitle("Jobs (\(total))")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -76,15 +78,67 @@ struct JobsListView: View {
 
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                FilterChip(label: "All", count: counts["all"] ?? 0, isSelected: filter == "all") { selectFilter("all") }
-                FilterChip(label: "Applied", count: counts["applied"] ?? 0, isSelected: filter == "applied") { selectFilter("applied") }
-                FilterChip(label: "Saved", count: counts["saved"] ?? 0, isSelected: filter == "saved") { selectFilter("saved") }
+            HStack(spacing: 10) {
+                Button {
+                    clearFilters()
+                } label: {
+                    Label("All", systemImage: "tray.full")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(selectedCompany.isEmpty && selectedStatus == "all" ? .blue : .gray)
+
+                Menu {
+                    Button("All companies") { selectCompany("") }
+                    ForEach(filterOptions.companies) { company in
+                        Button("\(company.value) (\(company.count))") { selectCompany(company.value) }
+                    }
+                } label: {
+                    Label(selectedCompany.isEmpty ? "Company" : selectedCompany, systemImage: "building.2")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(selectedCompany.isEmpty ? .gray : .blue)
+
+                Menu {
+                    Button("All statuses") { selectStatus("all") }
+                    ForEach(statusFilters, id: \.self) { status in
+                        let count = filterOptions.count(forStatus: status)
+                        Button("\(status.capitalized) (\(count))") { selectStatus(status) }
+                    }
+                } label: {
+                    Label(selectedStatus == "all" ? "Status" : selectedStatus.capitalized, systemImage: "line.3.horizontal.decrease.circle")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(selectedStatus == "all" ? .gray : .blue)
+
+                Menu {
+                    ForEach([15, 30, 50, 100], id: \.self) { size in
+                        Button("\(size)") { selectPageSize(size) }
+                    }
+                } label: {
+                    Label("\(pageSize)", systemImage: "number")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.gray)
             }
             .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(.regularMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(.separator))
+                .frame(height: 0.5)
+        }
+        .frame(height: 58)
     }
 
     private var paginationBar: some View {
@@ -117,8 +171,10 @@ struct JobsListView: View {
     }
 
     private func loadJobs(debounced: Bool = false) async {
-        let selectedFilter = filter
+        let company = selectedCompany
+        let status = selectedStatus
         let selectedPage = page
+        let selectedPageSize = pageSize
         if debounced {
             do {
                 try await Task.sleep(nanoseconds: 250_000_000)
@@ -132,36 +188,47 @@ struct JobsListView: View {
         error = nil
         do {
             async let selectedResult = api.getJobs(
-                limit: pageSize,
-                offset: selectedPage * pageSize,
-                status: selectedFilter == "all" ? nil : selectedFilter
+                limit: selectedPageSize,
+                offset: selectedPage * selectedPageSize,
+                status: status == "saved" ? status : nil,
+                stage: status != "all" && status != "saved" ? status : nil,
+                company: company.isEmpty ? nil : company
             )
-            async let allResult = api.getJobs(limit: 1)
-            async let appliedResult = api.getJobs(limit: 1, status: "applied")
-            async let savedResult = api.getJobs(limit: 1, status: "saved")
+            async let filtersResult = api.getJobFilters()
             let result = try await selectedResult
-            guard !Task.isCancelled, selectedFilter == filter, selectedPage == page else { return }
+            guard !Task.isCancelled, company == selectedCompany, status == selectedStatus, selectedPage == page, selectedPageSize == pageSize else { return }
             jobs = result.items
             total = result.total
-            counts = [
-                "all": try await allResult.total,
-                "applied": try await appliedResult.total,
-                "saved": try await savedResult.total,
-            ]
+            filterOptions = try await filtersResult
         } catch let apiError as APIError where apiError.isCancelled {
             return
         } catch let apiError as APIError where apiError.isRateLimited && !jobs.isEmpty {
             return
         } catch {
-            guard !Task.isCancelled, selectedFilter == filter, selectedPage == page else { return }
+            guard !Task.isCancelled, company == selectedCompany, status == selectedStatus, selectedPage == page else { return }
             self.error = error.localizedDescription
         }
         isLoading = false
     }
 
-    private func selectFilter(_ nextFilter: String) {
-        guard filter != nextFilter else { return }
-        filter = nextFilter
+    private func clearFilters() {
+        selectedCompany = ""
+        selectedStatus = "all"
+        page = 0
+    }
+
+    private func selectCompany(_ company: String) {
+        selectedCompany = company
+        page = 0
+    }
+
+    private func selectStatus(_ status: String) {
+        selectedStatus = status
+        page = 0
+    }
+
+    private func selectPageSize(_ size: Int) {
+        pageSize = size
         page = 0
     }
 }
@@ -203,8 +270,11 @@ struct JobRow: View {
                 }
                 if let status = job.displayApplicationStatus {
                     StatusBadge(status: status)
-                } else if let rec = job.recommendation {
-                    RecommendationBadge(recommendation: rec)
+                }
+                if let added = job.addedDateText {
+                    Text(added)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
             }
         }

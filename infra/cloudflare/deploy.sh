@@ -21,7 +21,7 @@ deploy_frontend() {
     echo "==> Building frontend..."
     cd "$ROOT_DIR/app/frontend"
     npm ci
-    NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL:-https://api.dachjob.ai}" npm run build
+    NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL:-https://dachjob-api.yaoyaoyaoyao.workers.dev}" npm run build
     echo "==> Deploying to Cloudflare Pages..."
     npx wrangler pages deploy out --project-name=dachjob-web
     echo "==> Frontend deployed."

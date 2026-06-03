@@ -6,12 +6,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { JobCard } from '@/components/jobs/job-card';
 import { JobForm } from '@/components/jobs/job-form';
 import { api } from '@/lib/api/client';
-import type { JobPosting } from '@/lib/api/types';
+import type { JobFilterOptions, JobPosting, JobQueryOptions, JobStatusFilterValue } from '@/lib/api/types';
 import JobDetailClient from './[id]/job-detail-client';
-
-type FilterKey = 'all' | 'applied' | 'saved';
-
-type JobCounts = Record<FilterKey, number>;
 
 const PAGE_SIZE_OPTIONS = [15, 30, 50, 100] as const;
 
@@ -22,8 +18,10 @@ export default function JobsPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [filter, setFilter] = useState<FilterKey>('all');
-  const [counts, setCounts] = useState<JobCounts>({ all: 0, applied: 0, saved: 0 });
+  const [companyFilter, setCompanyFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<JobStatusFilterValue | 'all'>('all');
+  const [filterOptions, setFilterOptions] = useState<JobFilterOptions>({ companies: [], statuses: [] });
+  const [allCount, setAllCount] = useState(0);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(15);
   const [importing, setImporting] = useState(false);
@@ -32,18 +30,22 @@ export default function JobsPage() {
   const fetchJobs = useCallback(async () => {
     if (routedJobId) return;
     setLoading(true);
-    const status = filter === 'all' ? undefined : filter;
-    const [result, allResult, appliedResult, savedResult] = await Promise.all([
-      api.getJobsPaginated(pageSize, page * pageSize, status),
+    const query: JobQueryOptions = {
+      status: statusFilter === 'saved' ? statusFilter : undefined,
+      stage: statusFilter !== 'all' && statusFilter !== 'saved' ? statusFilter : 'all',
+      company: companyFilter || undefined,
+    };
+    const [result, allResult, filtersResult] = await Promise.all([
+      api.getJobsPaginated(pageSize, page * pageSize, query),
       api.getJobsPaginated(1, 0),
-      api.getJobsPaginated(1, 0, 'applied'),
-      api.getJobsPaginated(1, 0, 'saved'),
+      api.getJobFilters(),
     ]);
     setJobs(result.items);
     setTotal(result.total);
-    setCounts({ all: allResult.total, applied: appliedResult.total, saved: savedResult.total });
+    setAllCount(allResult.total);
+    setFilterOptions(filtersResult);
     setLoading(false);
-  }, [filter, page, pageSize, routedJobId]);
+  }, [companyFilter, page, pageSize, routedJobId, statusFilter]);
 
   useEffect(() => {
     if (routedJobId) return;
@@ -51,17 +53,21 @@ export default function JobsPage() {
 
     async function loadJobs() {
       setLoading(true);
-      const status = filter === 'all' ? undefined : filter;
-      const [result, allResult, appliedResult, savedResult] = await Promise.all([
-        api.getJobsPaginated(pageSize, page * pageSize, status),
+      const query: JobQueryOptions = {
+        status: statusFilter === 'saved' ? statusFilter : undefined,
+        stage: statusFilter !== 'all' && statusFilter !== 'saved' ? statusFilter : 'all',
+        company: companyFilter || undefined,
+      };
+      const [result, allResult, filtersResult] = await Promise.all([
+        api.getJobsPaginated(pageSize, page * pageSize, query),
         api.getJobsPaginated(1, 0),
-        api.getJobsPaginated(1, 0, 'applied'),
-        api.getJobsPaginated(1, 0, 'saved'),
+        api.getJobFilters(),
       ]);
       if (!cancelled) {
         setJobs(result.items);
         setTotal(result.total);
-        setCounts({ all: allResult.total, applied: appliedResult.total, saved: savedResult.total });
+        setAllCount(allResult.total);
+        setFilterOptions(filtersResult);
         setLoading(false);
       }
     }
@@ -70,7 +76,7 @@ export default function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [filter, page, pageSize, routedJobId]);
+  }, [companyFilter, page, pageSize, routedJobId, statusFilter]);
 
   if (routedJobId) {
     return <JobDetailClient jobId={decodeURIComponent(routedJobId)} />;
@@ -109,8 +115,18 @@ export default function JobsPage() {
     return start + index;
   });
 
-  const selectFilter = (nextFilter: FilterKey) => {
-    setFilter(nextFilter);
+  const clearStatusFilter = () => {
+    setStatusFilter('all');
+    setPage(0);
+  };
+
+  const updateCompanyFilter = (company: string) => {
+    setCompanyFilter(company);
+    setPage(0);
+  };
+
+  const updateStatusFilter = (status: JobStatusFilterValue | 'all') => {
+    setStatusFilter(status);
     setPage(0);
   };
 
@@ -128,7 +144,7 @@ export default function JobsPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Jobs</h1>
-          <p className="text-sm text-slate-500 mt-1">{counts.all} job postings</p>
+          <p className="text-sm text-slate-500 mt-1">{allCount} job postings</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -138,27 +154,43 @@ export default function JobsPage() {
         </button>
       </div>
 
-      <div className="flex gap-2 items-center overflow-x-auto -mx-4 px-4 pb-1">
-        {(['all', 'applied', 'saved'] as FilterKey[]).map((f) => (
+      <div className="flex flex-col gap-3 text-sm lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            key={f}
-            onClick={() => selectFilter(f)}
+            onClick={clearStatusFilter}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-              filter === f
+              statusFilter === 'all'
                 ? 'bg-blue-600 text-white'
                 : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
             }`}
           >
-            {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
-            <span className="ml-1 opacity-60">
-              ({counts[f]})
-            </span>
+            All
+            <span className="ml-1 opacity-60">({allCount})</span>
           </button>
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
+          <select
+            value={companyFilter}
+            onChange={(event) => updateCompanyFilter(event.target.value)}
+            className="max-w-[220px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">All companies</option>
+            {filterOptions.companies.map((company) => (
+              <option key={company.value} value={company.value}>
+                {company.value} ({company.count})
+              </option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(event) => updateStatusFilter(event.target.value as JobStatusFilterValue | 'all')}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="all">All statuses</option>
+            {filterOptions.statuses.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.value.charAt(0).toUpperCase() + status.value.slice(1)} ({status.count})
+              </option>
+            ))}
+          </select>
           <span className="text-xs font-medium text-slate-500">Jobs per page</span>
           <select
             value={pageSize}

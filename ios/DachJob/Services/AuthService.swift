@@ -13,11 +13,21 @@ class AuthService {
     private let api = APIClient.shared
     private let emailKey = "account_email"
     private let nameKey = "account_name"
+    private var unauthorizedObserver: NSObjectProtocol?
 
     init() {
         isAuthenticated = api.isAuthenticated
         accountEmail = UserDefaults.standard.string(forKey: emailKey)
         accountName = UserDefaults.standard.string(forKey: nameKey)
+        unauthorizedObserver = NotificationCenter.default.addObserver(
+            forName: .apiUnauthorized,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.clearSession()
+            }
+        }
     }
 
     func login(email: String, password: String) async {
@@ -48,8 +58,13 @@ class AuthService {
 
     func logout() {
         api.logout()
+        clearSession()
+    }
+
+    private func clearSession() {
         accountEmail = nil
         accountName = nil
+        errorMessage = nil
         UserDefaults.standard.removeObject(forKey: emailKey)
         UserDefaults.standard.removeObject(forKey: nameKey)
         isAuthenticated = false
@@ -64,7 +79,11 @@ class AuthService {
             UserDefaults.standard.set(account.email, forKey: emailKey)
             UserDefaults.standard.set(account.name, forKey: nameKey)
         } catch {
-            errorMessage = error.localizedDescription
+            if let apiError = error as? APIError, apiError.isUnauthorized {
+                clearSession()
+            } else {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

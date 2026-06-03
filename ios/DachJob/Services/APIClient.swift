@@ -37,6 +37,16 @@ enum APIError: LocalizedError {
         if case .serverError(let code, _) = self, code == 429 { return true }
         return false
     }
+
+    var isUnauthorized: Bool {
+        if case .unauthorized = self { return true }
+        if case .serverError(let code, _) = self, code == 401 { return true }
+        return false
+    }
+}
+
+extension Notification.Name {
+    static let apiUnauthorized = Notification.Name("apiUnauthorized")
 }
 
 private struct CVMarkdownUpload: Encodable {
@@ -66,22 +76,43 @@ private struct JobStatusUpdateRequest: Encodable {
     let saved: Bool?
 }
 
+private struct EmptyRequest: Encodable {}
+
+private struct ApplicationUpdateRequest: Encodable {
+    let status: String?
+    let notes: String?
+}
+
 @MainActor
 class APIClient {
     static let shared = APIClient()
+    static let defaultBaseURL = "https://dachjob-api.yaoyaoyaoyao.workers.dev"
+    private var cachedAuthToken: String?
 
     private var baseURL: String {
-        // Migrate old AWS default → GCP default
+        // Migrate old cloud defaults to the current Cloudflare Worker API.
         if let saved = UserDefaults.standard.string(forKey: "api_base_url"),
-           saved == "https://d3ktpumdo7sly4.cloudfront.net" {
+           [
+            "https://d3ktpumdo7sly4.cloudfront.net",
+            "https://dachjob-dev-api-qxugiew36a-ew.a.run.app",
+            "https://api.dachjob.ai",
+           ].contains(saved) {
             UserDefaults.standard.removeObject(forKey: "api_base_url")
         }
-        return UserDefaults.standard.string(forKey: "api_base_url") ?? "https://dachjob-dev-api-qxugiew36a-ew.a.run.app"
+        return UserDefaults.standard.string(forKey: "api_base_url") ?? Self.defaultBaseURL
     }
 
     private var authToken: String? {
-        get { KeychainHelper.load(key: "auth_token") }
+        get {
+            if let cachedAuthToken {
+                return cachedAuthToken
+            }
+            let token = KeychainHelper.load(key: "auth_token")
+            cachedAuthToken = token
+            return token
+        }
         set {
+            cachedAuthToken = newValue
             if let token = newValue {
                 KeychainHelper.save(key: "auth_token", value: token)
             } else {
@@ -124,10 +155,22 @@ class APIClient {
 
     // MARK: - Jobs
 
-    func getJobs(limit: Int = 50, offset: Int = 0, status: String? = nil) async throws -> PaginatedJobs {
+    func getJobs(
+        limit: Int = 50,
+        offset: Int = 0,
+        status: String? = nil,
+        stage: String? = nil,
+        company: String? = nil
+    ) async throws -> PaginatedJobs {
         var path = "/api/jobs?limit=\(limit)&offset=\(offset)"
         if let status {
-            path += "&status=\(status)"
+            path += "&status=\(urlEncode(status))"
+        }
+        if let stage, stage != "all" {
+            path += "&stage=\(urlEncode(stage))"
+        }
+        if let company, !company.isEmpty {
+            path += "&company=\(urlEncode(company))"
         }
         let result: PaginatedJobs = try await get(path)
         // Filter out smoke test jobs
@@ -141,6 +184,10 @@ class APIClient {
         return try await get("/api/jobs/\(id)")
     }
 
+    func getJobFilters() async throws -> JobFilterOptions {
+        return try await get("/api/jobs/filters")
+    }
+
     func importJobs(urls: [String]) async throws -> JobImportResponse {
         let body: [String: [String]] = ["urls": urls]
         return try await post("/api/jobs/import", body: body)
@@ -149,6 +196,11 @@ class APIClient {
     func updateJobStatus(id: String, status: String? = nil, saved: Bool? = nil) async throws -> JobPosting {
         let body = JobStatusUpdateRequest(status: status, saved: saved)
         return try await patch("/api/jobs/\(id)/status", body: body)
+    }
+
+    func parseJob(id: String) async throws -> JobPosting {
+        let _: JobParseResponse = try await post("/api/jobs/\(id)/parse", body: EmptyRequest())
+        return try await getJob(id: id)
     }
 
     func createResumeArtifact(jobId: String, style: ResumeStyle, confirmedSkills: [String]) async throws -> ResumeArtifact {
@@ -193,7 +245,15 @@ class APIClient {
     // MARK: - Match
 
     func getMatchReport(jobId: String) async throws -> MatchReport? {
-        return try await get("/api/jobs/\(jobId)/match")
+        do {
+            return try await get("/api/jobs/\(jobId)/match")
+        } catch APIError.serverError(let code, _) where code == 404 {
+            return nil
+        }
+    }
+
+    func createMatchReport(jobId: String) async throws -> MatchReport {
+        return try await post("/api/jobs/\(jobId)/match", body: EmptyRequest())
     }
 
     // MARK: - LLM Runs
@@ -204,8 +264,16 @@ class APIClient {
 
     // MARK: - Applications
 
-    func getApplications() async throws -> [Application] {
-        return try await get("/api/applications")
+    func getApplications(status: String? = nil) async throws -> [Application] {
+        var path = "/api/applications"
+        if let status, !status.isEmpty {
+            path += "?status=\(urlEncode(status.lowercased()))"
+        }
+        return try await get(path)
+    }
+
+    func updateApplication(id: String, status: String? = nil, notes: String? = nil) async throws -> Application {
+        return try await patch("/api/applications/\(id)", body: ApplicationUpdateRequest(status: status, notes: notes))
     }
 
     // MARK: - Private helpers
@@ -312,6 +380,7 @@ class APIClient {
             let message = String(data: data, encoding: .utf8) ?? "Unknown error"
             if httpResponse.statusCode == 401 {
                 authToken = nil
+                NotificationCenter.default.post(name: .apiUnauthorized, object: nil)
                 // Try to extract the detail message from the server error
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let detail = json["detail"] as? String {
@@ -338,5 +407,9 @@ class APIClient {
             return true
         }
         return false
+    }
+
+    private func urlEncode(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
     }
 }

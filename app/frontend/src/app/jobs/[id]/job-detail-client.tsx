@@ -275,8 +275,11 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [matching, setMatching] = useState(false);
+  const [parsing, setParsing] = useState(false);
   const [generatingResume, setGeneratingResume] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const [matchError, setMatchError] = useState<string | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
   const [resumeStyle, setResumeStyle] = useState<ResumeStyle>('german');
   const [showCv, setShowCv] = useState(false);
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
@@ -359,6 +362,7 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
   const parsedRequiredQuals: string[] = readStringList(parsed.required_qualifications);
   const parsedPreferredQuals: string[] = readStringList(parsed.preferred_qualifications);
   const hasStructuredSections = parsedResponsibilities.length > 0 || parsedRequiredQuals.length > 0 || parsedPreferredQuals.length > 0;
+  const hasParsedJob = Object.keys(parsed).length > 0;
 
   // Fallback: parse raw_jd for sections when no structured data
   const allSections = parseRawJd(job.raw_jd);
@@ -376,13 +380,29 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
   // ── Actions ────────────────────────────────────────────────────
   const runMatch = async () => {
     setMatching(true);
+    setMatchError(null);
     try {
       const report = await api.createMatchReport(id);
       const refreshedJob = await api.getJob(id);
       setMatch(report);
       setJob(refreshedJob);
+    } catch (err) {
+      setMatchError(err instanceof Error ? err.message : 'Could not run match');
     } finally {
       setMatching(false);
+    }
+  };
+
+  const runParse = async () => {
+    setParsing(true);
+    setParseError(null);
+    try {
+      const refreshedJob = await api.parseJob(id);
+      setJob(refreshedJob);
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : 'Could not parse job');
+    } finally {
+      setParsing(false);
     }
   };
 
@@ -523,24 +543,34 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
               <CardContent className="flex flex-col items-center gap-3 py-6">
                 <TrendingUp className="h-8 w-8 text-slate-300" />
                 <p className="text-sm text-slate-500 text-center">
-                  Match score will appear automatically after the job is added.
+                  No match score yet.
                 </p>
+                <button
+                  onClick={runMatch}
+                  disabled={matching}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {matching ? 'Matching...' : 'Run match'}
+                </button>
               </CardContent>
             </Card>
           )}
 
-          {matchPercent != null && match && (
+          {matchPercent != null && (
             <div className="text-center">
-              <Badge variant={match.overall_score >= 4.2 ? 'green' : match.overall_score >= 3.6 ? 'yellow' : 'red'}>
-                {match.recommendation === 'apply' ? 'Recommended' : match.recommendation === 'maybe' ? 'Consider' : 'Not Recommended'}
-              </Badge>
               <button
                 onClick={runMatch}
                 disabled={matching}
-                className="mt-3 text-xs text-slate-400 hover:text-blue-600 underline"
+                className="text-xs text-slate-400 hover:text-blue-600 underline"
               >
-                {matching ? 'Refreshing...' : 'Refresh match'}
+                {matching ? 'Matching...' : 'Rematch'}
               </button>
+            </div>
+          )}
+
+          {matchError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="text-xs text-red-700">{matchError}</p>
             </div>
           )}
 
@@ -592,6 +622,15 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
           {/* Parse / CV generation card */}
           <Card>
             <CardContent className="py-4 space-y-3">
+              {!hasParsedJob && (
+                <button
+                  onClick={runParse}
+                  disabled={parsing}
+                  className="w-full rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {parsing ? 'Parsing...' : 'Parse Job'}
+                </button>
+              )}
               {!generatingResume && (
                 <div className="grid grid-cols-1 gap-2">
                   <button
@@ -632,6 +671,12 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
               )}
             </CardContent>
           </Card>
+
+          {parseError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="text-xs text-red-700">{parseError}</p>
+            </div>
+          )}
 
           {resumeError && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3">

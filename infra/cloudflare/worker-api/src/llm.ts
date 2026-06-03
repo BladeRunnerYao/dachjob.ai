@@ -49,7 +49,7 @@ export async function logLLMRun(
   userId: string,
   task: string,
   startTime: number,
-  status: "success" | "error",
+  status: "success" | "error" | "cache_hit" | "skipped",
   errorMessage?: string
 ) {
   await env.DB.prepare(

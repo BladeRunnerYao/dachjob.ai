@@ -1,0 +1,49 @@
+name = "dachjob-pipeline-importer"
+main = "src/index.ts"
+compatibility_date = "2026-06-02"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["0 * * * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[vars]
+GITHUB_OWNER = "BladeRunnerYao"
+GITHUB_REPO = "career-ops"
+GITHUB_REF = "main"
+PIPELINE_PATH = "data/pipeline.md"
+DACHJOB_API_BASE_URL = "https://api.dachjob.ai"
+DACHJOB_USER_ID = "52e40b21-723b-41d5-8d5b-8f00144e3f7a"
+DACHJOB_USER_EMAIL = "tiyao.li@outlook.com"
+MIN_IMPORTS_PER_RUN = "4"
+MAX_IMPORTS_PER_RUN = "5"
+MIN_PARSES_PER_RUN = "3"
+MAX_PARSES_PER_RUN = "5"
+MAX_ATTEMPTS_PER_URL = "12"
+BOOTSTRAP_MODE = "import"
+
+[[kv_namespaces]]
+binding = "STATE"
+id = "1bc9e01af7824ffabd0187fcb3c88561"
+
+[[services]]
+binding = "DACHJOB_API"
+service = "dachjob-api"
+
+[[secrets_store_secrets]]
+binding = "GITHUB_TOKEN_SECRET"
+store_id = "ec66f6181cde4a3883fb0ce7477c66cf"
+secret_name = "career_ops_github_token"
+
+[[secrets_store_secrets]]
+binding = "DACHJOB_JWT_SECRET"
+store_id = "ec66f6181cde4a3883fb0ce7477c66cf"
+secret_name = "dachjob_jwt_secret"
+
+[[secrets_store_secrets]]
+binding = "MANUAL_TRIGGER_SECRET"
+store_id = "ec66f6181cde4a3883fb0ce7477c66cf"
+secret_name = "dachjob_pipeline_importer_manual_secret"

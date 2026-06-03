@@ -17,12 +17,6 @@ function scoreBadge(percent: number) {
   return 'red';
 }
 
-function recBadge(rec: string) {
-  if (rec === 'apply') return 'green';
-  if (rec === 'maybe') return 'yellow';
-  return 'red';
-}
-
 function statusBadge(status: string) {
   if (status === 'applied') return 'green';
   if (status === 'interview') return 'blue';
@@ -48,14 +42,15 @@ export function JobCard({ job }: JobCardProps) {
           </div>
           <div className="flex items-center gap-2 ml-4 shrink-0">
             {job.score != null && <Badge variant={scoreBadge(toPercent(job.score))}>{toPercent(job.score)}%</Badge>}
-            {job.recommendation && <Badge variant={recBadge(job.recommendation)}>{job.recommendation}</Badge>}
             {job.saved && <Badge variant="yellow">Saved</Badge>}
-            {statusBadge(job.application_status || job.status) && (
-              <Badge variant={statusBadge(job.application_status || job.status)!}>
-                {displayStatus(job.application_status || job.status)}
+            {job.application_status && statusBadge(job.application_status) && (
+              <Badge variant={statusBadge(job.application_status)!}>
+                {displayStatus(job.application_status)}
               </Badge>
             )}
-            <span className="text-xs text-slate-400 hidden sm:inline">{new Date(job.created_at).toLocaleDateString()}</span>
+            <span className="text-xs text-slate-400 hidden sm:inline">
+              Added {new Date(job.pipeline_added_at || job.created_at).toLocaleDateString()}
+            </span>
           </div>
         </CardContent>
       </Card>

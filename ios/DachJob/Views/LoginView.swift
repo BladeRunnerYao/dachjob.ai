@@ -82,7 +82,7 @@ struct LoginView: View {
 
                     Spacer()
 
-                    SettingsLink()
+                    SettingsLink(tint: .white.opacity(0.9))
                         .padding(.bottom)
                 }
             }
@@ -226,13 +226,18 @@ struct ForgotPasswordView: View {
 struct SettingsLink: View {
     @Environment(AuthService.self) var authService
     @State private var showSettings = false
+    let tint: Color
+
+    init(tint: Color = .secondary) {
+        self.tint = tint
+    }
 
     var body: some View {
         Button("Server Settings") {
             showSettings = true
         }
         .font(.caption)
-        .foregroundColor(.secondary)
+        .foregroundColor(tint)
         .sheet(isPresented: $showSettings) {
             ServerSettingsView()
                 .environment(authService)
@@ -243,7 +248,7 @@ struct SettingsLink: View {
 struct ServerSettingsView: View {
     @Environment(AuthService.self) var authService
     @Environment(\.dismiss) var dismiss
-    @State private var apiURL: String = UserDefaults.standard.string(forKey: "api_base_url") ?? "https://dachjob-dev-api-qxugiew36a-ew.a.run.app"
+    @State private var apiURL: String = UserDefaults.standard.string(forKey: "api_base_url") ?? APIClient.defaultBaseURL
 
     var body: some View {
         NavigationStack {
@@ -254,7 +259,7 @@ struct ServerSettingsView: View {
                         .keyboardType(.URL)
                 }
                 Section {
-                    Text("Default: GCP Cloud Run endpoint")
+                    Text("Default: Cloudflare Worker API")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Text("Changing the server will require you to log in again.")
@@ -270,7 +275,7 @@ struct ServerSettingsView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        let oldURL = UserDefaults.standard.string(forKey: "api_base_url") ?? "https://dachjob-dev-api-qxugiew36a-ew.a.run.app"
+                        let oldURL = UserDefaults.standard.string(forKey: "api_base_url") ?? APIClient.defaultBaseURL
                         UserDefaults.standard.set(apiURL, forKey: "api_base_url")
                         if apiURL != oldURL {
                             authService.logout()

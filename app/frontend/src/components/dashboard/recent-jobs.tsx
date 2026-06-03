@@ -70,7 +70,7 @@ export function RecentJobs({ jobs }: RecentJobsProps) {
                     <span className="text-xs text-slate-400">New</span>
                   )}
                 </td>
-                <td className="px-4 py-2.5 text-slate-500">{new Date(job.created_at).toLocaleDateString()}</td>
+                <td className="px-4 py-2.5 text-slate-500">{new Date(job.pipeline_added_at || job.created_at).toLocaleDateString()}</td>
               </tr>
             ))}
           </tbody>
