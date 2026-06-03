@@ -100,7 +100,7 @@ struct ApplicationTrackerView: View {
                         selectedStatus = status
                     } label: {
                         Text(status.capitalized)
-                            .font(.caption)
+                            .font(.subheadline)
                             .fontWeight(.medium)
                     }
                     .buttonStyle(.borderedProminent)
@@ -108,9 +108,15 @@ struct ApplicationTrackerView: View {
                 }
             }
             .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(.regularMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(.separator))
+                .frame(height: 0.5)
+        }
+        .frame(height: 58)
     }
 
     private func loadApplications() async {

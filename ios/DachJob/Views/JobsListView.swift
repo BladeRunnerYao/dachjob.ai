@@ -78,12 +78,12 @@ struct JobsListView: View {
 
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Button {
                     clearFilters()
                 } label: {
-                    Text("All")
-                        .font(.caption)
+                    Label("All", systemImage: "tray.full")
+                        .font(.subheadline)
                         .fontWeight(.medium)
                 }
                 .buttonStyle(.borderedProminent)
@@ -95,10 +95,13 @@ struct JobsListView: View {
                         Button("\(company.value) (\(company.count))") { selectCompany(company.value) }
                     }
                 } label: {
-                    Label(selectedCompany.isEmpty ? "All companies" : selectedCompany, systemImage: "building.2")
+                    Label(selectedCompany.isEmpty ? "Company" : selectedCompany, systemImage: "building.2")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
                         .lineLimit(1)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
+                .tint(selectedCompany.isEmpty ? .gray : .blue)
 
                 Menu {
                     Button("All statuses") { selectStatus("all") }
@@ -107,9 +110,12 @@ struct JobsListView: View {
                         Button("\(status.capitalized) (\(count))") { selectStatus(status) }
                     }
                 } label: {
-                    Label(selectedStatus == "all" ? "All statuses" : selectedStatus.capitalized, systemImage: "line.3.horizontal.decrease.circle")
+                    Label(selectedStatus == "all" ? "Status" : selectedStatus.capitalized, systemImage: "line.3.horizontal.decrease.circle")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
+                .tint(selectedStatus == "all" ? .gray : .blue)
 
                 Menu {
                     ForEach([15, 30, 50, 100], id: \.self) { size in
@@ -117,13 +123,22 @@ struct JobsListView: View {
                     }
                 } label: {
                     Label("\(pageSize)", systemImage: "number")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
+                .tint(.gray)
             }
             .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(.regularMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(.separator))
+                .frame(height: 0.5)
+        }
+        .frame(height: 58)
     }
 
     private var paginationBar: some View {
