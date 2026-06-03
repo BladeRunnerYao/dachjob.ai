@@ -37,6 +37,16 @@ enum APIError: LocalizedError {
         if case .serverError(let code, _) = self, code == 429 { return true }
         return false
     }
+
+    var isUnauthorized: Bool {
+        if case .unauthorized = self { return true }
+        if case .serverError(let code, _) = self, code == 401 { return true }
+        return false
+    }
+}
+
+extension Notification.Name {
+    static let apiUnauthorized = Notification.Name("apiUnauthorized")
 }
 
 private struct CVMarkdownUpload: Encodable {
@@ -361,6 +371,7 @@ class APIClient {
             let message = String(data: data, encoding: .utf8) ?? "Unknown error"
             if httpResponse.statusCode == 401 {
                 authToken = nil
+                NotificationCenter.default.post(name: .apiUnauthorized, object: nil)
                 // Try to extract the detail message from the server error
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let detail = json["detail"] as? String {
