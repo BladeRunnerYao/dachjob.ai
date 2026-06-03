@@ -44,6 +44,8 @@ describe("resume generator prompt parity", () => {
     expect(prompt).toContain("Career-ops Resume Tailor Mode parity rules");
     expect(prompt).toContain("Use exact JD wording for ATS keywords");
     expect(prompt).toContain("If a JD skill is not present in the CV/profile/match evidence");
+    expect(prompt).toContain("Do not expand generic evidence into specific vendor tools or services");
+    expect(prompt).toContain('do not write "AWS Lambda" or "Azure Functions"');
     expect(prompt).toContain("Python, distributed systems and cloud infrastructure");
     expect(prompt).toContain("API confirmed_skills:\nInsurance technology");
     expect(prompt).toContain("Kalepa");

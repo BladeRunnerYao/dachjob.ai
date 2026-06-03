@@ -156,9 +156,10 @@ Career-ops Resume Tailor Mode parity rules:
 3. Treat API confirmed_skills as user-approved skills. If a JD skill is not present in the CV/profile/match evidence and not in confirmed_skills, do not claim it as experience.
 4. Seamlessly integrate supported skills into Summary, Technical Skills, and existing work-experience bullets. Do not keyword-stuff.
 5. Never invent employers, dates, degrees, metrics, tools, certifications, publications, security clearance, work authorization, or domain experience.
-6. If the candidate has adjacent but not exact experience, phrase carefully: "experience with", "worked with", or omit the claim.
-7. Prioritize evidence relevant to this job; compress older/lower-priority experience first.
-8. Output a complete HTML document starting with <!DOCTYPE html>. The first bytes of the response must be <!DOCTYPE html>; do not include markdown fences, explanations, JSON, or provenance.
+6. Do not expand generic evidence into specific vendor tools or services. For example, if the CV only says "serverless", do not write "AWS Lambda" or "Azure Functions" unless those exact services appear in the CV/profile/match evidence or confirmed_skills.
+7. If the candidate has adjacent but not exact experience, phrase carefully: "experience with", "worked with", or omit the claim.
+8. Prioritize evidence relevant to this job; compress older/lower-priority experience first.
+9. Output a complete HTML document starting with <!DOCTYPE html>. The first bytes of the response must be <!DOCTYPE html>; do not include markdown fences, explanations, JSON, or provenance.
 
 Target job:
 Company: ${input.job.company || "Unknown"}
