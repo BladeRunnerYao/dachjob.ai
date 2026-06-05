@@ -5,6 +5,13 @@ import { generateId } from "../db/utils";
 import { AppError } from "../middleware/error-handler";
 import { callDeepSeekChat, logLLMRun } from "../llm";
 import { generateAndStoreResume } from "../resume-generator";
+import {
+  JOB_COUNTRIES,
+  countriesForLocation,
+  inferCountriesFromLocation,
+  parseSerializedCountries,
+  serializeCountries,
+} from "./location-country";
 
 export const jobsRoutes = new Hono<{ Bindings: Env }>();
 
@@ -35,6 +42,7 @@ interface JobImportItem {
   title?: string;
   company?: string;
   location?: string;
+  countries?: string[];
   prepare?: boolean;
 }
 
@@ -92,6 +100,7 @@ jobsRoutes.post("/", async (c) => {
     employment_type?: string;
     workplace?: string;
     salary_text?: string;
+    countries?: string[];
   }>();
 
   if (!body.title) {
@@ -101,10 +110,11 @@ jobsRoutes.post("/", async (c) => {
   const id = generateId();
   const now = new Date().toISOString();
   const jobKey = body.url ? canonicalJobKey(body.url) : null;
+  const countries = serializeCountries(body.countries || inferCountriesFromLocation(body.location));
 
   await c.env.DB.prepare(
-    `INSERT INTO jobs (id, user_id, title, company, location, job_url, job_key, raw_description, source, employment_type, workplace, salary_text, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO jobs (id, user_id, title, company, location, countries, job_url, job_key, raw_description, source, employment_type, workplace, salary_text, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -112,6 +122,7 @@ jobsRoutes.post("/", async (c) => {
       body.title,
       body.company || "",
       body.location || "",
+      countries,
       body.url || "",
       jobKey,
       body.raw_jd || "",
@@ -138,13 +149,15 @@ jobsRoutes.get("/", async (c) => {
   const status = c.req.query("status");
   const stage = c.req.query("stage");
   const company = c.req.query("company");
+  const addedDate = c.req.query("added_date");
+  const country = c.req.query("country");
   const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 200);
   const offset = parseInt(c.req.query("offset") || "0", 10);
 
   let query = "SELECT * FROM jobs WHERE user_id = ?";
   const params: (string | number)[] = [userId];
 
-  const filterSql = buildJobFilterSql({ status, stage, company });
+  const filterSql = buildJobFilterSql({ status, stage, company, addedDate, country });
   query += filterSql.sql;
   params.push(...filterSql.params);
 
@@ -167,7 +180,7 @@ jobsRoutes.get("/", async (c) => {
 // GET /api/jobs/filters - Distinct filter options for Jobs page
 jobsRoutes.get("/filters", async (c) => {
   const userId = await authMiddleware(c);
-  if (!userId) return c.json({ companies: [], statuses: [] });
+  if (!userId) return c.json({ companies: [], statuses: [], added_dates: [], countries: [] });
 
   const companyRows = await c.env.DB.prepare(
     `SELECT company, COUNT(*) AS count
@@ -192,9 +205,25 @@ jobsRoutes.get("/filters", async (c) => {
     .bind(userId)
     .first<{ saved: number; applied: number; interview: number; rejected: number; offer: number }>();
 
+  const addedDateRows = await c.env.DB.prepare(
+    `SELECT date(COALESCE(pipeline_added_at, created_at)) AS added_date, COUNT(*) AS count
+     FROM jobs
+     WHERE user_id = ? AND COALESCE(pipeline_added_at, created_at) IS NOT NULL
+     GROUP BY date(COALESCE(pipeline_added_at, created_at))
+     ORDER BY added_date DESC`
+  )
+    .bind(userId)
+    .all<{ added_date: string; count: number }>();
+
+  const countryRows = await getCountryFilterRows(c.env, userId);
+
   return c.json({
     companies: (companyRows.results || []).map((row) => ({ value: row.company, count: row.count })),
     statuses: normalizeStatusCounts(statusRows || { saved: 0, applied: 0, interview: 0, rejected: 0, offer: 0 }),
+    added_dates: (addedDateRows.results || [])
+      .filter((row) => row.added_date)
+      .map((row) => ({ value: row.added_date, count: row.count })),
+    countries: countryRows,
   });
 });
 
@@ -416,6 +445,7 @@ async function formatJobResponse(env: Env, userId: string, job: Record<string, a
     title: job.title,
     company: job.company,
     location: job.location,
+    countries: countriesForJob(job),
     url: job.job_url,
     source: job.source,
     employment_type: job.employment_type,
@@ -450,6 +480,8 @@ function buildJobFilterSql(filters: {
   status?: string;
   stage?: string;
   company?: string;
+  addedDate?: string;
+  country?: string;
 }): { sql: string; params: (string | number)[] } {
   let sql = "";
   const params: (string | number)[] = [];
@@ -485,6 +517,18 @@ function buildJobFilterSql(filters: {
     params.push(company);
   }
 
+  const addedDate = filters.addedDate?.trim();
+  if (addedDate) {
+    sql += " AND date(COALESCE(pipeline_added_at, created_at)) = ?";
+    params.push(addedDate);
+  }
+
+  const country = filters.country?.trim();
+  if (country && (JOB_COUNTRIES as readonly string[]).includes(country)) {
+    sql += " AND countries LIKE ?";
+    params.push(`%|${country}|%`);
+  }
+
   return { sql, params };
 }
 
@@ -502,6 +546,22 @@ function normalizeStatusCounts(counts: { saved: number; applied: number; intervi
     value: status,
     count: counts[status as keyof typeof counts] || 0,
   }));
+}
+
+async function getCountryFilterRows(env: Env, userId: string): Promise<Array<{ value: string; count: number }>> {
+  const rows = await Promise.all(
+    JOB_COUNTRIES.map(async (country) => {
+      const result = await env.DB.prepare(
+        `SELECT COUNT(*) AS count
+         FROM jobs
+         WHERE user_id = ? AND countries LIKE ?`
+      )
+        .bind(userId, `%|${country}|%`)
+        .first<{ count: number }>();
+      return { value: country, count: result?.count || 0 };
+    })
+  );
+  return rows.filter((row) => row.count > 0);
 }
 
 function canonicalJobKey(url: string): string {
@@ -577,6 +637,13 @@ function safeJsonParse(value: string | null): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function countriesForJob(job: Record<string, any>): string[] {
+  const persisted = parseSerializedCountries(job.countries as string | null);
+  if (persisted.length > 0) return persisted;
+  return countriesForLocation(job.location as string | null).countries;
 }
 
 function readParsedString(parsed: Record<string, unknown>, key: string): string | null {
@@ -851,13 +918,14 @@ async function importSingleJobUrl(
   const id = generateId();
   const now = new Date().toISOString();
   const location = item.location?.trim() || "";
+  const countries = serializeCountries(item.countries || inferCountriesFromLocation(location));
 
   await env.DB.prepare(
     `INSERT INTO jobs (
-       id, user_id, title, company, location, job_url, job_key, raw_description, source,
+       id, user_id, title, company, location, countries, job_url, job_key, raw_description, source,
        pipeline_added_at, pipeline_source_sha, created_at, updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -865,6 +933,7 @@ async function importSingleJobUrl(
       title,
       company,
       location,
+      countries,
       cleanedUrl,
       jobKey,
       rawText,
@@ -1071,6 +1140,7 @@ async function parseAndStoreJobDetails(
     const parsedTitle = readParsedString(parsedJson, "title");
     const parsedCompany = readParsedString(parsedJson, "company");
     const parsedLocation = readParsedString(parsedJson, "location");
+    const parsedCountries = parsedLocation ? serializeCountries(inferCountriesFromLocation(parsedLocation)) : "";
     const parsedEmploymentType = readParsedString(parsedJson, "employment_type");
     const parsedWorkplace = readParsedString(parsedJson, "workplace");
     const parsedSalary = readParsedString(parsedJson, "salary_range") || readParsedString(parsedJson, "salary_text");
@@ -1081,6 +1151,7 @@ async function parseAndStoreJobDetails(
            title = COALESCE(NULLIF(?, ''), title),
            company = COALESCE(NULLIF(?, ''), company),
            location = COALESCE(NULLIF(?, ''), location),
+           countries = CASE WHEN ? != '' THEN ? ELSE countries END,
            employment_type = COALESCE(NULLIF(?, ''), employment_type),
            workplace = COALESCE(NULLIF(?, ''), workplace),
            salary_text = COALESCE(NULLIF(?, ''), salary_text),
@@ -1092,6 +1163,8 @@ async function parseAndStoreJobDetails(
         parsedTitle || "",
         parsedCompany || "",
         parsedLocation || "",
+        parsedCountries,
+        parsedCountries,
         parsedEmploymentType || "",
         parsedWorkplace || "",
         parsedSalary || "",

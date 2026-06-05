@@ -4,7 +4,9 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.modules.jobs.location_country import parse_serialized_countries
 
 
 class JobResponse(BaseModel):
@@ -14,6 +16,7 @@ class JobResponse(BaseModel):
     company: str
     url: str | None = None
     location: str | None = None
+    countries: list[str] = Field(default_factory=list)
     source: str | None = None
     source_job_id: str | None = None
     posted_at: datetime | None = None
@@ -32,6 +35,13 @@ class JobResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @field_validator("countries", mode="before")
+    @classmethod
+    def parse_countries(cls, value):
+        if isinstance(value, str):
+            return parse_serialized_countries(value)
+        return value or []
+
     model_config = {"from_attributes": True}
 
 
@@ -40,6 +50,7 @@ class JobCreateRequest(BaseModel):
     company: str
     url: str | None = None
     location: str | None = None
+    countries: list[str] = Field(default_factory=list)
     raw_jd: str
 
 
@@ -78,3 +89,15 @@ class PaginatedJobResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class JobFilterOption(BaseModel):
+    value: str
+    count: int
+
+
+class JobFilterOptionsResponse(BaseModel):
+    companies: list[JobFilterOption] = Field(default_factory=list)
+    statuses: list[JobFilterOption] = Field(default_factory=list)
+    added_dates: list[JobFilterOption] = Field(default_factory=list)
+    countries: list[JobFilterOption] = Field(default_factory=list)

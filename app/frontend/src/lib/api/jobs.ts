@@ -32,6 +32,8 @@ function matchesStatusFilter(job: JobPosting, status?: JobFilterStatus): boolean
 function matchesQueryFilters(job: JobPosting, options: JobQueryOptions = {}): boolean {
   if (!matchesStatusFilter(job, options.status)) return false;
   if (options.company && job.company !== options.company) return false;
+  if (options.added_date && addedDateForJob(job) !== options.added_date) return false;
+  if (options.country && !countriesForJob(job).includes(options.country)) return false;
   if (options.stage && options.stage !== 'all') {
     return job.application_status === options.stage;
   }
@@ -46,6 +48,8 @@ function buildJobsQuery(limit: number, offset: number, options: JobFilterStatus 
   if (queryOptions.status) q.set('status', queryOptions.status);
   if (queryOptions.stage && queryOptions.stage !== 'all') q.set('stage', queryOptions.stage);
   if (queryOptions.company) q.set('company', queryOptions.company);
+  if (queryOptions.added_date) q.set('added_date', queryOptions.added_date);
+  if (queryOptions.country) q.set('country', queryOptions.country);
   return q.toString();
 }
 
@@ -85,9 +89,16 @@ export async function getJobFilters(): Promise<JobFilterOptions> {
     const jobs = filterSmokeTestJobs(getMockJobs());
     const companyCounts = new Map<string, number>();
     const statusCounts = new Map<string, number>();
+    const addedDateCounts = new Map<string, number>();
+    const countryCounts = new Map<string, number>();
     let savedCount = 0;
     for (const job of jobs) {
       if (job.company) companyCounts.set(job.company, (companyCounts.get(job.company) || 0) + 1);
+      const addedDate = addedDateForJob(job);
+      if (addedDate) addedDateCounts.set(addedDate, (addedDateCounts.get(addedDate) || 0) + 1);
+      for (const country of countriesForJob(job)) {
+        countryCounts.set(country, (countryCounts.get(country) || 0) + 1);
+      }
       if (job.saved) savedCount += 1;
       if (job.application_status) {
         statusCounts.set(job.application_status, (statusCounts.get(job.application_status) || 0) + 1);
@@ -99,8 +110,31 @@ export async function getJobFilters(): Promise<JobFilterOptions> {
         value,
         count: value === 'saved' ? savedCount : statusCounts.get(value) || 0,
       })),
+      added_dates: [...addedDateCounts.entries()]
+        .sort(([left], [right]) => right.localeCompare(left))
+        .map(([value, count]) => ({ value, count })),
+      countries: [...countryCounts.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([value, count]) => ({ value, count })),
     };
   }
+}
+
+function addedDateForJob(job: JobPosting): string {
+  return (job.pipeline_added_at || job.created_at || '').slice(0, 10);
+}
+
+function countriesForJob(job: JobPosting): string[] {
+  if (job.countries && job.countries.length > 0) return job.countries;
+  const location = job.location || '';
+  const pairs: Array<[string, RegExp]> = [
+    ['Germany', /\b(germany|deutschland|berlin|hamburg|munich|münchen|frankfurt|stuttgart|leipzig)\b/i],
+    ['Switzerland', /\b(switzerland|schweiz|zurich|zürich|basel|bern|geneva|lausanne|zug)\b/i],
+    ['Austria', /\b(austria|österreich|vienna|wien)\b/i],
+    ['United States', /\b(united states|usa|san francisco|new york|seattle|austin)\b|,\s*(ca|ny|tx|wa|ma)\b/i],
+    ['Spain', /\b(spain|barcelona|madrid)\b/i],
+  ];
+  return pairs.filter(([, pattern]) => pattern.test(location)).map(([country]) => country);
 }
 
 export async function getJob(id: string): Promise<JobPosting> {

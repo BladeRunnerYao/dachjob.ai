@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import TenantContext
 from app.db.models import JobPosting
 from app.modules.jobs.extractor import ScrapedJob
+from app.modules.jobs.location_country import infer_countries_from_location, serialize_countries
 from app.modules.jobs.repository import create_job, get_job
 from app.modules.jobs.source_parsers import scrape_job_url
 from app.modules.matching.service import parse_job_posting
@@ -44,6 +45,7 @@ async def _upsert_scraped_job(
         job.title = scraped.title
         job.company = scraped.company
         job.location = scraped.location
+        job.countries = serialize_countries(infer_countries_from_location(scraped.location))
         job.raw_jd = scraped.raw_jd
         job.source = scraped.source
         job.source_job_id = scraped.source_job_id
