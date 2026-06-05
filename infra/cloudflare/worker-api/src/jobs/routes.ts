@@ -4,6 +4,7 @@ import { authMiddleware } from "../middleware/auth";
 import { generateId } from "../db/utils";
 import { AppError } from "../middleware/error-handler";
 import { callDeepSeekChat, logLLMRun } from "../llm";
+import { generateAndStoreResume } from "../resume-generator";
 
 export const jobsRoutes = new Hono<{ Bindings: Env }>();
 
@@ -324,16 +325,21 @@ jobsRoutes.post("/:id/resume", async (c) => {
     .json<{ confirmed_skills?: string[]; style?: string }>()
     .catch(() => ({}));
   const job = await c.env.DB.prepare(
-    "SELECT id, title, company, raw_description FROM jobs WHERE id = ? AND user_id = ?"
+    "SELECT id, title, company, raw_description, parsed_json FROM jobs WHERE id = ? AND user_id = ?"
   )
     .bind(jobId, userId)
-    .first<{ id: string; title: string; company: string; raw_description: string }>();
+    .first<{ id: string; title: string; company: string; raw_description: string; parsed_json: string | null }>();
   if (!job) throw new AppError("NOT_FOUND", "Job not found", 404);
 
   const profile = await getLatestProfile(c.env, userId);
   if (!profile) throw new AppError("NOT_FOUND", "Profile not found", 404);
 
-  const artifact = await generateAndStoreResume(c.env, userId, job, profile, body.confirmed_skills || [], body.style || "german");
+  const match = await getLatestMatchRow(c.env, userId, jobId);
+  const artifact = await generateAndStoreResume(c.env, userId, job, profile, {
+    confirmedSkills: body.confirmed_skills || [],
+    matchResult: match?.match_result || null,
+    style: body.style || "us",
+  });
   return c.json(artifact, 201);
 });
 
@@ -776,77 +782,6 @@ async function getLatestResumeArtifact(env: Env, userId: string, jobId: string) 
     pdf_object_key: null,
     provenance_json: [],
   };
-}
-
-async function generateAndStoreResume(
-  env: Env,
-  userId: string,
-  job: { id: string; title: string; company: string; raw_description: string },
-  profile: ProfileRow,
-  confirmedSkills: string[],
-  style: string
-) {
-  const startTime = Date.now();
-  const prompt = `Generate a ${style} style, ATS-friendly HTML CV for this candidate and job.
-
-Job: ${job.title} at ${job.company}
-Job Description:
-${job.raw_description.slice(0, 4000)}
-
-Candidate Profile:
-${profile.raw_cv_md.slice(0, 6000)}
-
-Confirmed skills to emphasize: ${confirmedSkills.join(", ") || "none"}
-
-Output only complete HTML.`;
-
-  let html: string;
-  try {
-    html = await callDeepSeekChat(env, [{ role: "user", content: prompt }], { temperature: 0.4 });
-    await logLLMRun(env, userId, "resume_generate", startTime, "success");
-  } catch (err) {
-    html = fallbackResumeHtml(profile.name, profile.raw_cv_md);
-    await logLLMRun(env, userId, "resume_generate", startTime, "error", (err as Error).message);
-  }
-
-  const applicationId = await getOrCreateApplication(env, userId, job.id, profile.id);
-  const artifactId = generateId();
-  const r2Key = `resumes/${userId}/${job.id}/${artifactId}.html`;
-  await env.STORAGE.put(r2Key, html, {
-    httpMetadata: { contentType: "text/html; charset=utf-8" },
-  });
-
-  const now = new Date().toISOString();
-  await env.DB.prepare(
-    `INSERT INTO artifacts (id, user_id, application_id, type, r2_key, content_type, size_bytes, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(artifactId, userId, applicationId, "cv_html", r2Key, "text/html; charset=utf-8", html.length, now)
-    .run();
-
-  return {
-    id: artifactId,
-    job_id: job.id,
-    html_object_key: r2Key,
-    pdf_object_key: null,
-    provenance_json: [{ source: "cloudflare-worker", style, confirmed_skills: confirmedSkills }],
-  };
-}
-
-function fallbackResumeHtml(name: string, rawCvMd: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><title>CV - ${escapeHtml(name)}</title></head>
-<body><main><h1>${escapeHtml(name)}</h1><pre>${escapeHtml(rawCvMd.slice(0, 6000))}</pre></main></body>
-</html>`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 async function importSingleJobUrl(
