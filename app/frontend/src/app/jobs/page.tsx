@@ -19,8 +19,15 @@ export default function JobsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [companyFilter, setCompanyFilter] = useState('');
+  const [addedDateFilter, setAddedDateFilter] = useState('');
+  const [countryFilter, setCountryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<JobStatusFilterValue | 'all'>('all');
-  const [filterOptions, setFilterOptions] = useState<JobFilterOptions>({ companies: [], statuses: [] });
+  const [filterOptions, setFilterOptions] = useState<JobFilterOptions>({
+    companies: [],
+    statuses: [],
+    added_dates: [],
+    countries: [],
+  });
   const [allCount, setAllCount] = useState(0);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(15);
@@ -34,6 +41,8 @@ export default function JobsPage() {
       status: statusFilter === 'saved' ? statusFilter : undefined,
       stage: statusFilter !== 'all' && statusFilter !== 'saved' ? statusFilter : 'all',
       company: companyFilter || undefined,
+      added_date: addedDateFilter || undefined,
+      country: countryFilter || undefined,
     };
     const [result, allResult, filtersResult] = await Promise.all([
       api.getJobsPaginated(pageSize, page * pageSize, query),
@@ -45,7 +54,7 @@ export default function JobsPage() {
     setAllCount(allResult.total);
     setFilterOptions(filtersResult);
     setLoading(false);
-  }, [companyFilter, page, pageSize, routedJobId, statusFilter]);
+  }, [addedDateFilter, companyFilter, countryFilter, page, pageSize, routedJobId, statusFilter]);
 
   useEffect(() => {
     if (routedJobId) return;
@@ -57,6 +66,8 @@ export default function JobsPage() {
         status: statusFilter === 'saved' ? statusFilter : undefined,
         stage: statusFilter !== 'all' && statusFilter !== 'saved' ? statusFilter : 'all',
         company: companyFilter || undefined,
+        added_date: addedDateFilter || undefined,
+        country: countryFilter || undefined,
       };
       const [result, allResult, filtersResult] = await Promise.all([
         api.getJobsPaginated(pageSize, page * pageSize, query),
@@ -76,7 +87,7 @@ export default function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [companyFilter, page, pageSize, routedJobId, statusFilter]);
+  }, [addedDateFilter, companyFilter, countryFilter, page, pageSize, routedJobId, statusFilter]);
 
   if (routedJobId) {
     return <JobDetailClient jobId={decodeURIComponent(routedJobId)} />;
@@ -122,6 +133,16 @@ export default function JobsPage() {
 
   const updateCompanyFilter = (company: string) => {
     setCompanyFilter(company);
+    setPage(0);
+  };
+
+  const updateAddedDateFilter = (addedDate: string) => {
+    setAddedDateFilter(addedDate);
+    setPage(0);
+  };
+
+  const updateCountryFilter = (country: string) => {
+    setCountryFilter(country);
     setPage(0);
   };
 
@@ -176,6 +197,30 @@ export default function JobsPage() {
             {filterOptions.companies.map((company) => (
               <option key={company.value} value={company.value}>
                 {company.value} ({company.count})
+              </option>
+            ))}
+          </select>
+          <select
+            value={addedDateFilter}
+            onChange={(event) => updateAddedDateFilter(event.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">All added dates</option>
+            {filterOptions.added_dates.map((addedDate) => (
+              <option key={addedDate.value} value={addedDate.value}>
+                {new Date(`${addedDate.value}T00:00:00`).toLocaleDateString()} ({addedDate.count})
+              </option>
+            ))}
+          </select>
+          <select
+            value={countryFilter}
+            onChange={(event) => updateCountryFilter(event.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">All countries</option>
+            {filterOptions.countries.map((country) => (
+              <option key={country.value} value={country.value}>
+                {country.value} ({country.count})
               </option>
             ))}
           </select>

@@ -71,6 +71,7 @@ class JobPosting(Base):
     company = Column(Text, nullable=False)
     url = Column(Text, nullable=True)
     location = Column(Text, nullable=True)
+    countries = Column(Text, nullable=False, default="")
     source = Column(Text, nullable=True)
     source_job_id = Column(Text, nullable=True)
     posted_at = Column(DateTime(timezone=True), nullable=True)

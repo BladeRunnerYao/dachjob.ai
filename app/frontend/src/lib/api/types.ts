@@ -11,6 +11,7 @@ export interface JobPosting {
   title: string;
   company: string;
   location?: string;
+  countries?: string[];
   url?: string;
   source?: string;
   source_job_id?: string;
@@ -107,12 +108,16 @@ export interface JobImportResponse {
 export interface JobFilterOptions {
   companies: Array<{ value: string; count: number }>;
   statuses: Array<{ value: JobStatusFilterValue; count: number }>;
+  added_dates: Array<{ value: string; count: number }>;
+  countries: Array<{ value: string; count: number }>;
 }
 
 export interface JobQueryOptions {
   status?: JobFilterStatus;
   stage?: JobStageStatus | 'all';
   company?: string;
+  added_date?: string;
+  country?: string;
 }
 
 export interface PaginatedLLMRuns {

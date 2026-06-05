@@ -4,6 +4,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Application, JobPosting, JobSkill, MatchReport
+from app.modules.jobs.location_country import infer_countries_from_location, serialize_countries
 
 APPLICATION_JOB_STATUSES = {"applied", "interview", "rejected", "offer"}
 VALID_JOB_STATUSES = {"new", *APPLICATION_JOB_STATUSES}
@@ -21,6 +22,9 @@ def _job_filters(
     tenant_id: UUID,
     status: str | None = None,
     exclude_smoke_test: bool = True,
+    company: str | None = None,
+    added_date: str | None = None,
+    country: str | None = None,
 ):
     filters = [JobPosting.tenant_id == tenant_id]
     if status == "saved":
@@ -31,6 +35,12 @@ def _job_filters(
         filters.append(JobPosting.application_status == status)
     elif status == "new":
         filters.append(JobPosting.application_status.is_(None))
+    if company:
+        filters.append(JobPosting.company == company)
+    if added_date:
+        filters.append(func.date(JobPosting.created_at) == added_date)
+    if country:
+        filters.append(JobPosting.countries.contains(f"|{country}|"))
     if exclude_smoke_test:
         filters.append(~JobPosting.title.ilike("%smoke test%"))
     return filters
@@ -80,12 +90,24 @@ async def count_jobs_by_tenant(
     db: AsyncSession,
     tenant_id: UUID,
     status: str | None = None,
+    company: str | None = None,
+    added_date: str | None = None,
+    country: str | None = None,
     exclude_smoke_test: bool = True,
 ) -> int:
     stmt = (
         select(func.count())
         .select_from(JobPosting)
-        .where(*_job_filters(tenant_id, status, exclude_smoke_test))
+        .where(
+            *_job_filters(
+                tenant_id,
+                status=status,
+                exclude_smoke_test=exclude_smoke_test,
+                company=company,
+                added_date=added_date,
+                country=country,
+            )
+        )
     )
     result = await db.execute(stmt)
     return result.scalar() or 0
@@ -97,11 +119,23 @@ async def list_jobs_by_tenant(
     limit: int = 50,
     offset: int = 0,
     status: str | None = None,
+    company: str | None = None,
+    added_date: str | None = None,
+    country: str | None = None,
     exclude_smoke_test: bool = True,
 ) -> list[JobPosting]:
     stmt = (
         select(JobPosting)
-        .where(*_job_filters(tenant_id, status, exclude_smoke_test))
+        .where(
+            *_job_filters(
+                tenant_id,
+                status=status,
+                exclude_smoke_test=exclude_smoke_test,
+                company=company,
+                added_date=added_date,
+                country=country,
+            )
+        )
         .order_by(JobPosting.created_at.desc())
         .limit(limit)
         .offset(offset)
@@ -247,6 +281,7 @@ async def create_job(
     raw_jd: str,
     url: str | None = None,
     location: str | None = None,
+    countries: list[str] | None = None,
     parsed_json: dict | None = None,
     source: str | None = None,
     source_job_id: str | None = None,
@@ -263,6 +298,7 @@ async def create_job(
         raw_jd=raw_jd,
         url=url,
         location=location,
+        countries=serialize_countries(countries or infer_countries_from_location(location)),
         parsed_json=parsed_json,
         source=source,
         source_job_id=source_job_id,

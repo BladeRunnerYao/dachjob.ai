@@ -1,16 +1,19 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import TenantContext
 from app.core.errors import AppError
 from app.core.redis_client import cache
 from app.core.tenant import get_tenant_context
+from app.db.models import JobPosting
 from app.db.session import get_db
 from app.modules.background_tasks.execution import run_or_enqueue
 from app.modules.background_tasks.schemas import BackgroundTaskResponse
 from app.modules.jobs.importer import import_job_urls
+from app.modules.jobs.location_country import JOB_COUNTRIES
 from app.modules.jobs.repository import (
     VALID_JOB_FILTERS,
     VALID_JOB_STATUSES,
@@ -23,6 +26,8 @@ from app.modules.jobs.repository import (
 from app.modules.jobs.schemas import (
     ImportError,
     JobCreateRequest,
+    JobFilterOption,
+    JobFilterOptionsResponse,
     JobImportRequest,
     JobImportResponse,
     JobResponse,
@@ -35,8 +40,18 @@ router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 async def _invalidate_jobs_cache(tenant_id: UUID, job_id: UUID | None = None):
     await cache.delete_pattern(f"jobs:list:v2:{tenant_id}")
+    await cache.delete_pattern(f"jobs:list:v3:{tenant_id}")
     if job_id:
         await cache.delete("job:detail:v2", str(job_id))
+
+
+async def _count_job_filter(db: AsyncSession, tenant_id: UUID, criterion) -> int:
+    result = await db.execute(
+        select(func.count())
+        .select_from(JobPosting)
+        .where(JobPosting.tenant_id == tenant_id, criterion)
+    )
+    return result.scalar() or 0
 
 
 @router.get("", response_model=PaginatedJobResponse)
@@ -46,19 +61,54 @@ async def list_jobs(
     limit: int = Query(15, ge=1, le=200, description="Number of jobs per page"),
     offset: int = Query(0, ge=0, description="Number of jobs to skip"),
     status: str | None = Query(None, pattern=r"^(new|saved|applied|interview|rejected|offer)$"),
+    stage: str | None = Query(
+        None, pattern=r"^(all|new|received|applied|interview|rejected|offer)$"
+    ),
+    company: str | None = Query(None),
+    added_date: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    country: str | None = Query(None),
 ):
     if tenant.id is None:
         return PaginatedJobResponse(items=[], total=0, limit=limit, offset=offset)
     status_key = status or "all"
     if status not in VALID_JOB_FILTERS:
         raise AppError("invalid_job_filter", "Status filter is not supported", status_code=422)
+    if country and country not in JOB_COUNTRIES:
+        raise AppError("invalid_country_filter", "Country filter is not supported", status_code=422)
+    status_filter = status
+    if stage and stage != "all":
+        status_filter = "new" if stage == "received" else stage
     cached = await cache.get_json(
-        "jobs:list:v2", str(tenant.id), status_key, str(limit), str(offset)
+        "jobs:list:v3",
+        str(tenant.id),
+        status_key,
+        stage or "all",
+        company or "",
+        added_date or "",
+        country or "",
+        str(limit),
+        str(offset),
     )
     if cached is not None:
         return PaginatedJobResponse.model_validate(cached)
-    total = await count_jobs_by_tenant(db, tenant.id, status=status)
-    jobs = await list_jobs_by_tenant(db, tenant.id, limit=limit, offset=offset, status=status)
+    total = await count_jobs_by_tenant(
+        db,
+        tenant.id,
+        status=status_filter,
+        company=company,
+        added_date=added_date,
+        country=country,
+    )
+    jobs = await list_jobs_by_tenant(
+        db,
+        tenant.id,
+        limit=limit,
+        offset=offset,
+        status=status_filter,
+        company=company,
+        added_date=added_date,
+        country=country,
+    )
     serialized = PaginatedJobResponse(
         items=[JobResponse.model_validate(job).model_dump(mode="json") for job in jobs],
         total=total,
@@ -66,14 +116,75 @@ async def list_jobs(
         offset=offset,
     )
     await cache.set_json(
-        "jobs:list:v2",
+        "jobs:list:v3",
         str(tenant.id),
         status_key,
+        stage or "all",
+        company or "",
+        added_date or "",
+        country or "",
         str(limit),
         str(offset),
         value=serialized.model_dump(mode="json"),
     )
     return serialized
+
+
+@router.get("/filters", response_model=JobFilterOptionsResponse)
+async def get_job_filters(
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+):
+    if tenant.id is None:
+        return JobFilterOptionsResponse()
+
+    company_result = await db.execute(
+        select(JobPosting.company, func.count())
+        .where(
+            JobPosting.tenant_id == tenant.id,
+            JobPosting.company.is_not(None),
+            JobPosting.company != "",
+        )
+        .group_by(JobPosting.company)
+        .order_by(func.lower(JobPosting.company))
+    )
+    companies = [
+        JobFilterOption(value=company, count=count) for company, count in company_result.all()
+    ]
+
+    status_counts = []
+    saved_count = await _count_job_filter(db, tenant.id, JobPosting.saved.is_(True))
+    status_counts.append(JobFilterOption(value="saved", count=saved_count))
+    for status in ("applied", "interview", "rejected", "offer"):
+        count = await _count_job_filter(db, tenant.id, JobPosting.application_status == status)
+        status_counts.append(JobFilterOption(value=status, count=count))
+
+    added_date_result = await db.execute(
+        select(func.date(JobPosting.created_at), func.count())
+        .where(JobPosting.tenant_id == tenant.id)
+        .group_by(func.date(JobPosting.created_at))
+        .order_by(func.date(JobPosting.created_at).desc())
+    )
+    added_dates = [
+        JobFilterOption(value=str(added_date), count=count)
+        for added_date, count in added_date_result.all()
+        if added_date
+    ]
+
+    countries = []
+    for country_name in JOB_COUNTRIES:
+        count = await _count_job_filter(
+            db, tenant.id, JobPosting.countries.contains(f"|{country_name}|")
+        )
+        if count:
+            countries.append(JobFilterOption(value=country_name, count=count))
+
+    return JobFilterOptionsResponse(
+        companies=companies,
+        statuses=status_counts,
+        added_dates=added_dates,
+        countries=countries,
+    )
 
 
 @router.post("", response_model=JobResponse, status_code=201)
@@ -83,7 +194,14 @@ async def create_job_endpoint(
     db: AsyncSession = Depends(get_db),
 ):
     job = await create_job(
-        db, tenant.id, body.title, body.company, body.raw_jd, body.url, body.location
+        db,
+        tenant.id,
+        body.title,
+        body.company,
+        body.raw_jd,
+        body.url,
+        body.location,
+        body.countries,
     )
     await _invalidate_jobs_cache(tenant.id)
     return job
