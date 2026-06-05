@@ -1,8 +1,9 @@
 resource "google_cloud_run_v2_service" "api" {
-  name     = "${var.name_prefix}-api"
-  location = var.region
-  labels   = var.labels
-  client   = "terraform"
+  name                = "${var.name_prefix}-api"
+  location            = var.region
+  labels              = var.labels
+  client              = "terraform"
+  deletion_protection = false
 
   template {
     service_account                  = var.api_service_account_email
@@ -155,10 +156,11 @@ resource "google_cloud_run_v2_service" "api" {
 }
 
 resource "google_cloud_run_v2_service" "frontend" {
-  name     = "${var.name_prefix}-frontend"
-  location = var.region
-  labels   = var.labels
-  client   = "terraform"
+  name                = "${var.name_prefix}-frontend"
+  location            = var.region
+  labels              = var.labels
+  client              = "terraform"
+  deletion_protection = false
 
   template {
     service_account = var.frontend_service_account_email
