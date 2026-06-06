@@ -37,6 +37,8 @@ ios/.build/
 **/backend.conf
 
 
-# Cloudflare
+
+# Local docs
+docs/aws-setup.md
 .wrangler/
 .dev.vars
