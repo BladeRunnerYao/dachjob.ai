@@ -90,6 +90,13 @@ echo "your-deepseek-api-key" | npx wrangler secret put LLM_API_KEY
 
 # Optional: override the default model (deepseek-v4-flash)
 echo "deepseek-v4-flash" | npx wrangler secret put DEEPSEEK_MODEL
+
+# Service token accepted by POST /api/jobs/import-parsed.
+# Use the same token as the GCP Secret Manager DACHJOB_IMPORT_PARSED_TOKEN value.
+echo "your-long-random-import-token" | npx wrangler secret put DACHJOB_IMPORT_PARSED_TOKEN
+
+# DACH user id that owns jobs imported by the OpenCode ETL service.
+echo "your-dach-user-id" | npx wrangler secret put DACHJOB_IMPORT_PARSED_USER_ID
 ```
 
 ### 7. Deploy Worker API
@@ -153,6 +160,14 @@ In the Cloudflare dashboard:
 | `JWT_SECRET` | HMAC key for JWT signing (min 32 chars) |
 | `LLM_API_KEY` | DeepSeek API key |
 | `DEEPSEEK_MODEL` | Optional DeepSeek model override; defaults to `deepseek-v4-flash` |
+| `DACHJOB_IMPORT_PARSED_TOKEN` | Bearer token for the GCP OpenCode ETL service to call `/api/jobs/import-parsed` |
+| `DACHJOB_IMPORT_PARSED_USER_ID` | DACH user id that owns jobs imported by `/api/jobs/import-parsed` |
+
+### OpenCode Parsed Import Endpoint
+
+`POST /api/jobs/import-parsed` is for the GCP LinkedIn scanner ETL. It accepts up to 10 already-parsed jobs per request,
+upserts by `job_key` or URL, stores `parsed_json`, and sets `source = "li_job_scout_opencode"`. This endpoint does not
+call the DeepSeek importer or `/api/jobs/:id/parse`; parsing is expected to have happened upstream in OpenCode.
 
 ### Pipeline Importer Worker
 
