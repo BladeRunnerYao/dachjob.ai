@@ -149,6 +149,41 @@ def test_build_providers_prefers_gemini(monkeypatch):
     ]
 
 
+def test_build_providers_accepts_call_level_preferred_provider(monkeypatch):
+    gateway = LLMGateway.__new__(LLMGateway)
+    monkeypatch.setattr(
+        gateway,
+        "_build_azure_openai_provider",
+        lambda settings: None,
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_vertex_ai_provider",
+        lambda settings: _provider("vertex_ai", _FakeCompletions("vertex_ai")),
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_gemini_provider",
+        lambda settings: _provider("gemini", _FakeCompletions("gemini")),
+    )
+    monkeypatch.setattr(
+        gateway,
+        "_build_openai_provider",
+        lambda **kwargs: _provider(kwargs["name"], _FakeCompletions(kwargs["name"])),
+    )
+
+    providers = gateway._build_providers(
+        _provider_settings("gemini"), preferred_provider="deepseek"
+    )
+
+    assert [provider.name for provider in providers] == [
+        "deepseek",
+        "vertex_ai",
+        "gemini",
+        "openrouter",
+    ]
+
+
 def test_build_providers_prefers_vertex_ai(monkeypatch):
     gateway = LLMGateway.__new__(LLMGateway)
     monkeypatch.setattr(

@@ -79,10 +79,11 @@ async def parse_with_llm(
     tenant: TenantContext,
     job: Any,
     logger: logging.Logger,
+    preferred_provider: str | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     from app.modules.llm_gateway.gateway import LLMGateway
 
-    gateway = LLMGateway()
+    gateway = LLMGateway(preferred_provider=preferred_provider)
     messages = jd_extract_messages(job)
     content = await gateway.run_text(
         tenant_id=tenant.id,

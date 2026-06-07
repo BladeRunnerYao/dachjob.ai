@@ -22,7 +22,10 @@ router = APIRouter(prefix="/api/jobs/{job_id}", tags=["matching"])
 
 async def _invalidate_job_caches(tenant_id: UUID, job_id: UUID):
     await cache.delete_pattern(f"jobs:list:{tenant_id}")
+    await cache.delete_pattern(f"jobs:list:v2:{tenant_id}")
+    await cache.delete_pattern(f"jobs:list:v3:{tenant_id}")
     await cache.delete("job:detail", str(job_id))
+    await cache.delete("job:detail:v2", str(job_id))
 
 
 @router.post("/parse", status_code=201)
@@ -46,9 +49,12 @@ async def parse_job(
                 "tenant_slug": tenant.slug,
                 "user_id": str(tenant.user_id) if tenant.user_id else None,
                 "job_id": str(job_id),
+                "preferred_provider": "deepseek",
             },
             celery_task=__import__("app.workers.tasks", fromlist=["parse_job_task"]).parse_job_task,
-            sync_runner=lambda: parse_job_posting(db, tenant, job, force=True),
+            sync_runner=lambda: parse_job_posting(
+                db, tenant, job, force=True, preferred_provider="deepseek"
+            ),
             result_serializer=lambda r: r,
         )
         if mode == "queued":
@@ -56,7 +62,7 @@ async def parse_job(
             return BackgroundTaskResponse(**result.model_dump())
         result = result
     else:
-        result = await parse_job_posting(db, tenant, job, force=True)
+        result = await parse_job_posting(db, tenant, job, force=True, preferred_provider="deepseek")
 
     await _invalidate_job_caches(tenant.id, job_id)
     return ParseResponse(
