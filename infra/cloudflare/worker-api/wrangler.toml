@@ -25,3 +25,5 @@ bucket_name = "dachjob-storage"
 # Secrets (set via `wrangler secret put`):
 # - JWT_SECRET
 # - LLM_API_KEY
+# - DACHJOB_IMPORT_PARSED_TOKEN
+# - DACHJOB_IMPORT_PARSED_USER_ID

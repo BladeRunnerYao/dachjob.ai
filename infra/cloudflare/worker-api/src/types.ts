@@ -10,6 +10,8 @@ export interface Env {
   JWT_EXPIRY_HOURS: string;
   CORS_ORIGIN: string;
   DEEPSEEK_MODEL?: string;
+  DACHJOB_IMPORT_PARSED_TOKEN?: string;
+  DACHJOB_IMPORT_PARSED_USER_ID?: string;
 }
 
 export interface JwtPayload {

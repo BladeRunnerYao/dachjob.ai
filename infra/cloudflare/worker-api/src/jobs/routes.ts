@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { Env } from "../types";
 import { authMiddleware } from "../middleware/auth";
 import { generateId } from "../db/utils";
@@ -51,6 +51,27 @@ interface JobImportBody {
   jobs?: JobImportItem[];
 }
 
+interface ParsedJobImportItem {
+  url: string;
+  job_key?: string;
+  title: string;
+  company?: string;
+  location?: string;
+  countries?: string[];
+  raw_description: string;
+  parsed_json: Record<string, unknown>;
+  employment_type?: string;
+  workplace?: string;
+  salary_text?: string;
+  pipeline_added_at?: string;
+  pipeline_source_sha?: string;
+  status?: string | null;
+}
+
+interface ParsedJobImportBody {
+  jobs?: ParsedJobImportItem[];
+}
+
 // POST /api/jobs/import - Import jobs from URLs
 jobsRoutes.post("/import", async (c) => {
   const userId = await authMiddleware(c);
@@ -72,6 +93,40 @@ jobsRoutes.post("/import", async (c) => {
   for (const item of items) {
     try {
       const result = await importSingleJobUrl(c.env, userId, item);
+      if (result.cacheHit) {
+        cacheHits.push(result.job);
+      } else {
+        imported.push(result.job);
+      }
+    } catch (err) {
+      errors.push({ url: item.url, error: (err as Error).message });
+    }
+  }
+
+  return c.json({ imported, cache_hits: cacheHits, errors }, 201);
+});
+
+// POST /api/jobs/import-parsed - Import already parsed jobs without invoking LLM parsing.
+jobsRoutes.post("/import-parsed", async (c) => {
+  const userId = await importParsedUserId(c);
+  if (!userId) return c.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, 401);
+
+  const body = await c.req.json<ParsedJobImportBody>();
+  const items = normalizeParsedImportItems(body);
+  if (items.length === 0) {
+    throw new AppError("VALIDATION_ERROR", "Provide at least one parsed job", 400);
+  }
+  if (items.length > 10) {
+    throw new AppError("VALIDATION_ERROR", "Import at most 10 parsed jobs at a time", 400);
+  }
+
+  const imported: Record<string, unknown>[] = [];
+  const cacheHits: Record<string, unknown>[] = [];
+  const errors: { url: string; error: string }[] = [];
+
+  for (const item of items) {
+    try {
+      const result = await importSingleParsedJob(c.env, userId, item);
       if (result.cacheHit) {
         cacheHits.push(result.job);
       } else {
@@ -474,6 +529,38 @@ function normalizeImportItems(body: JobImportBody): JobImportItem[] {
   return (body.urls || [])
     .map((url) => ({ url: url.trim() }))
     .filter((job) => /^https?:\/\//i.test(job.url));
+}
+
+async function importParsedUserId(c: Context<{ Bindings: Env }>): Promise<string | null> {
+  const authorization = c.req.header("Authorization");
+  const serviceToken = c.env.DACHJOB_IMPORT_PARSED_TOKEN;
+  const serviceUserId = c.env.DACHJOB_IMPORT_PARSED_USER_ID;
+  const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  if (serviceToken && serviceUserId && bearer && bearer === serviceToken) {
+    return serviceUserId;
+  }
+  return authMiddleware(c);
+}
+
+function normalizeParsedImportItems(body: ParsedJobImportBody): ParsedJobImportItem[] {
+  return (body.jobs || [])
+    .map((job) => ({
+      ...job,
+      url: job.url?.trim() || "",
+      title: job.title?.trim() || "",
+      company: job.company?.trim() || "",
+      location: job.location?.trim() || "",
+      raw_description: job.raw_description?.trim() || "",
+    }))
+    .filter(
+      (job) =>
+        /^https?:\/\//i.test(job.url) &&
+        Boolean(job.title) &&
+        Boolean(job.raw_description) &&
+        typeof job.parsed_json === "object" &&
+        job.parsed_json !== null &&
+        !Array.isArray(job.parsed_json)
+    );
 }
 
 function buildJobFilterSql(filters: {
@@ -956,6 +1043,109 @@ async function importSingleJobUrl(
   return { job: await formatJobResponse(env, userId, job!), cacheHit: false };
 }
 
+async function importSingleParsedJob(
+  env: Env,
+  userId: string,
+  item: ParsedJobImportItem
+): Promise<{ job: Record<string, unknown>; cacheHit: boolean }> {
+  const cleanedUrl = item.url.trim();
+  const jobKey = item.job_key?.trim() || canonicalJobKey(cleanedUrl);
+  const addedAt = normalizeIsoDate(item.pipeline_added_at) || new Date().toISOString();
+  const requestedStatus = normalizePipelineStatus(item.status);
+  const now = new Date().toISOString();
+  const countries = serializeCountries(item.countries || inferCountriesFromLocation(item.location));
+  const parsedJson = JSON.stringify(item.parsed_json);
+
+  const existing = await env.DB.prepare(
+    "SELECT * FROM jobs WHERE user_id = ? AND (job_key = ? OR job_url = ?)"
+  )
+    .bind(userId, jobKey, cleanedUrl)
+    .first();
+
+  if (existing) {
+    await env.DB.prepare(
+      `UPDATE jobs
+       SET title = ?,
+           company = ?,
+           location = ?,
+           countries = ?,
+           job_url = ?,
+           job_key = ?,
+           raw_description = ?,
+           parsed_json = ?,
+           source = ?,
+           employment_type = ?,
+           workplace = ?,
+           salary_text = ?,
+           pipeline_added_at = COALESCE(pipeline_added_at, ?),
+           pipeline_source_sha = COALESCE(?, pipeline_source_sha),
+           updated_at = ?
+       WHERE id = ? AND user_id = ?`
+    )
+      .bind(
+        item.title,
+        item.company || "",
+        item.location || "",
+        countries,
+        cleanedUrl,
+        jobKey,
+        item.raw_description,
+        parsedJson,
+        "li_job_scout_opencode",
+        item.employment_type || "",
+        item.workplace || "",
+        item.salary_text || "",
+        addedAt,
+        item.pipeline_source_sha || null,
+        now,
+        existing.id,
+        userId
+      )
+      .run();
+    if (requestedStatus) {
+      await setJobApplicationStatus(env, userId, String(existing.id), requestedStatus);
+    }
+    const refreshed = await env.DB.prepare("SELECT * FROM jobs WHERE id = ?").bind(existing.id).first();
+    return { job: await formatJobResponse(env, userId, refreshed || existing), cacheHit: true };
+  }
+
+  const id = generateId();
+  await env.DB.prepare(
+    `INSERT INTO jobs (
+       id, user_id, title, company, location, countries, job_url, job_key, raw_description,
+       parsed_json, source, employment_type, workplace, salary_text,
+       pipeline_added_at, pipeline_source_sha, created_at, updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(
+      id,
+      userId,
+      item.title,
+      item.company || "",
+      item.location || "",
+      countries,
+      cleanedUrl,
+      jobKey,
+      item.raw_description,
+      parsedJson,
+      "li_job_scout_opencode",
+      item.employment_type || "",
+      item.workplace || "",
+      item.salary_text || "",
+      addedAt,
+      item.pipeline_source_sha || null,
+      addedAt,
+      now
+    )
+    .run();
+  if (requestedStatus) {
+    await setJobApplicationStatus(env, userId, id, requestedStatus);
+  }
+  const job = await env.DB.prepare("SELECT * FROM jobs WHERE id = ?").bind(id).first();
+  return { job: await formatJobResponse(env, userId, job!), cacheHit: false };
+}
+
 function getProfileMismatchReason(text: string): string | null {
   const normalized = text.replace(/\s+/g, " ").trim();
   const title = normalized.slice(0, 240);
@@ -1181,3 +1371,8 @@ async function parseAndStoreJobDetails(
     throw new AppError("LLM_ERROR", (err as Error).message, 500);
   }
 }
+
+export const jobsRoutesTestables = {
+  canonicalJobKey,
+  normalizeParsedImportItems,
+};

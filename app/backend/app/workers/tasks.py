@@ -111,8 +111,18 @@ def parse_job_task(self, background_task_id: str):
         job = await get_job(db, UUID(payload["job_id"]), tenant.id)
         if not job:
             raise ValueError(f"Job {payload['job_id']} not found")
-        result = await parse_job_posting(db, tenant, job, force=True)
+        result = await parse_job_posting(
+            db,
+            tenant,
+            job,
+            force=True,
+            preferred_provider=payload.get("preferred_provider"),
+        )
         await cache.delete("jobs:list", str(tenant.id))
+        await cache.delete_pattern(f"jobs:list:v2:{tenant.id}")
+        await cache.delete_pattern(f"jobs:list:v3:{tenant.id}")
+        await cache.delete("job:detail", payload["job_id"])
+        await cache.delete("job:detail:v2", payload["job_id"])
         return {"job_id": payload["job_id"], "status": result["status"]}
 
     run_async(_run_inner(background_task_id, _run, result_serializer=lambda r: r))

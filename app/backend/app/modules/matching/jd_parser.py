@@ -21,6 +21,7 @@ async def parse_job_posting(
     tenant: TenantContext,
     job: Any,
     force: bool = False,
+    preferred_provider: str | None = None,
 ) -> dict[str, Any]:
     logger = logging.getLogger(__name__)
 
@@ -47,7 +48,9 @@ async def parse_job_posting(
         return {"status": job.status or "parsed", "parsed_json": job.parsed_json}
 
     try:
-        parsed_json, source = await parse_with_llm(tenant, job, logger)
+        parsed_json, source = await parse_with_llm(
+            tenant, job, logger, preferred_provider=preferred_provider
+        )
         if parsed_json:
             job.parsed_json = parsed_json
             job.status = "parsed"

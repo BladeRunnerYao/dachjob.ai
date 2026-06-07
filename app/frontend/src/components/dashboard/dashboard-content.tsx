@@ -15,17 +15,36 @@ export function DashboardContent() {
   const [savedCount, setSavedCount] = useState(0);
   const [recentApplied, setRecentApplied] = useState<JobPosting[]>([]);
   const [runs, setRuns] = useState<LLMRun[]>([]);
+  const [runSummary, setRunSummary] = useState({
+    total: 0,
+    successful: 0,
+    failed: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [jobsData, appliedData, savedData, recentAppliedData, runsData] = await Promise.all([
+        const [
+          jobsData,
+          appliedData,
+          savedData,
+          recentAppliedData,
+          runsData,
+          successRuns,
+          completedRuns,
+          errorRuns,
+          failedRuns,
+        ] = await Promise.all([
           api.getJobsPaginated(5, 0),
           api.getJobsPaginated(1, 0, 'applied'),
           api.getJobsPaginated(1, 0, 'saved'),
           api.getJobsPaginated(3, 0, 'applied'),
           api.getLLMRuns({ limit: 200 }),
+          api.getLLMRuns({ limit: 1, status: 'success' }),
+          api.getLLMRuns({ limit: 1, status: 'completed' }),
+          api.getLLMRuns({ limit: 1, status: 'error' }),
+          api.getLLMRuns({ limit: 1, status: 'failed' }),
         ]);
         setJobs(jobsData.items);
         setTotalJobs(jobsData.total);
@@ -33,6 +52,11 @@ export function DashboardContent() {
         setSavedCount(savedData.total);
         setRecentApplied(recentAppliedData.items);
         setRuns(runsData.items || []);
+        setRunSummary({
+          total: runsData.total,
+          successful: successRuns.total + completedRuns.total,
+          failed: errorRuns.total + failedRuns.total,
+        });
       } catch {
         // In production, leave state as empty if API is unreachable
       } finally {
@@ -65,7 +89,7 @@ export function DashboardContent() {
         totalJobs={totalJobs}
         appliedCount={appliedCount}
         savedCount={savedCount}
-        totalRuns={runs.length}
+        totalRuns={runSummary.total}
       />
 
       <RecentJobs jobs={jobs} />
@@ -103,18 +127,18 @@ export function DashboardContent() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-600">Total Runs</span>
-                <span className="font-medium text-slate-900">{runs.length}</span>
+                <span className="font-medium text-slate-900">{runSummary.total}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-600">Successful</span>
                 <span className="font-medium text-emerald-600">
-                  {runs.filter((r) => r.status === 'success' || r.status === 'completed').length}
+                  {runSummary.successful}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-600">Failed</span>
                 <span className="font-medium text-red-600">
-                  {runs.filter((r) => r.status === 'error' || r.status === 'failed').length}
+                  {runSummary.failed}
                 </span>
               </div>
               <div className="flex justify-between">

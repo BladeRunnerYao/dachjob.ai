@@ -68,9 +68,9 @@ class VertexAIClientRefresher:
 
 
 class LLMGateway:
-    def __init__(self):
+    def __init__(self, preferred_provider: str | None = None):
         settings = get_settings()
-        self.providers = self._build_providers(settings)
+        self.providers = self._build_providers(settings, preferred_provider=preferred_provider)
         if not self.providers:
             raise RuntimeError(
                 "No LLM provider configured. "
@@ -152,8 +152,10 @@ class LLMGateway:
             reasoning_model=model_reasoning,
         )
 
-    def _build_providers(self, settings) -> list[LLMProvider]:
-        preferred = (settings.llm_provider or "vertex_ai").lower()
+    def _build_providers(
+        self, settings, preferred_provider: str | None = None
+    ) -> list[LLMProvider]:
+        preferred = (preferred_provider or settings.llm_provider or "vertex_ai").lower()
         ordered_names = list(
             dict.fromkeys(
                 [preferred, "azure_openai", "vertex_ai", "gemini", "deepseek", "openrouter"]
