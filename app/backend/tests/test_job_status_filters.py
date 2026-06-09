@@ -95,3 +95,46 @@ async def test_update_job_status_refreshes_job_before_serialization(monkeypatch)
     assert job.application_status == "applied"
     db.flush.assert_awaited_once()
     db.refresh.assert_awaited_once_with(job)
+
+
+@pytest.mark.asyncio
+async def test_delete_job_removes_related_rows_before_job(monkeypatch):
+    tenant_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    job = JobPosting(
+        id=job_id,
+        tenant_id=tenant_id,
+        title="Backend Engineer",
+        company="Example GmbH",
+        raw_jd="Build APIs",
+        status="new",
+    )
+
+    async def fake_get_job(_db, requested_job_id, requested_tenant_id):
+        assert requested_job_id == job_id
+        assert requested_tenant_id == tenant_id
+        return job
+
+    db = AsyncMock()
+    monkeypatch.setattr(jobs_repository, "get_job", fake_get_job)
+
+    deleted = await jobs_repository.delete_job(db, job_id, tenant_id)
+
+    assert deleted is True
+    assert db.execute.await_count == 5
+    db.flush.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_job_returns_false_for_missing_job(monkeypatch):
+    async def fake_get_job(_db, _job_id, _tenant_id):
+        return None
+
+    db = AsyncMock()
+    monkeypatch.setattr(jobs_repository, "get_job", fake_get_job)
+
+    deleted = await jobs_repository.delete_job(db, uuid.uuid4(), uuid.uuid4())
+
+    assert deleted is False
+    db.execute.assert_not_awaited()
+    db.flush.assert_not_awaited()

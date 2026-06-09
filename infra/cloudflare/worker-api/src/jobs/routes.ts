@@ -486,7 +486,15 @@ jobsRoutes.delete("/:id", async (c) => {
     throw new AppError("NOT_FOUND", "Job not found", 404);
   }
 
-  await c.env.DB.prepare("DELETE FROM jobs WHERE id = ?").bind(jobId).run();
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      `UPDATE artifacts
+       SET application_id = NULL
+       WHERE application_id IN (SELECT id FROM applications WHERE job_id = ? AND user_id = ?)`
+    ).bind(jobId, userId),
+    c.env.DB.prepare("DELETE FROM applications WHERE job_id = ? AND user_id = ?").bind(jobId, userId),
+    c.env.DB.prepare("DELETE FROM jobs WHERE id = ? AND user_id = ?").bind(jobId, userId),
+  ]);
   return c.json({ message: "Job deleted" });
 });
 
