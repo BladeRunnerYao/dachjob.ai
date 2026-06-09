@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Application, JobPosting, JobSkill, MatchReport
+from app.db.models import Application, JobPosting, JobSkill, MatchReport, ResumeArtifact
 from app.modules.jobs.location_country import infer_countries_from_location, serialize_countries
 
 APPLICATION_JOB_STATUSES = {"applied", "interview", "rejected", "offer"}
@@ -218,6 +218,22 @@ async def update_job_status(
     await _attach_latest_match(db, [job])
     await _attach_skills(db, [job])
     return job
+
+
+async def delete_job(db: AsyncSession, job_id: UUID, tenant_id: UUID) -> bool:
+    job = await get_job(db, job_id, tenant_id)
+    if not job:
+        return False
+
+    await db.execute(delete(Application).where(Application.job_id == job_id))
+    await db.execute(delete(ResumeArtifact).where(ResumeArtifact.job_id == job_id))
+    await db.execute(delete(MatchReport).where(MatchReport.job_id == job_id))
+    await db.execute(delete(JobSkill).where(JobSkill.job_id == job_id))
+    await db.execute(
+        delete(JobPosting).where(JobPosting.id == job_id, JobPosting.tenant_id == tenant_id)
+    )
+    await db.flush()
+    return True
 
 
 def extract_skill_items(parsed_json: dict | None) -> list[tuple[str, str]]:

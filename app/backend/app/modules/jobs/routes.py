@@ -19,6 +19,7 @@ from app.modules.jobs.repository import (
     VALID_JOB_STATUSES,
     count_jobs_by_tenant,
     create_job,
+    delete_job,
     get_job,
     list_jobs_by_tenant,
     update_job_status,
@@ -298,3 +299,18 @@ async def update_job_status_endpoint(
         raise AppError("job_not_found", "Job posting not found", status_code=404)
     await _invalidate_jobs_cache(tenant.id, job_id)
     return job
+
+
+@router.delete("/{job_id}")
+async def delete_job_endpoint(
+    job_id: UUID,
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: AsyncSession = Depends(get_db),
+):
+    if tenant.id is None:
+        raise AppError("tenant_not_found", "Tenant context is required")
+    deleted = await delete_job(db, job_id, tenant.id)
+    if not deleted:
+        raise AppError("job_not_found", "Job posting not found", status_code=404)
+    await _invalidate_jobs_cache(tenant.id, job_id)
+    return {"message": "Job deleted"}

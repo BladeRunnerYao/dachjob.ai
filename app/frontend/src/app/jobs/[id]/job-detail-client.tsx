@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   Building2,
   CalendarDays,
@@ -14,6 +14,7 @@ import {
   Clock,
   Plus,
   RefreshCw,
+  Trash2,
   TrendingUp,
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
@@ -268,6 +269,7 @@ const APPLICATION_LABELS: Array<{
 
 export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
   const params = useParams<{ id?: string }>();
+  const router = useRouter();
   const id = jobId || params.id;
   const [job, setJob] = useState<JobPosting | null>(null);
   const [match, setMatch] = useState<MatchReport | null>(null);
@@ -281,8 +283,11 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
   const [resumeError, setResumeError] = useState<string | null>(null);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [resumeStyle, setResumeStyle] = useState<ResumeStyle>('german');
   const [showCv, setShowCv] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [ownedSkills, setOwnedSkills] = useState<Set<string>>(new Set());
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -434,6 +439,20 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
       setJob(updated);
     } catch (err) {
       setStatusError(err instanceof Error ? err.message : 'Could not update saved label');
+    }
+  };
+
+  const deleteCurrentJob = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteJob(id);
+      router.push('/jobs');
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Could not delete job');
+      setShowDeleteConfirm(false);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -687,6 +706,20 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
               <p className="text-xs text-red-700">{resumeError}</p>
             </div>
           )}
+
+          <Card>
+            <CardContent className="py-4 space-y-3">
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={deleting}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleting ? 'Deleting...' : 'Delete job'}
+              </button>
+              {deleteError && <p className="text-xs text-red-700">{deleteError}</p>}
+            </CardContent>
+          </Card>
         </aside>
 
         {/* ── Main content ───────────────────────────────────── */}
@@ -967,6 +1000,37 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
               className="w-full h-full min-h-[75vh] border-0"
               title="Generated CV"
             />
+          </Modal>
+
+          <Modal
+            open={showDeleteConfirm}
+            onClose={() => {
+              if (!deleting) setShowDeleteConfirm(false);
+            }}
+            title="Delete job"
+            size="lg"
+          >
+            <div className="space-y-4 p-5">
+              <p className="text-sm leading-6 text-slate-700">
+                This removes the job from your job list and tracker. This action cannot be undone.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={deleting}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={deleteCurrentJob}
+                  disabled={deleting}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {deleting ? 'Deleting...' : 'Delete job'}
+                </button>
+              </div>
+            </div>
           </Modal>
         </div>
       </div>

@@ -78,6 +78,10 @@ export class ApiClient {
     return jobsApi.updateJobStatus(jobId, status, saved);
   }
 
+  deleteJob(jobId: string): Promise<{ message: string }> {
+    return jobsApi.deleteJob(jobId);
+  }
+
   parseJob(jobId: string): Promise<JobPosting> {
     return jobsApi.parseJob(jobId);
   }
