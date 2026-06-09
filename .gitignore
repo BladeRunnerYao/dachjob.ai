@@ -42,3 +42,7 @@ ios/.build/
 docs/aws-setup.md
 .wrangler/
 .dev.vars
+
+# Xcode user data
+ios/DachJob.xcodeproj/project.xcworkspace/xcuserdata/
+ios/DachJob.xcodeproj/xcuserdata/
