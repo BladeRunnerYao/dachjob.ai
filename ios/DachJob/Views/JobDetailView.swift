@@ -95,6 +95,11 @@ struct JobDetailView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
+                if let applied = job.appliedDateText {
+                    Label("Applied \(applied)", systemImage: "checkmark.circle")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
             }
 
             FlowLayout(spacing: 8) {

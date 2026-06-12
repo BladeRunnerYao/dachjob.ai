@@ -323,8 +323,15 @@ jobsRoutes.patch("/:id/status", async (c) => {
   const values: (string | number | null)[] = [now];
 
   if (body.status !== undefined && body.status !== "saved") {
+    const normalizedStatus = body.status === "new" ? null : body.status;
     updates.push("application_status = ?");
-    values.push(body.status === "new" ? null : body.status);
+    values.push(normalizedStatus);
+    if (normalizedStatus === "applied") {
+      updates.push("application_applied_at = COALESCE(application_applied_at, ?)");
+      values.push(now);
+    } else if (normalizedStatus === null) {
+      updates.push("application_applied_at = NULL");
+    }
   }
   if (body.saved !== undefined) {
     updates.push("saved = ?");
@@ -498,8 +505,7 @@ jobsRoutes.delete("/:id", async (c) => {
   return c.json({ message: "Job deleted" });
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function formatJobResponse(env: Env, userId: string, job: Record<string, any>) {
+async function formatJobResponse(env: Env, userId: string, job: Record<string, unknown>) {
   const match = await getLatestMatchRow(env, userId, String(job.id));
   const matchResponse = match ? formatMatchResponse(match) : null;
   return {
@@ -519,6 +525,7 @@ async function formatJobResponse(env: Env, userId: string, job: Record<string, a
     status: job.status,
     saved: Boolean(job.saved),
     application_status: job.application_status,
+    application_applied_at: job.application_applied_at,
     score: matchResponse?.overall_score ?? null,
     recommendation: matchResponse?.recommendation ?? null,
     pipeline_added_at: job.pipeline_added_at,
@@ -734,8 +741,7 @@ function safeJsonParse(value: string | null): Record<string, unknown> | null {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function countriesForJob(job: Record<string, any>): string[] {
+function countriesForJob(job: Record<string, unknown>): string[] {
   const persisted = parseSerializedCountries(job.countries as string | null);
   if (persisted.length > 0) return persisted;
   return countriesForLocation(job.location as string | null).countries;
@@ -855,10 +861,18 @@ async function setJobApplicationStatus(
   status: string
 ) {
   const now = new Date().toISOString();
+  const updates =
+    status === "applied"
+      ? "application_status = ?, application_applied_at = COALESCE(application_applied_at, ?), updated_at = ?"
+      : "application_status = ?, updated_at = ?";
+  const values =
+    status === "applied"
+      ? [status, now, now, jobId, userId]
+      : [status, now, jobId, userId];
   await env.DB.prepare(
-    "UPDATE jobs SET application_status = ?, updated_at = ? WHERE id = ? AND user_id = ?"
+    `UPDATE jobs SET ${updates} WHERE id = ? AND user_id = ?`
   )
-    .bind(status, now, jobId, userId)
+    .bind(...values)
     .run();
   await syncApplicationForJobStatus(env, userId, jobId, status);
 }

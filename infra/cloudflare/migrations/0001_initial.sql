@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     status TEXT NOT NULL DEFAULT 'new',
     saved INTEGER NOT NULL DEFAULT 0,
     application_status TEXT DEFAULT NULL,
+    application_applied_at TEXT DEFAULT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

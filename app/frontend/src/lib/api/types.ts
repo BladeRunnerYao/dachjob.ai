@@ -30,6 +30,7 @@ export interface JobPosting {
   raw_jd?: string;
   saved?: boolean;
   application_status?: ApplicationJobStatus | null;
+  application_applied_at?: string | null;
   pipeline_added_at?: string | null;
   pipeline_source_sha?: string | null;
 }
@@ -79,6 +80,7 @@ export interface Application {
   score?: number;
   notes?: string;
   added_at?: string;
+  applied_at?: string | null;
   created_at: string;
   updated_at?: string;
 }

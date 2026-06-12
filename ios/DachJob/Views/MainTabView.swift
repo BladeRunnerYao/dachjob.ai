@@ -208,6 +208,11 @@ struct ApplicationTrackerRow: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+                if let applied = application.appliedDateText {
+                    Label(applied, systemImage: "checkmark.circle")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
 
             if let notes = application.notes, !notes.isEmpty {

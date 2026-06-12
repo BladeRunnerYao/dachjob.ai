@@ -10,6 +10,7 @@ struct JobPosting: Codable, Identifiable {
     let status: String?
     let saved: Bool?
     let applicationStatus: String?
+    let applicationAppliedAt: String?
     let url: String?
     let rawJd: String?
     let parsedJson: ParsedJobDescription?
@@ -19,6 +20,7 @@ struct JobPosting: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id, title, company, location, score, recommendation, status, saved, url
         case applicationStatus = "application_status"
+        case applicationAppliedAt = "application_applied_at"
         case rawJd = "raw_jd"
         case parsedJson = "parsed_json"
         case createdAt = "created_at"
@@ -53,6 +55,10 @@ struct JobPosting: Codable, Identifiable {
 
     var addedDateText: String? {
         formatShortDate(pipelineAddedAt ?? createdAt)
+    }
+
+    var appliedDateText: String? {
+        formatShortDate(applicationAppliedAt)
     }
 }
 
@@ -118,6 +124,7 @@ struct Application: Codable, Identifiable {
     let score: Double?
     let notes: String?
     let addedAt: String?
+    let appliedAt: String?
     let createdAt: String
 
     enum CodingKeys: String, CodingKey {
@@ -126,6 +133,7 @@ struct Application: Codable, Identifiable {
         case jobTitle = "job_title"
         case company, status, score, notes
         case addedAt = "added_at"
+        case appliedAt = "applied_at"
         case createdAt = "created_at"
     }
 
@@ -136,6 +144,10 @@ struct Application: Codable, Identifiable {
 
     var addedDateText: String? {
         formatShortDate(addedAt ?? createdAt)
+    }
+
+    var appliedDateText: String? {
+        formatShortDate(appliedAt)
     }
 }
 

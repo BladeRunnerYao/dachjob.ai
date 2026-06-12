@@ -85,6 +85,10 @@ function cleanMarkdownHeading(line: string) {
     .trim();
 }
 
+function formatDate(value?: string | null) {
+  return value ? new Date(value).toLocaleDateString() : '';
+}
+
 function isBulletish(line: string) {
   return /^[-*•]\s+/.test(line) || /^\d+[.)]\s+/.test(line);
 }
@@ -508,6 +512,13 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
               <span className="text-slate-300">·</span>
               <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
               Posted {new Date(job.posted_at).toLocaleDateString()}
+            </span>
+          )}
+          {job.application_applied_at && (
+            <span className="flex items-center gap-1.5">
+              <span className="text-slate-300">·</span>
+              <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
+              Applied {formatDate(job.application_applied_at)}
             </span>
           )}
           {!job.parsed_json && (

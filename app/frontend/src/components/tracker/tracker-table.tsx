@@ -26,6 +26,10 @@ function toPercent(score: number): number {
   return Math.round((Math.min(Math.max(score, 1), 5) / 5) * 100);
 }
 
+function formatDate(value?: string | null): string {
+  return value ? new Date(value).toLocaleDateString() : '-';
+}
+
 export function TrackerTable({ applications, onStatusChange }: TrackerTableProps) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
@@ -40,6 +44,7 @@ export function TrackerTable({ applications, onStatusChange }: TrackerTableProps
               <th className="px-4 py-3 font-medium">Company</th>
               <th className="px-4 py-3 font-medium">Score</th>
               <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Applied</th>
               <th className="px-4 py-3 font-medium">Notes</th>
               <th className="px-4 py-3 font-medium">Added</th>
             </tr>
@@ -82,8 +87,9 @@ export function TrackerTable({ applications, onStatusChange }: TrackerTableProps
                     </div>
                   )}
                 </td>
+                <td className="px-4 py-3 text-slate-500">{formatDate(app.applied_at)}</td>
                 <td className="px-4 py-3 text-slate-500 max-w-[200px] truncate">{app.notes || '-'}</td>
-                <td className="px-4 py-3 text-slate-500">{new Date(app.added_at || app.created_at).toLocaleDateString()}</td>
+                <td className="px-4 py-3 text-slate-500">{formatDate(app.added_at || app.created_at)}</td>
               </tr>
             ))}
           </tbody>
