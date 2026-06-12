@@ -6,8 +6,10 @@ struct JobsListView: View {
     @State private var isLoading = true
     @State private var showImport = false
     @State private var selectedCompany = ""
+    @State private var selectedAddedDate = ""
+    @State private var selectedCountry = ""
     @State private var selectedStatus = "all"
-    @State private var filterOptions = JobFilterOptions(companies: [], statuses: [])
+    @State private var filterOptions = JobFilterOptions(companies: [], statuses: [], addedDates: [], countries: [])
     @State private var page = 0
     @State private var pageSize = 15
     @State private var error: String?
@@ -20,7 +22,7 @@ struct JobsListView: View {
     }
 
     private var loadTaskID: String {
-        "\(selectedCompany):\(selectedStatus):\(page):\(pageSize)"
+        "\(selectedCompany):\(selectedAddedDate):\(selectedCountry):\(selectedStatus):\(page):\(pageSize)"
     }
 
     var body: some View {
@@ -87,7 +89,7 @@ struct JobsListView: View {
                         .fontWeight(.medium)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(selectedCompany.isEmpty && selectedStatus == "all" ? .blue : .gray)
+                .tint(filtersAreClear ? .blue : .gray)
 
                 Menu {
                     Button("All companies") { selectCompany("") }
@@ -102,6 +104,35 @@ struct JobsListView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(selectedCompany.isEmpty ? .gray : .blue)
+
+                Menu {
+                    Button("All added dates") { selectAddedDate("") }
+                    ForEach(filterOptions.addedDates) { addedDate in
+                        Button("\(formatShortDate(addedDate.value) ?? addedDate.value) (\(addedDate.count))") {
+                            selectAddedDate(addedDate.value)
+                        }
+                    }
+                } label: {
+                    Label(selectedAddedDate.isEmpty ? "Added date" : (formatShortDate(selectedAddedDate) ?? selectedAddedDate), systemImage: "calendar")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(selectedAddedDate.isEmpty ? .gray : .blue)
+
+                Menu {
+                    Button("All countries") { selectCountry("") }
+                    ForEach(filterOptions.countries) { country in
+                        Button("\(country.value) (\(country.count))") { selectCountry(country.value) }
+                    }
+                } label: {
+                    Label(selectedCountry.isEmpty ? "Country" : selectedCountry, systemImage: "globe.europe.africa")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(selectedCountry.isEmpty ? .gray : .blue)
 
                 Menu {
                     Button("All statuses") { selectStatus("all") }
@@ -172,6 +203,8 @@ struct JobsListView: View {
 
     private func loadJobs(debounced: Bool = false) async {
         let company = selectedCompany
+        let addedDate = selectedAddedDate
+        let country = selectedCountry
         let status = selectedStatus
         let selectedPage = page
         let selectedPageSize = pageSize
@@ -192,11 +225,19 @@ struct JobsListView: View {
                 offset: selectedPage * selectedPageSize,
                 status: status == "saved" ? status : nil,
                 stage: status != "all" && status != "saved" ? status : nil,
-                company: company.isEmpty ? nil : company
+                company: company.isEmpty ? nil : company,
+                addedDate: addedDate.isEmpty ? nil : addedDate,
+                country: country.isEmpty ? nil : country
             )
             async let filtersResult = api.getJobFilters()
             let result = try await selectedResult
-            guard !Task.isCancelled, company == selectedCompany, status == selectedStatus, selectedPage == page, selectedPageSize == pageSize else { return }
+            guard !Task.isCancelled,
+                  company == selectedCompany,
+                  addedDate == selectedAddedDate,
+                  country == selectedCountry,
+                  status == selectedStatus,
+                  selectedPage == page,
+                  selectedPageSize == pageSize else { return }
             jobs = result.items
             total = result.total
             filterOptions = try await filtersResult
@@ -205,20 +246,41 @@ struct JobsListView: View {
         } catch let apiError as APIError where apiError.isRateLimited && !jobs.isEmpty {
             return
         } catch {
-            guard !Task.isCancelled, company == selectedCompany, status == selectedStatus, selectedPage == page else { return }
+            guard !Task.isCancelled,
+                  company == selectedCompany,
+                  addedDate == selectedAddedDate,
+                  country == selectedCountry,
+                  status == selectedStatus,
+                  selectedPage == page else { return }
             self.error = error.localizedDescription
         }
         isLoading = false
     }
 
+    private var filtersAreClear: Bool {
+        selectedCompany.isEmpty && selectedAddedDate.isEmpty && selectedCountry.isEmpty && selectedStatus == "all"
+    }
+
     private func clearFilters() {
         selectedCompany = ""
+        selectedAddedDate = ""
+        selectedCountry = ""
         selectedStatus = "all"
         page = 0
     }
 
     private func selectCompany(_ company: String) {
         selectedCompany = company
+        page = 0
+    }
+
+    private func selectAddedDate(_ addedDate: String) {
+        selectedAddedDate = addedDate
+        page = 0
+    }
+
+    private func selectCountry(_ country: String) {
+        selectedCountry = country
         page = 0
     }
 
@@ -259,12 +321,6 @@ struct JobRow: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                if let percent = job.scorePercent {
-                    Text("\(percent)%")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(percent >= 84 ? .green : percent >= 72 ? .orange : .red)
-                }
                 if job.isSaved {
                     StatusBadge(status: "saved")
                 }

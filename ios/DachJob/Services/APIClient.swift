@@ -57,16 +57,6 @@ private struct CVMarkdownUpload: Encodable {
     }
 }
 
-private struct ResumeGenerateRequest: Encodable {
-    let confirmedSkills: [String]
-    let style: ResumeStyle
-
-    enum CodingKeys: String, CodingKey {
-        case confirmedSkills = "confirmed_skills"
-        case style
-    }
-}
-
 private struct PasswordResetRequest: Encodable {
     let email: String
 }
@@ -160,7 +150,9 @@ class APIClient {
         offset: Int = 0,
         status: String? = nil,
         stage: String? = nil,
-        company: String? = nil
+        company: String? = nil,
+        addedDate: String? = nil,
+        country: String? = nil
     ) async throws -> PaginatedJobs {
         var path = "/api/jobs?limit=\(limit)&offset=\(offset)"
         if let status {
@@ -171,6 +163,12 @@ class APIClient {
         }
         if let company, !company.isEmpty {
             path += "&company=\(urlEncode(company))"
+        }
+        if let addedDate, !addedDate.isEmpty {
+            path += "&added_date=\(urlEncode(addedDate))"
+        }
+        if let country, !country.isEmpty {
+            path += "&country=\(urlEncode(country))"
         }
         let result: PaginatedJobs = try await get(path)
         // Filter out smoke test jobs
@@ -203,13 +201,6 @@ class APIClient {
         return try await getJob(id: id)
     }
 
-    func createResumeArtifact(jobId: String, style: ResumeStyle, confirmedSkills: [String]) async throws -> ResumeArtifact {
-        return try await post(
-            "/api/jobs/\(jobId)/resume",
-            body: ResumeGenerateRequest(confirmedSkills: confirmedSkills, style: style)
-        )
-    }
-
     // MARK: - Profile
 
     func getProfile() async throws -> CandidateProfile? {
@@ -240,20 +231,6 @@ class APIClient {
     func importProfileFromUrl(_ url: String) async throws -> CandidateProfile {
         let body: [String: String] = ["url": url]
         return try await post("/api/profile/import-url", body: body)
-    }
-
-    // MARK: - Match
-
-    func getMatchReport(jobId: String) async throws -> MatchReport? {
-        do {
-            return try await get("/api/jobs/\(jobId)/match")
-        } catch APIError.serverError(let code, _) where code == 404 {
-            return nil
-        }
-    }
-
-    func createMatchReport(jobId: String) async throws -> MatchReport {
-        return try await post("/api/jobs/\(jobId)/match", body: EmptyRequest())
     }
 
     // MARK: - LLM Runs

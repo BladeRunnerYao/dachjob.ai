@@ -16,7 +16,28 @@ import {
 export const jobsRoutes = new Hono<{ Bindings: Env }>();
 
 const APPLICATION_JOB_STATUSES = ["applied", "interview", "rejected", "offer"];
+const STATUS_DATE_COLUMNS: Record<string, string> = {
+  saved: "saved_at",
+  applied: "application_applied_at",
+  interview: "application_interview_at",
+  rejected: "application_rejected_at",
+  offer: "application_offer_at",
+};
 const PROFILE_MISMATCH_ERROR_PREFIX = "PROFILE_MISMATCH:";
+
+function addStatusDateUpdate(
+  updates: string[],
+  values: Array<string | number | null>,
+  status: string | null | undefined,
+  now: string
+) {
+  if (!status) return;
+  const column = STATUS_DATE_COLUMNS[status];
+  if (!column) return;
+  if (updates.some((update) => update.startsWith(`${column} =`))) return;
+  updates.push(`${column} = COALESCE(${column}, ?)`);
+  values.push(now);
+}
 
 interface ApplicationMatchRow {
   id: string;
@@ -323,15 +344,19 @@ jobsRoutes.patch("/:id/status", async (c) => {
   const values: (string | number | null)[] = [now];
 
   if (body.status !== undefined && body.status !== "saved") {
+    const normalizedStatus = body.status === "new" ? null : body.status;
     updates.push("application_status = ?");
-    values.push(body.status === "new" ? null : body.status);
+    values.push(normalizedStatus);
+    addStatusDateUpdate(updates, values, normalizedStatus, now);
   }
   if (body.saved !== undefined) {
     updates.push("saved = ?");
     values.push(body.saved ? 1 : 0);
+    if (body.saved) addStatusDateUpdate(updates, values, "saved", now);
   }
   if (body.status === "saved") {
     updates.push("saved = 1");
+    addStatusDateUpdate(updates, values, "saved", now);
   }
 
   values.push(jobId, userId);
@@ -498,8 +523,7 @@ jobsRoutes.delete("/:id", async (c) => {
   return c.json({ message: "Job deleted" });
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function formatJobResponse(env: Env, userId: string, job: Record<string, any>) {
+async function formatJobResponse(env: Env, userId: string, job: Record<string, unknown>) {
   const match = await getLatestMatchRow(env, userId, String(job.id));
   const matchResponse = match ? formatMatchResponse(match) : null;
   return {
@@ -519,6 +543,11 @@ async function formatJobResponse(env: Env, userId: string, job: Record<string, a
     status: job.status,
     saved: Boolean(job.saved),
     application_status: job.application_status,
+    saved_at: job.saved_at,
+    application_applied_at: job.application_applied_at,
+    application_interview_at: job.application_interview_at,
+    application_rejected_at: job.application_rejected_at,
+    application_offer_at: job.application_offer_at,
     score: matchResponse?.overall_score ?? null,
     recommendation: matchResponse?.recommendation ?? null,
     pipeline_added_at: job.pipeline_added_at,
@@ -734,8 +763,7 @@ function safeJsonParse(value: string | null): Record<string, unknown> | null {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function countriesForJob(job: Record<string, any>): string[] {
+function countriesForJob(job: Record<string, unknown>): string[] {
   const persisted = parseSerializedCountries(job.countries as string | null);
   if (persisted.length > 0) return persisted;
   return countriesForLocation(job.location as string | null).countries;
@@ -855,10 +883,12 @@ async function setJobApplicationStatus(
   status: string
 ) {
   const now = new Date().toISOString();
-  await env.DB.prepare(
-    "UPDATE jobs SET application_status = ?, updated_at = ? WHERE id = ? AND user_id = ?"
-  )
-    .bind(status, now, jobId, userId)
+  const updates = ["application_status = ?", "updated_at = ?"];
+  const values: Array<string | number | null> = [status, now];
+  addStatusDateUpdate(updates, values, status, now);
+  values.push(jobId, userId);
+  await env.DB.prepare(`UPDATE jobs SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`)
+    .bind(...values)
     .run();
   await syncApplicationForJobStatus(env, userId, jobId, status);
 }

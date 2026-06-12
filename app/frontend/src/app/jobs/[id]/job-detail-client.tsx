@@ -85,6 +85,20 @@ function cleanMarkdownHeading(line: string) {
     .trim();
 }
 
+function formatDate(value?: string | null) {
+  return value ? new Date(value).toLocaleDateString() : '';
+}
+
+function statusMilestones(job: JobPosting) {
+  return [
+    { label: 'Saved', value: job.saved_at },
+    { label: 'Applied', value: job.application_applied_at },
+    { label: 'Interview', value: job.application_interview_at },
+    { label: 'Rejected', value: job.application_rejected_at },
+    { label: 'Offer', value: job.application_offer_at },
+  ].filter((item) => item.value);
+}
+
 function isBulletish(line: string) {
   return /^[-*•]\s+/.test(line) || /^\d+[.)]\s+/.test(line);
 }
@@ -510,6 +524,13 @@ export default function JobDetailClient({ jobId }: { jobId?: string } = {}) {
               Posted {new Date(job.posted_at).toLocaleDateString()}
             </span>
           )}
+          {statusMilestones(job).map((milestone) => (
+            <span key={milestone.label} className="flex items-center gap-1.5">
+              <span className="text-slate-300">·</span>
+              <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
+              {milestone.label} {formatDate(milestone.value)}
+            </span>
+          ))}
           {!job.parsed_json && (
             <span className="flex items-center gap-1.5">
               <span className="text-slate-300">·</span>

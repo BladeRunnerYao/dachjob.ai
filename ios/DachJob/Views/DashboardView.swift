@@ -74,12 +74,6 @@ struct DashboardView: View {
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
-                        if let percent = job.scorePercent {
-                            Text("\(percent)%")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(percent >= 84 ? .green : percent >= 72 ? .orange : .red)
-                        }
                         if job.isSaved {
                             StatusBadge(status: "saved")
                         }

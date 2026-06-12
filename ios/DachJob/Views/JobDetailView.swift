@@ -3,18 +3,11 @@ import SwiftUI
 struct JobDetailView: View {
     let jobId: String
     @State private var job: JobPosting?
-    @State private var matchReport: MatchReport?
     @State private var isLoading = true
     @State private var error: String?
     @State private var updatingStatus = false
-    @State private var generatingResumeStyle: ResumeStyle?
-    @State private var resumeMessage: String?
-    @State private var resumeError: String?
     @State private var isParsing = false
     @State private var parseError: String?
-    @State private var isMatching = false
-    @State private var matchError: String?
-    @State private var selectedSkills: Set<String> = []
 
     private let api = APIClient.shared
 
@@ -36,11 +29,9 @@ struct JobDetailView: View {
             } else if let job {
                 VStack(alignment: .leading, spacing: 16) {
                     headerSection(job: job)
-                    matchActionSection(job: job)
                     if job.needsParsing || job.parsedJson == nil {
                         parseSection
                     }
-                    resumeSection
                     if let parsed = job.parsedJson {
                         if !parsed.requiredQualifications.isEmpty || !parsed.preferredQualifications.isEmpty {
                             responsibilitiesSection(parsed: parsed)
@@ -81,17 +72,13 @@ struct JobDetailView: View {
             }
 
             HStack(spacing: 12) {
-                if let percent = job.scorePercent {
-                    HStack(spacing: 4) {
-                        Image(systemName: "star.fill")
-                            .foregroundColor(percent >= 84 ? .green : percent >= 72 ? .orange : .red)
-                        Text("\(percent)% match")
-                            .fontWeight(.semibold)
-                    }
-                    .font(.subheadline)
-                }
                 if let added = job.addedDateText {
                     Label("Added \(added)", systemImage: "calendar")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                ForEach(job.statusDateLabels, id: \.0) { label, date in
+                    Label("\(label) \(date)", systemImage: "checkmark.circle")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -112,60 +99,6 @@ struct JobDetailView: View {
                 }
             }
         }
-    }
-
-    private func matchActionSection(job: JobPosting) -> some View {
-        let percent = matchReport?.scorePercent ?? job.scorePercent
-        let color = percent.map { matchColor($0) } ?? Color.secondary
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(color.opacity(0.12))
-                    if let percent {
-                        Text("\(percent)%")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(color)
-                    } else {
-                        Image(systemName: "star")
-                            .font(.title3)
-                            .foregroundColor(color)
-                    }
-                }
-                .frame(width: 72, height: 72)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Match")
-                        .font(.headline)
-                    Text(percent == nil ? "No score yet" : "Latest database score")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-
-                Button {
-                    Task { await runMatch() }
-                } label: {
-                    if isMatching {
-                        ProgressView()
-                    } else {
-                        Label(percent == nil ? "Run Match" : "Rematch", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isMatching)
-            }
-
-            if let matchError {
-                Text(matchError)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .clipShape(.rect(cornerRadius: 12))
     }
 
     private var parseSection: some View {
@@ -200,47 +133,6 @@ struct JobDetailView: View {
         .padding()
         .background(Color(.systemGray6))
         .clipShape(.rect(cornerRadius: 12))
-    }
-
-    private var resumeSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Generate CV")
-                .font(.headline)
-
-            HStack(spacing: 10) {
-                ForEach(ResumeStyle.allCases) { style in
-                    Button {
-                        Task { await generateResume(style: style) }
-                    } label: {
-                        if generatingResumeStyle == style {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            Text(style.title)
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(style == .american ? .blue : .orange)
-                    .disabled(generatingResumeStyle != nil)
-                }
-            }
-
-            if let resumeMessage {
-                Text(resumeMessage)
-                    .font(.caption)
-                    .foregroundColor(.green)
-            }
-            if let resumeError {
-                Text(resumeError)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(.rect(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
     }
 
     @ViewBuilder
@@ -284,9 +176,7 @@ struct JobDetailView: View {
                 .textCase(.uppercase)
             FlowLayout(spacing: 6) {
                 ForEach(skills, id: \.self) { skill in
-                    SkillChoiceChip(skill: skill, isSelected: selectedSkills.contains(skill)) {
-                        toggleSkill(skill)
-                    }
+                    SkillChip(skill: skill)
                 }
             }
         }
@@ -367,37 +257,10 @@ struct JobDetailView: View {
         isLoading = true
         do {
             job = try await api.getJob(id: jobId)
-            matchReport = try await api.getMatchReport(jobId: jobId)
         } catch {
             self.error = error.localizedDescription
         }
         isLoading = false
-    }
-
-    private func toggleSkill(_ skill: String) {
-        if selectedSkills.contains(skill) {
-            selectedSkills.remove(skill)
-        } else {
-            selectedSkills.insert(skill)
-        }
-    }
-
-    private func generateResume(style: ResumeStyle) async {
-        generatingResumeStyle = style
-        resumeMessage = nil
-        resumeError = nil
-        defer { generatingResumeStyle = nil }
-
-        do {
-            _ = try await api.createResumeArtifact(
-                jobId: jobId,
-                style: style,
-                confirmedSkills: Array(selectedSkills)
-            )
-            resumeMessage = "\(style.title) generated."
-        } catch {
-            resumeError = error.localizedDescription
-        }
     }
 
     private func runParse() async {
@@ -410,25 +273,6 @@ struct JobDetailView: View {
         } catch {
             parseError = error.localizedDescription
         }
-    }
-
-    private func runMatch() async {
-        isMatching = true
-        matchError = nil
-        defer { isMatching = false }
-
-        do {
-            matchReport = try await api.createMatchReport(jobId: jobId)
-            job = try? await api.getJob(id: jobId)
-        } catch {
-            matchError = error.localizedDescription
-        }
-    }
-
-    private func matchColor(_ percent: Int) -> Color {
-        if percent >= 84 { return .green }
-        if percent >= 72 { return .orange }
-        return .red
     }
 
     @ViewBuilder
@@ -492,25 +336,17 @@ struct JobDetailView: View {
     }
 }
 
-struct SkillChoiceChip: View {
+struct SkillChip: View {
     let skill: String
-    let isSelected: Bool
-    let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "plus.circle")
-                    .font(.caption2)
-                Text(skill)
-            }
+        Text(skill)
             .font(.caption)
             .fontWeight(.medium)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(isSelected ? Color.green.opacity(0.18) : Color.blue.opacity(0.10))
-            .foregroundColor(isSelected ? .green : .blue)
+            .background(Color.blue.opacity(0.10))
+            .foregroundColor(.blue)
             .clipShape(.rect(cornerRadius: 8))
-        }
     }
 }

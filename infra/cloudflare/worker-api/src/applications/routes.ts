@@ -8,6 +8,27 @@ export const applicationsRoutes = new Hono<{ Bindings: Env }>();
 
 const TRACKED_STATUSES = ["saved", "applied", "interview", "offer", "rejected"];
 const VALID_STATUSES = ["draft", "received", ...TRACKED_STATUSES, "withdrawn"];
+const STATUS_DATE_COLUMNS: Record<string, string> = {
+  saved: "saved_at",
+  applied: "application_applied_at",
+  interview: "application_interview_at",
+  rejected: "application_rejected_at",
+  offer: "application_offer_at",
+};
+
+function addStatusDateUpdate(
+  updates: string[],
+  values: Array<string | number | null>,
+  status: string | null | undefined,
+  now: string
+) {
+  if (!status) return;
+  const column = STATUS_DATE_COLUMNS[status];
+  if (!column) return;
+  if (updates.some((update) => update.startsWith(`${column} =`))) return;
+  updates.push(`${column} = COALESCE(${column}, ?)`);
+  values.push(now);
+}
 
 interface ApplicationRow {
   id: string;
@@ -24,6 +45,11 @@ interface ApplicationRow {
   company?: string | null;
   job_added_at?: string | null;
   job_application_status?: string | null;
+  job_saved_at?: string | null;
+  job_application_applied_at?: string | null;
+  job_application_interview_at?: string | null;
+  job_application_rejected_at?: string | null;
+  job_application_offer_at?: string | null;
   job_saved?: number | null;
 }
 
@@ -40,6 +66,11 @@ function formatApplicationResponse(app: ApplicationRow) {
     match_score: app.match_score,
     notes: app.notes || null,
     added_at: app.job_added_at || app.created_at,
+    saved_at: app.job_saved_at || null,
+    applied_at: app.job_application_applied_at || null,
+    interview_at: app.job_application_interview_at || null,
+    rejected_at: app.job_application_rejected_at || null,
+    offer_at: app.job_application_offer_at || null,
     created_at: app.created_at,
     updated_at: app.updated_at,
   };
@@ -83,6 +114,11 @@ applicationsRoutes.get("/", async (c) => {
        jobs.company AS company,
        COALESCE(jobs.pipeline_added_at, jobs.created_at) AS job_added_at,
        jobs.application_status AS job_application_status,
+       jobs.saved_at AS job_saved_at,
+       jobs.application_applied_at AS job_application_applied_at,
+       jobs.application_interview_at AS job_application_interview_at,
+       jobs.application_rejected_at AS job_application_rejected_at,
+       jobs.application_offer_at AS job_application_offer_at,
        jobs.saved AS job_saved
      FROM applications
      LEFT JOIN jobs ON jobs.id = applications.job_id AND jobs.user_id = applications.user_id
@@ -133,16 +169,18 @@ applicationsRoutes.post("/", async (c) => {
     .run();
 
   if (status === "saved") {
-    await c.env.DB.prepare(
-      "UPDATE jobs SET saved = 1, application_status = NULL, updated_at = ? WHERE id = ? AND user_id = ?"
-    )
-      .bind(now, body.job_id, userId)
-      .run();
+    const updates = ["saved = 1", "application_status = NULL", "updated_at = ?"];
+    const values: Array<string | number | null> = [now];
+    addStatusDateUpdate(updates, values, "saved", now);
+    values.push(body.job_id, userId);
+    await c.env.DB.prepare(`UPDATE jobs SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`).bind(...values).run();
   } else if (status !== "draft") {
-    await c.env.DB.prepare(
-      "UPDATE jobs SET application_status = ?, updated_at = ? WHERE id = ? AND user_id = ?"
-    )
-      .bind(status, now, body.job_id, userId)
+    const updates = ["application_status = ?", "updated_at = ?"];
+    const values: Array<string | number | null> = [status, now];
+    addStatusDateUpdate(updates, values, status, now);
+    values.push(body.job_id, userId);
+    await c.env.DB.prepare(`UPDATE jobs SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`)
+      .bind(...values)
       .run();
   }
 
@@ -150,6 +188,11 @@ applicationsRoutes.post("/", async (c) => {
     `SELECT applications.*, jobs.title AS job_title, jobs.company AS company,
             COALESCE(jobs.pipeline_added_at, jobs.created_at) AS job_added_at,
             jobs.application_status AS job_application_status,
+            jobs.saved_at AS job_saved_at,
+            jobs.application_applied_at AS job_application_applied_at,
+            jobs.application_interview_at AS job_application_interview_at,
+            jobs.application_rejected_at AS job_application_rejected_at,
+            jobs.application_offer_at AS job_application_offer_at,
             jobs.saved AS job_saved
      FROM applications
      LEFT JOIN jobs ON jobs.id = applications.job_id AND jobs.user_id = applications.user_id
@@ -183,7 +226,7 @@ applicationsRoutes.patch("/:id", async (c) => {
 
   const now = new Date().toISOString();
   const updates: string[] = ["updated_at = ?"];
-  const values: (string | number)[] = [now];
+  const values: (string | number | null)[] = [now];
 
   if (normalizedStatus) {
     updates.push("status = ?");
@@ -202,16 +245,19 @@ applicationsRoutes.patch("/:id", async (c) => {
   // Update job application_status if status changed
   if (normalizedStatus && app.job_id) {
     if (normalizedStatus === "saved") {
-      await c.env.DB.prepare(
-        "UPDATE jobs SET saved = 1, application_status = NULL, updated_at = ? WHERE id = ? AND user_id = ?"
-      )
-        .bind(now, app.job_id, userId)
-        .run();
+      const updates = ["saved = 1", "application_status = NULL", "updated_at = ?"];
+      const values: Array<string | number | null> = [now];
+      addStatusDateUpdate(updates, values, "saved", now);
+      values.push(app.job_id, userId);
+      await c.env.DB.prepare(`UPDATE jobs SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`).bind(...values).run();
     } else {
-      await c.env.DB.prepare(
-        "UPDATE jobs SET application_status = ?, updated_at = ? WHERE id = ? AND user_id = ?"
-      )
-        .bind(normalizedStatus === "draft" ? null : normalizedStatus, now, app.job_id, userId)
+      const jobStatus = normalizedStatus === "draft" ? null : normalizedStatus;
+      const updates = ["application_status = ?", "updated_at = ?"];
+      const values: Array<string | number | null> = [jobStatus, now];
+      addStatusDateUpdate(updates, values, jobStatus, now);
+      values.push(app.job_id, userId);
+      await c.env.DB.prepare(`UPDATE jobs SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`)
+        .bind(...values)
         .run();
     }
   }
@@ -220,6 +266,11 @@ applicationsRoutes.patch("/:id", async (c) => {
     `SELECT applications.*, jobs.title AS job_title, jobs.company AS company,
             COALESCE(jobs.pipeline_added_at, jobs.created_at) AS job_added_at,
             jobs.application_status AS job_application_status,
+            jobs.saved_at AS job_saved_at,
+            jobs.application_applied_at AS job_application_applied_at,
+            jobs.application_interview_at AS job_application_interview_at,
+            jobs.application_rejected_at AS job_application_rejected_at,
+            jobs.application_offer_at AS job_application_offer_at,
             jobs.saved AS job_saved
      FROM applications
      LEFT JOIN jobs ON jobs.id = applications.job_id AND jobs.user_id = applications.user_id
@@ -241,6 +292,11 @@ applicationsRoutes.get("/:id", async (c) => {
     `SELECT applications.*, jobs.title AS job_title, jobs.company AS company,
             COALESCE(jobs.pipeline_added_at, jobs.created_at) AS job_added_at,
             jobs.application_status AS job_application_status,
+            jobs.saved_at AS job_saved_at,
+            jobs.application_applied_at AS job_application_applied_at,
+            jobs.application_interview_at AS job_application_interview_at,
+            jobs.application_rejected_at AS job_application_rejected_at,
+            jobs.application_offer_at AS job_application_offer_at,
             jobs.saved AS job_saved
      FROM applications
      LEFT JOIN jobs ON jobs.id = applications.job_id AND jobs.user_id = applications.user_id

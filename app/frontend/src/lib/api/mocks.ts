@@ -9,6 +9,8 @@ export function getMockJobs(): JobPosting[] {
       location: 'Munich, Bavaria, Germany',
       url: 'https://www.linkedin.com/jobs/view/4414035441/',
       status: 'new',
+      saved: true,
+      saved_at: '2026-05-22T08:30:00Z',
       parsed_json: {
         skills: ['GenAI', 'RAG', 'LLMOps', 'PyTorch', 'AWS/Azure/GCP', 'Databricks', 'Spark'],
         years_exp: 5,
@@ -23,6 +25,8 @@ export function getMockJobs(): JobPosting[] {
       location: 'Zurich, Switzerland',
       url: 'https://www.linkedin.com/jobs/view/4414349687/',
       status: 'new',
+      application_status: 'applied',
+      application_applied_at: '2026-05-22T09:30:00Z',
       parsed_json: {
         skills: ['Python', 'LLM/VLM', 'Evaluation', 'SQL', 'BigQuery', 'Airflow', 'Kafka', 'Kubernetes'],
         years_exp: 4,
@@ -49,8 +53,8 @@ export function getMockJobs(): JobPosting[] {
 
 export function getMockApplications(): Application[] {
   return [
-    { id: 'a1', job_id: '4414035441', job_title: 'AI Engineer - FDE (Forward Deployed Engineer)', company: 'Databricks', status: 'saved', score: 4.1, notes: 'Strong GenAI and cloud ML overlap; review customer-facing travel expectations.', created_at: '2026-05-22T08:30:00Z' },
-    { id: 'a2', job_id: '4414349687', job_title: 'Senior Software / ML Engineer (Python) (f/m/d)', company: 'Digitec Galaxus AG', status: 'applied', score: 4.4, notes: 'Best Python and applied ML fit among the current examples.', created_at: '2026-05-22T09:30:00Z' },
+    { id: 'a1', job_id: '4414035441', job_title: 'AI Engineer - FDE (Forward Deployed Engineer)', company: 'Databricks', status: 'saved', score: 4.1, notes: 'Strong GenAI and cloud ML overlap; review customer-facing travel expectations.', saved_at: '2026-05-22T08:30:00Z', created_at: '2026-05-22T08:30:00Z' },
+    { id: 'a2', job_id: '4414349687', job_title: 'Senior Software / ML Engineer (Python) (f/m/d)', company: 'Digitec Galaxus AG', status: 'applied', score: 4.4, notes: 'Best Python and applied ML fit among the current examples.', applied_at: '2026-05-22T09:30:00Z', created_at: '2026-05-22T09:30:00Z' },
     { id: 'a3', job_id: '4417727434', job_title: 'Senior DevOps & Cloud Platform Engineer, CH', company: 'vector8', status: 'saved', score: 3.7, notes: 'Good cloud and platform match; less direct ML emphasis.', created_at: '2026-05-22T10:30:00Z' },
   ];
 }

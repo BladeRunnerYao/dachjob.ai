@@ -26,12 +26,29 @@ function statusBadge(status: string) {
   return undefined;
 }
 
+function effectiveStatus(job: JobPosting) {
+  return job.application_status || (job.saved ? 'saved' : job.status || 'new');
+}
+
 function displayStatus(status?: string | null) {
   if (!status) return '';
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
+function statusDate(job: JobPosting, status: string) {
+  if (status === 'saved') return job.saved_at;
+  if (status === 'applied') return job.application_applied_at;
+  if (status === 'interview') return job.application_interview_at;
+  if (status === 'rejected') return job.application_rejected_at;
+  if (status === 'offer') return job.application_offer_at;
+  return null;
+}
+
 export function JobCard({ job }: JobCardProps) {
+  const status = effectiveStatus(job);
+  const statusVariant = statusBadge(status);
+  const statusSetAt = statusDate(job, status);
+
   return (
     <Link href={`/jobs/${job.id}`}>
       <Card className="hover:border-blue-300 transition-colors cursor-pointer">
@@ -42,11 +59,11 @@ export function JobCard({ job }: JobCardProps) {
           </div>
           <div className="flex items-center gap-2 ml-4 shrink-0">
             {job.score != null && <Badge variant={scoreBadge(toPercent(job.score))}>{toPercent(job.score)}%</Badge>}
-            {job.saved && <Badge variant="yellow">Saved</Badge>}
-            {job.application_status && statusBadge(job.application_status) && (
-              <Badge variant={statusBadge(job.application_status)!}>
-                {displayStatus(job.application_status)}
-              </Badge>
+            <Badge variant={statusVariant || 'default'}>{displayStatus(status)}</Badge>
+            {statusSetAt && (
+              <span className="text-xs text-slate-400 hidden sm:inline">
+                {new Date(statusSetAt).toLocaleDateString()}
+              </span>
             )}
             <span className="text-xs text-slate-400 hidden sm:inline">
               Added {new Date(job.pipeline_added_at || job.created_at).toLocaleDateString()}
