@@ -5,6 +5,7 @@ struct JobPosting: Codable, Identifiable {
     let title: String
     let company: String?
     let location: String?
+    let countries: [String]?
     let score: Double?
     let recommendation: String?
     let status: String?
@@ -22,7 +23,7 @@ struct JobPosting: Codable, Identifiable {
     let pipelineAddedAt: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, company, location, score, recommendation, status, saved, url
+        case id, title, company, location, countries, score, recommendation, status, saved, url
         case applicationStatus = "application_status"
         case savedAt = "saved_at"
         case applicationAppliedAt = "application_applied_at"
@@ -33,11 +34,6 @@ struct JobPosting: Codable, Identifiable {
         case parsedJson = "parsed_json"
         case createdAt = "created_at"
         case pipelineAddedAt = "pipeline_added_at"
-    }
-
-    var scorePercent: Int? {
-        guard let s = score else { return nil }
-        return Int((min(max(s, 1), 5) / 5.0) * 100)
     }
 
     var hasQualificationDetails: Bool {
@@ -121,6 +117,15 @@ struct PaginatedJobs: Codable {
 struct JobFilterOptions: Codable {
     let companies: [JobFilterOption]
     let statuses: [JobFilterOption]
+    let addedDates: [JobFilterOption]
+    let countries: [JobFilterOption]
+
+    enum CodingKeys: String, CodingKey {
+        case companies
+        case statuses
+        case addedDates = "added_dates"
+        case countries
+    }
 }
 
 struct JobFilterOption: Codable, Identifiable {
@@ -164,11 +169,6 @@ struct Application: Codable, Identifiable {
         case rejectedAt = "rejected_at"
         case offerAt = "offer_at"
         case createdAt = "created_at"
-    }
-
-    var scorePercent: Int? {
-        guard let score else { return nil }
-        return Int((min(max(score, 1), 5) / 5.0) * 100)
     }
 
     var addedDateText: String? {
@@ -216,34 +216,6 @@ struct PaginatedLLMRuns: Codable {
     let total: Int
 }
 
-enum ResumeStyle: String, Codable, CaseIterable, Identifiable {
-    case american
-    case german
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .american: return "American CV"
-        case .german: return "German CV"
-        }
-    }
-}
-
-struct ResumeArtifact: Codable, Identifiable {
-    let id: String
-    let jobId: String
-    let htmlObjectKey: String
-    let pdfObjectKey: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case jobId = "job_id"
-        case htmlObjectKey = "html_object_key"
-        case pdfObjectKey = "pdf_object_key"
-    }
-}
-
 struct CandidateProfile: Codable {
     let id: String
     let fullName: String?
@@ -257,25 +229,6 @@ struct CandidateProfile: Codable {
         case fullName = "full_name"
         case headline, location, skills
         case rawCvMd = "raw_cv_md"
-    }
-}
-
-struct MatchReport: Codable, Identifiable {
-    let id: String
-    let jobId: String
-    let overallScore: Double
-    let recommendation: String
-    let explanation: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case jobId = "job_id"
-        case overallScore = "overall_score"
-        case recommendation, explanation
-    }
-
-    var scorePercent: Int {
-        Int((min(max(overallScore, 1), 5) / 5.0) * 100)
     }
 }
 
@@ -382,6 +335,13 @@ func parseISODate(_ isoDate: String?) -> Date? {
     if date == nil {
         formatter.formatOptions = [.withInternetDateTime]
         date = formatter.date(from: isoDate)
+    }
+    if date == nil {
+        let dateOnlyFormatter = DateFormatter()
+        dateOnlyFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateOnlyFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
+        date = dateOnlyFormatter.date(from: isoDate)
     }
     return date
 }

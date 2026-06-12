@@ -42,7 +42,7 @@ struct ApplicationTrackerView: View {
     @State private var isLoading = true
     @State private var error: String?
     private let api = APIClient.shared
-    private let statuses = ["applied", "interview", "rejected", "offer"]
+    private let statuses = ["saved", "applied", "interview", "rejected", "offer"]
 
     var body: some View {
         NavigationStack {
@@ -152,6 +152,7 @@ struct ApplicationTrackerView: View {
 
     private func statusColor(_ status: String) -> Color {
         switch status {
+        case "saved": return .orange
         case "applied": return .green
         case "interview": return .blue
         case "rejected": return .red
@@ -193,13 +194,6 @@ struct ApplicationTrackerRow: View {
                     StatusBadge(status: application.status.lowercased())
                 }
                 .disabled(isUpdating)
-
-                if let score = application.scorePercent {
-                    Text("\(score)% match")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(score >= 84 ? .green : score >= 72 ? .orange : .red)
-                }
 
                 Spacer()
 
