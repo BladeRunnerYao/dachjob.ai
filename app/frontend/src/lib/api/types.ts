@@ -30,7 +30,11 @@ export interface JobPosting {
   raw_jd?: string;
   saved?: boolean;
   application_status?: ApplicationJobStatus | null;
+  saved_at?: string | null;
   application_applied_at?: string | null;
+  application_interview_at?: string | null;
+  application_rejected_at?: string | null;
+  application_offer_at?: string | null;
   pipeline_added_at?: string | null;
   pipeline_source_sha?: string | null;
 }
@@ -80,7 +84,11 @@ export interface Application {
   score?: number;
   notes?: string;
   added_at?: string;
+  saved_at?: string | null;
   applied_at?: string | null;
+  interview_at?: string | null;
+  rejected_at?: string | null;
+  offer_at?: string | null;
   created_at: string;
   updated_at?: string;
 }

@@ -6,6 +6,7 @@ import type { Application } from '@/lib/api/types';
 import { useState } from 'react';
 
 type BadgeVariant = 'default' | 'green' | 'yellow' | 'red' | 'blue';
+type StatusDateField = 'saved_at' | 'applied_at' | 'interview_at' | 'rejected_at' | 'offer_at';
 
 interface TrackerTableProps {
   applications: Application[];
@@ -21,6 +22,13 @@ const statusColors: Record<string, BadgeVariant> = {
 };
 
 const statusOptions = ['Saved', 'Applied', 'Interview', 'Rejected', 'Offer'];
+const statusDateColumns: Array<{ label: string; field: StatusDateField }> = [
+  { label: 'Saved', field: 'saved_at' },
+  { label: 'Applied', field: 'applied_at' },
+  { label: 'Interview', field: 'interview_at' },
+  { label: 'Rejected', field: 'rejected_at' },
+  { label: 'Offer', field: 'offer_at' },
+];
 
 function toPercent(score: number): number {
   return Math.round((Math.min(Math.max(score, 1), 5) / 5) * 100);
@@ -37,14 +45,16 @@ export function TrackerTable({ applications, onStatusChange }: TrackerTableProps
     <Card>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[980px] text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
               <th className="px-4 py-3 font-medium">Job Title</th>
               <th className="px-4 py-3 font-medium">Company</th>
               <th className="px-4 py-3 font-medium">Score</th>
               <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Applied</th>
+              {statusDateColumns.map((column) => (
+                <th key={column.field} className="px-4 py-3 font-medium">{column.label}</th>
+              ))}
               <th className="px-4 py-3 font-medium">Notes</th>
               <th className="px-4 py-3 font-medium">Added</th>
             </tr>
@@ -87,7 +97,11 @@ export function TrackerTable({ applications, onStatusChange }: TrackerTableProps
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 text-slate-500">{formatDate(app.applied_at)}</td>
+                {statusDateColumns.map((column) => (
+                  <td key={column.field} className="px-4 py-3 text-slate-500">
+                    {formatDate(app[column.field])}
+                  </td>
+                ))}
                 <td className="px-4 py-3 text-slate-500 max-w-[200px] truncate">{app.notes || '-'}</td>
                 <td className="px-4 py-3 text-slate-500">{formatDate(app.added_at || app.created_at)}</td>
               </tr>

@@ -95,8 +95,8 @@ struct JobDetailView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
-                if let applied = job.appliedDateText {
-                    Label("Applied \(applied)", systemImage: "checkmark.circle")
+                ForEach(job.statusDateLabels, id: \.0) { label, date in
+                    Label("\(label) \(date)", systemImage: "checkmark.circle")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }

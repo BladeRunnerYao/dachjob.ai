@@ -16,7 +16,28 @@ import {
 export const jobsRoutes = new Hono<{ Bindings: Env }>();
 
 const APPLICATION_JOB_STATUSES = ["applied", "interview", "rejected", "offer"];
+const STATUS_DATE_COLUMNS: Record<string, string> = {
+  saved: "saved_at",
+  applied: "application_applied_at",
+  interview: "application_interview_at",
+  rejected: "application_rejected_at",
+  offer: "application_offer_at",
+};
 const PROFILE_MISMATCH_ERROR_PREFIX = "PROFILE_MISMATCH:";
+
+function addStatusDateUpdate(
+  updates: string[],
+  values: Array<string | number | null>,
+  status: string | null | undefined,
+  now: string
+) {
+  if (!status) return;
+  const column = STATUS_DATE_COLUMNS[status];
+  if (!column) return;
+  if (updates.some((update) => update.startsWith(`${column} =`))) return;
+  updates.push(`${column} = COALESCE(${column}, ?)`);
+  values.push(now);
+}
 
 interface ApplicationMatchRow {
   id: string;
@@ -326,19 +347,16 @@ jobsRoutes.patch("/:id/status", async (c) => {
     const normalizedStatus = body.status === "new" ? null : body.status;
     updates.push("application_status = ?");
     values.push(normalizedStatus);
-    if (normalizedStatus === "applied") {
-      updates.push("application_applied_at = COALESCE(application_applied_at, ?)");
-      values.push(now);
-    } else if (normalizedStatus === null) {
-      updates.push("application_applied_at = NULL");
-    }
+    addStatusDateUpdate(updates, values, normalizedStatus, now);
   }
   if (body.saved !== undefined) {
     updates.push("saved = ?");
     values.push(body.saved ? 1 : 0);
+    if (body.saved) addStatusDateUpdate(updates, values, "saved", now);
   }
   if (body.status === "saved") {
     updates.push("saved = 1");
+    addStatusDateUpdate(updates, values, "saved", now);
   }
 
   values.push(jobId, userId);
@@ -525,7 +543,11 @@ async function formatJobResponse(env: Env, userId: string, job: Record<string, u
     status: job.status,
     saved: Boolean(job.saved),
     application_status: job.application_status,
+    saved_at: job.saved_at,
     application_applied_at: job.application_applied_at,
+    application_interview_at: job.application_interview_at,
+    application_rejected_at: job.application_rejected_at,
+    application_offer_at: job.application_offer_at,
     score: matchResponse?.overall_score ?? null,
     recommendation: matchResponse?.recommendation ?? null,
     pipeline_added_at: job.pipeline_added_at,
@@ -861,17 +883,11 @@ async function setJobApplicationStatus(
   status: string
 ) {
   const now = new Date().toISOString();
-  const updates =
-    status === "applied"
-      ? "application_status = ?, application_applied_at = COALESCE(application_applied_at, ?), updated_at = ?"
-      : "application_status = ?, updated_at = ?";
-  const values =
-    status === "applied"
-      ? [status, now, now, jobId, userId]
-      : [status, now, jobId, userId];
-  await env.DB.prepare(
-    `UPDATE jobs SET ${updates} WHERE id = ? AND user_id = ?`
-  )
+  const updates = ["application_status = ?", "updated_at = ?"];
+  const values: Array<string | number | null> = [status, now];
+  addStatusDateUpdate(updates, values, status, now);
+  values.push(jobId, userId);
+  await env.DB.prepare(`UPDATE jobs SET ${updates.join(", ")} WHERE id = ? AND user_id = ?`)
     .bind(...values)
     .run();
   await syncApplicationForJobStatus(env, userId, jobId, status);

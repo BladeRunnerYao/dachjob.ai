@@ -208,8 +208,8 @@ struct ApplicationTrackerRow: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                if let applied = application.appliedDateText {
-                    Label(applied, systemImage: "checkmark.circle")
+                ForEach(application.statusDateLabels, id: \.0) { label, date in
+                    Label("\(label) \(date)", systemImage: "checkmark.circle")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

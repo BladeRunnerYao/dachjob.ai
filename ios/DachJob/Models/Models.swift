@@ -10,7 +10,11 @@ struct JobPosting: Codable, Identifiable {
     let status: String?
     let saved: Bool?
     let applicationStatus: String?
+    let savedAt: String?
     let applicationAppliedAt: String?
+    let applicationInterviewAt: String?
+    let applicationRejectedAt: String?
+    let applicationOfferAt: String?
     let url: String?
     let rawJd: String?
     let parsedJson: ParsedJobDescription?
@@ -20,7 +24,11 @@ struct JobPosting: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id, title, company, location, score, recommendation, status, saved, url
         case applicationStatus = "application_status"
+        case savedAt = "saved_at"
         case applicationAppliedAt = "application_applied_at"
+        case applicationInterviewAt = "application_interview_at"
+        case applicationRejectedAt = "application_rejected_at"
+        case applicationOfferAt = "application_offer_at"
         case rawJd = "raw_jd"
         case parsedJson = "parsed_json"
         case createdAt = "created_at"
@@ -59,6 +67,19 @@ struct JobPosting: Codable, Identifiable {
 
     var appliedDateText: String? {
         formatShortDate(applicationAppliedAt)
+    }
+
+    var statusDateLabels: [(String, String)] {
+        [
+            ("Saved", formatShortDate(savedAt)),
+            ("Applied", formatShortDate(applicationAppliedAt)),
+            ("Interview", formatShortDate(applicationInterviewAt)),
+            ("Rejected", formatShortDate(applicationRejectedAt)),
+            ("Offer", formatShortDate(applicationOfferAt)),
+        ].compactMap { label, date in
+            guard let date else { return nil }
+            return (label, date)
+        }
     }
 }
 
@@ -124,7 +145,11 @@ struct Application: Codable, Identifiable {
     let score: Double?
     let notes: String?
     let addedAt: String?
+    let savedAt: String?
     let appliedAt: String?
+    let interviewAt: String?
+    let rejectedAt: String?
+    let offerAt: String?
     let createdAt: String
 
     enum CodingKeys: String, CodingKey {
@@ -133,7 +158,11 @@ struct Application: Codable, Identifiable {
         case jobTitle = "job_title"
         case company, status, score, notes
         case addedAt = "added_at"
+        case savedAt = "saved_at"
         case appliedAt = "applied_at"
+        case interviewAt = "interview_at"
+        case rejectedAt = "rejected_at"
+        case offerAt = "offer_at"
         case createdAt = "created_at"
     }
 
@@ -148,6 +177,19 @@ struct Application: Codable, Identifiable {
 
     var appliedDateText: String? {
         formatShortDate(appliedAt)
+    }
+
+    var statusDateLabels: [(String, String)] {
+        [
+            ("Saved", formatShortDate(savedAt)),
+            ("Applied", formatShortDate(appliedAt)),
+            ("Interview", formatShortDate(interviewAt)),
+            ("Rejected", formatShortDate(rejectedAt)),
+            ("Offer", formatShortDate(offerAt)),
+        ].compactMap { label, date in
+            guard let date else { return nil }
+            return (label, date)
+        }
     }
 }
 
