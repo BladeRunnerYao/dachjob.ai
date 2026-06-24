@@ -31,9 +31,14 @@ async def test_settings_worker_enabled_default():
 def test_version_route_reports_worker_mode():
     from app.main import app
 
-    routes = {r.path for r in app.routes}
+    routes = {r.path for r in app.routes if hasattr(r, "path")}
+    for route in app.routes:
+        original_router = getattr(route, "original_router", None)
+        if original_router is not None:
+            routes.update(r.path for r in original_router.routes if hasattr(r, "path"))
+
     assert "/api/version" in routes
-    assert "/api/tasks" in routes or any("/api/tasks" in r.path for r in app.routes)
+    assert "/api/tasks" in routes or any(path.startswith("/api/tasks") for path in routes)
 
 
 @pytest.mark.asyncio
