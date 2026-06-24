@@ -18,11 +18,17 @@ TRACKER_STATUS_BY_JOB_STATUS = {
 }
 
 
+def _contains_pattern(value: str) -> str:
+    escaped = value.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 def _job_filters(
     tenant_id: UUID,
     status: str | None = None,
     exclude_smoke_test: bool = True,
     company: str | None = None,
+    company_query: str | None = None,
     added_date: str | None = None,
     country: str | None = None,
 ):
@@ -37,6 +43,8 @@ def _job_filters(
         filters.append(JobPosting.application_status.is_(None))
     if company:
         filters.append(JobPosting.company == company)
+    if company_query and company_query.strip():
+        filters.append(JobPosting.company.ilike(_contains_pattern(company_query), escape="\\"))
     if added_date:
         filters.append(func.date(JobPosting.created_at) == added_date)
     if country:
@@ -91,6 +99,7 @@ async def count_jobs_by_tenant(
     tenant_id: UUID,
     status: str | None = None,
     company: str | None = None,
+    company_query: str | None = None,
     added_date: str | None = None,
     country: str | None = None,
     exclude_smoke_test: bool = True,
@@ -104,6 +113,7 @@ async def count_jobs_by_tenant(
                 status=status,
                 exclude_smoke_test=exclude_smoke_test,
                 company=company,
+                company_query=company_query,
                 added_date=added_date,
                 country=country,
             )
@@ -120,6 +130,7 @@ async def list_jobs_by_tenant(
     offset: int = 0,
     status: str | None = None,
     company: str | None = None,
+    company_query: str | None = None,
     added_date: str | None = None,
     country: str | None = None,
     exclude_smoke_test: bool = True,
@@ -132,6 +143,7 @@ async def list_jobs_by_tenant(
                 status=status,
                 exclude_smoke_test=exclude_smoke_test,
                 company=company,
+                company_query=company_query,
                 added_date=added_date,
                 country=country,
             )

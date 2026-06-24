@@ -56,6 +56,20 @@ def test_job_filters_omit_status_for_all_jobs():
     assert "job_postings.saved" not in where
 
 
+def test_job_filters_include_company_partial_match_when_requested():
+    compiled = _compiled(_job_filters(uuid.uuid4(), company_query="APP"))
+    where = _where_clause(str(compiled))
+
+    assert "job_postings.company ILIKE" in where
+    assert compiled.params["company_1"] == "%APP%"
+
+
+def test_job_filters_escape_company_partial_match_wildcards():
+    compiled = _compiled(_job_filters(uuid.uuid4(), company_query=r"100%_remote"))
+
+    assert compiled.params["company_1"] == r"%100\%\_remote%"
+
+
 def test_job_status_set_matches_public_api_contract():
     assert VALID_JOB_STATUSES == {"new", "applied", "interview", "rejected", "offer"}
 

@@ -30,8 +30,12 @@ function matchesStatusFilter(job: JobPosting, status?: JobFilterStatus): boolean
 }
 
 function matchesQueryFilters(job: JobPosting, options: JobQueryOptions = {}): boolean {
+  const companyQuery = options.company_query?.trim().toLowerCase();
   if (!matchesStatusFilter(job, options.status)) return false;
   if (options.company && job.company !== options.company) return false;
+  if (companyQuery && !job.company.toLowerCase().includes(companyQuery)) {
+    return false;
+  }
   if (options.added_date && addedDateForJob(job) !== options.added_date) return false;
   if (options.country && !countriesForJob(job).includes(options.country)) return false;
   if (options.stage && options.stage !== 'all') {
@@ -48,6 +52,7 @@ function buildJobsQuery(limit: number, offset: number, options: JobFilterStatus 
   if (queryOptions.status) q.set('status', queryOptions.status);
   if (queryOptions.stage && queryOptions.stage !== 'all') q.set('stage', queryOptions.stage);
   if (queryOptions.company) q.set('company', queryOptions.company);
+  if (queryOptions.company_query?.trim()) q.set('company_query', queryOptions.company_query.trim());
   if (queryOptions.added_date) q.set('added_date', queryOptions.added_date);
   if (queryOptions.country) q.set('country', queryOptions.country);
   return q.toString();

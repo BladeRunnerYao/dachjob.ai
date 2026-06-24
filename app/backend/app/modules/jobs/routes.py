@@ -42,6 +42,7 @@ router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 async def _invalidate_jobs_cache(tenant_id: UUID, job_id: UUID | None = None):
     await cache.delete_pattern(f"jobs:list:v2:{tenant_id}")
     await cache.delete_pattern(f"jobs:list:v3:{tenant_id}")
+    await cache.delete_pattern(f"jobs:list:v4:{tenant_id}")
     if job_id:
         await cache.delete("job:detail:v2", str(job_id))
 
@@ -66,6 +67,7 @@ async def list_jobs(
         None, pattern=r"^(all|new|received|applied|interview|rejected|offer)$"
     ),
     company: str | None = Query(None),
+    company_query: str | None = Query(None),
     added_date: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     country: str | None = Query(None),
 ):
@@ -79,12 +81,14 @@ async def list_jobs(
     status_filter = status
     if stage and stage != "all":
         status_filter = "new" if stage == "received" else stage
+    company_query = company_query.strip() if company_query else None
     cached = await cache.get_json(
-        "jobs:list:v3",
+        "jobs:list:v4",
         str(tenant.id),
         status_key,
         stage or "all",
         company or "",
+        company_query or "",
         added_date or "",
         country or "",
         str(limit),
@@ -97,6 +101,7 @@ async def list_jobs(
         tenant.id,
         status=status_filter,
         company=company,
+        company_query=company_query,
         added_date=added_date,
         country=country,
     )
@@ -107,6 +112,7 @@ async def list_jobs(
         offset=offset,
         status=status_filter,
         company=company,
+        company_query=company_query,
         added_date=added_date,
         country=country,
     )
@@ -117,11 +123,12 @@ async def list_jobs(
         offset=offset,
     )
     await cache.set_json(
-        "jobs:list:v3",
+        "jobs:list:v4",
         str(tenant.id),
         status_key,
         stage or "all",
         company or "",
+        company_query or "",
         added_date or "",
         country or "",
         str(limit),
