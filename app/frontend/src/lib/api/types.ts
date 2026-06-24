@@ -126,6 +126,7 @@ export interface JobQueryOptions {
   status?: JobFilterStatus;
   stage?: JobStageStatus | 'all';
   company?: string;
+  company_query?: string;
   added_date?: string;
   country?: string;
 }

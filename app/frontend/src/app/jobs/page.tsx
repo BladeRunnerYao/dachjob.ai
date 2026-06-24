@@ -18,7 +18,7 @@ export default function JobsPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [companyFilter, setCompanyFilter] = useState('');
+  const [companyQueryFilter, setCompanyQueryFilter] = useState('');
   const [addedDateFilter, setAddedDateFilter] = useState('');
   const [countryFilter, setCountryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<JobStatusFilterValue | 'all'>('all');
@@ -40,7 +40,7 @@ export default function JobsPage() {
     const query: JobQueryOptions = {
       status: statusFilter === 'saved' ? statusFilter : undefined,
       stage: statusFilter !== 'all' && statusFilter !== 'saved' ? statusFilter : 'all',
-      company: companyFilter || undefined,
+      company_query: companyQueryFilter.trim() || undefined,
       added_date: addedDateFilter || undefined,
       country: countryFilter || undefined,
     };
@@ -54,7 +54,7 @@ export default function JobsPage() {
     setAllCount(allResult.total);
     setFilterOptions(filtersResult);
     setLoading(false);
-  }, [addedDateFilter, companyFilter, countryFilter, page, pageSize, routedJobId, statusFilter]);
+  }, [addedDateFilter, companyQueryFilter, countryFilter, page, pageSize, routedJobId, statusFilter]);
 
   useEffect(() => {
     if (routedJobId) return;
@@ -65,7 +65,7 @@ export default function JobsPage() {
       const query: JobQueryOptions = {
         status: statusFilter === 'saved' ? statusFilter : undefined,
         stage: statusFilter !== 'all' && statusFilter !== 'saved' ? statusFilter : 'all',
-        company: companyFilter || undefined,
+        company_query: companyQueryFilter.trim() || undefined,
         added_date: addedDateFilter || undefined,
         country: countryFilter || undefined,
       };
@@ -87,7 +87,7 @@ export default function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [addedDateFilter, companyFilter, countryFilter, page, pageSize, routedJobId, statusFilter]);
+  }, [addedDateFilter, companyQueryFilter, countryFilter, page, pageSize, routedJobId, statusFilter]);
 
   if (routedJobId) {
     return <JobDetailClient jobId={decodeURIComponent(routedJobId)} />;
@@ -131,8 +131,8 @@ export default function JobsPage() {
     setPage(0);
   };
 
-  const updateCompanyFilter = (company: string) => {
-    setCompanyFilter(company);
+  const updateCompanyQueryFilter = (companyQuery: string) => {
+    setCompanyQueryFilter(companyQuery);
     setPage(0);
   };
 
@@ -188,18 +188,22 @@ export default function JobsPage() {
             All
             <span className="ml-1 opacity-60">({allCount})</span>
           </button>
-          <select
-            value={companyFilter}
-            onChange={(event) => updateCompanyFilter(event.target.value)}
-            className="max-w-[220px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option value="">All companies</option>
+          <input
+            type="search"
+            value={companyQueryFilter}
+            onChange={(event) => updateCompanyQueryFilter(event.target.value)}
+            list="company-filter-options"
+            placeholder="Company"
+            aria-label="Company filter"
+            className="w-[180px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <datalist id="company-filter-options">
             {filterOptions.companies.map((company) => (
               <option key={company.value} value={company.value}>
-                {company.value} ({company.count})
+                {`${company.value} (${company.count})`}
               </option>
             ))}
-          </select>
+          </datalist>
           <select
             value={addedDateFilter}
             onChange={(event) => updateAddedDateFilter(event.target.value)}
