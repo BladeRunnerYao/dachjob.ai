@@ -130,9 +130,32 @@ jobs:
 
       - name: Run migrations
         run: |
+          set -euo pipefail
+
+          has_column() {
+            local table="$1"
+            local column="$2"
+            wrangler d1 execute dachjob-db --remote --json \
+              --command "SELECT COUNT(*) AS count FROM pragma_table_info('$table') WHERE name='$column';" \
+              | node -e "let input = ''; process.stdin.on('data', c => input += c); process.stdin.on('end', () => { const result = JSON.parse(input); process.exit(result?.[0]?.results?.[0]?.count > 0 ? 0 : 1); });"
+          }
+
+          run_if_missing() {
+            local table="$1"
+            local column="$2"
+            local file="$3"
+            if has_column "$table" "$column"; then
+              echo "Skipping $file; $table.$column already exists."
+            else
+              wrangler d1 execute dachjob-db --remote --file="$file"
+            fi
+          }
+
           wrangler d1 execute dachjob-db --remote --file=infra/cloudflare/migrations/0001_initial.sql
-          wrangler d1 execute dachjob-db --remote --file=infra/cloudflare/migrations/0002_add_notes_to_applications.sql
-          wrangler d1 execute dachjob-db --remote --file=infra/cloudflare/migrations/0003_job_pipeline_metadata.sql
-          wrangler d1 execute dachjob-db --remote --file=infra/cloudflare/migrations/0004_job_countries.sql
+          run_if_missing applications notes infra/cloudflare/migrations/0002_add_notes_to_applications.sql
+          run_if_missing jobs job_key infra/cloudflare/migrations/0003_job_pipeline_metadata.sql
+          run_if_missing jobs countries infra/cloudflare/migrations/0004_job_countries.sql
+          run_if_missing jobs application_applied_at infra/cloudflare/migrations/0005_job_application_applied_at.sql
+          run_if_missing jobs saved_at infra/cloudflare/migrations/0006_job_status_dates.sql
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
