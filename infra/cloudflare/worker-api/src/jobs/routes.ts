@@ -225,6 +225,7 @@ jobsRoutes.get("/", async (c) => {
   const status = c.req.query("status");
   const stage = c.req.query("stage");
   const company = c.req.query("company");
+  const companyQuery = c.req.query("company_query");
   const addedDate = c.req.query("added_date");
   const country = c.req.query("country");
   const limit = Math.min(parseInt(c.req.query("limit") || "50", 10), 200);
@@ -233,7 +234,7 @@ jobsRoutes.get("/", async (c) => {
   let query = "SELECT * FROM jobs WHERE user_id = ?";
   const params: (string | number)[] = [userId];
 
-  const filterSql = buildJobFilterSql({ status, stage, company, addedDate, country });
+  const filterSql = buildJobFilterSql({ status, stage, company, companyQuery, addedDate, country });
   query += filterSql.sql;
   params.push(...filterSql.params);
 
@@ -604,6 +605,7 @@ function buildJobFilterSql(filters: {
   status?: string;
   stage?: string;
   company?: string;
+  companyQuery?: string;
   addedDate?: string;
   country?: string;
 }): { sql: string; params: (string | number)[] } {
@@ -641,6 +643,12 @@ function buildJobFilterSql(filters: {
     params.push(company);
   }
 
+  const companyQuery = filters.companyQuery?.trim();
+  if (companyQuery) {
+    sql += " AND LOWER(company) LIKE ? ESCAPE '\\'";
+    params.push(`%${escapeSqlLike(companyQuery.toLowerCase())}%`);
+  }
+
   const addedDate = filters.addedDate?.trim();
   if (addedDate) {
     sql += " AND date(COALESCE(pipeline_added_at, created_at)) = ?";
@@ -654,6 +662,10 @@ function buildJobFilterSql(filters: {
   }
 
   return { sql, params };
+}
+
+function escapeSqlLike(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
 function normalizeStageFilter(value?: string): string | null {
@@ -1411,6 +1423,8 @@ async function parseAndStoreJobDetails(
 }
 
 export const jobsRoutesTestables = {
+  buildJobFilterSql,
   canonicalJobKey,
+  escapeSqlLike,
   normalizeParsedImportItems,
 };
