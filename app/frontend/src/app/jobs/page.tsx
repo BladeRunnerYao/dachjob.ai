@@ -19,6 +19,7 @@ export default function JobsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [companyQueryFilter, setCompanyQueryFilter] = useState('');
+  const [debouncedCompanyQueryFilter, setDebouncedCompanyQueryFilter] = useState('');
   const [addedDateFilter, setAddedDateFilter] = useState('');
   const [countryFilter, setCountryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<JobStatusFilterValue | 'all'>('all');
@@ -57,6 +58,16 @@ export default function JobsPage() {
   }, [addedDateFilter, companyQueryFilter, countryFilter, page, pageSize, routedJobId, statusFilter]);
 
   useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedCompanyQueryFilter(companyQueryFilter);
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [companyQueryFilter]);
+
+  useEffect(() => {
     if (routedJobId) return;
     let cancelled = false;
 
@@ -65,7 +76,7 @@ export default function JobsPage() {
       const query: JobQueryOptions = {
         status: statusFilter === 'saved' ? statusFilter : undefined,
         stage: statusFilter !== 'all' && statusFilter !== 'saved' ? statusFilter : 'all',
-        company_query: companyQueryFilter.trim() || undefined,
+        company_query: debouncedCompanyQueryFilter.trim() || undefined,
         added_date: addedDateFilter || undefined,
         country: countryFilter || undefined,
       };
@@ -87,7 +98,7 @@ export default function JobsPage() {
     return () => {
       cancelled = true;
     };
-  }, [addedDateFilter, companyQueryFilter, countryFilter, page, pageSize, routedJobId, statusFilter]);
+  }, [addedDateFilter, debouncedCompanyQueryFilter, countryFilter, page, pageSize, routedJobId, statusFilter]);
 
   if (routedJobId) {
     return <JobDetailClient jobId={decodeURIComponent(routedJobId)} />;
